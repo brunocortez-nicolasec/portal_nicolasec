@@ -1,0 +1,19 @@
+# Usando a imagem moderna padrão
+FROM node:18-slim
+
+WORKDIR /usr/src/app
+
+# Nenhuma instalação manual de 'libssl' é necessária aqui
+
+COPY package*.json ./
+RUN npm install
+
+COPY prisma ./prisma/
+# Este comando agora vai ler o binaryTargets e gerar o motor correto
+RUN npx prisma generate
+
+COPY . .
+
+EXPOSE 8080
+
+CMD [ "npm", "run", "start" ]

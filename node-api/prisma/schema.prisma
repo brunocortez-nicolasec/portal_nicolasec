@@ -1,0 +1,31 @@
+generator client {
+  provider      = "prisma-client-js"
+  // Esta linha força o Prisma a gerar o motor moderno compatível com OpenSSL 3.0
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int      @id @default(autoincrement())
+  name          String
+  email         String   @unique
+  password      String
+  profile_image String?
+  role          String   @default("Membro") // <-- LINHA ADICIONADA
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("users")
+}
+
+model PasswordReset {
+  id        Int      @id @default(autoincrement())
+  email     String
+  token     String   @unique
+  createdAt DateTime @default(now())
+  @@map("password_resets")
+}

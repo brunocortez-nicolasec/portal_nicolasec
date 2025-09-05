@@ -1,0 +1,23 @@
+# --- Etapa 1: Build ---
+FROM node:18-alpine AS builder
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+# Compila o React para produção, criando arquivos estáticos otimizados
+RUN npm run build
+
+# --- Etapa 2: Servir ---
+FROM nginx:stable-alpine
+
+# Copia apenas os arquivos compilados da etapa de build para a pasta do Nginx
+COPY --from=builder /app/build /usr/share/nginx/html
+
+# Exponha a porta 80, que é a padrão do Nginx
+EXPOSE 80
+
+# Comando para iniciar o Nginx de forma que o container continue rodando
+CMD ["nginx", "-g", "daemon off;"]

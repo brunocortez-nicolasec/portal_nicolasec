@@ -1,0 +1,57 @@
+# docker-compose.yml - VERSÃO FINAL E CORRIGIDA (PostgreSQL)
+# A linha 'version' foi removida por ser obsoleta nas versões mais recentes do Docker Compose.
+
+services:
+  # 1. Serviço do Banco de Dados PostgreSQL
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      # Credenciais para o container do Postgres criar o banco e o usuário
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: abc@1234
+      POSTGRES_DB: portal_db
+    volumes:
+      # Volume nomeado para garantir que os dados do banco persistam
+      - postgres-data:/var/lib/postgresql/data
+
+  # 2. Serviço do Backend (API)
+  api:
+    build:
+      context: ./node-api
+    container_name: api_server
+    restart: unless-stopped
+    depends_on:
+      - db # Garante que a API só inicie depois que o banco estiver pronto
+    environment:
+      # URL de conexão que o Prisma usará. Note que o host é 'db' e não 'localhost'
+      DATABASE_URL: "postgresql://postgres:abc%401234@db:5432/portal_db"
+      JWT_SECRET: token
+      APP_URL_CLIENT: http://localhost
+
+  # 3. Serviço do Frontend (Cliente React)
+  client:
+    build:
+      context: ./material-react-app
+    container_name: client_app
+    restart: unless-stopped
+
+  # 4. Serviço do Nginx (Reverse Proxy - O "Porteiro")
+  nginx:
+    image: nginx:stable-alpine
+    container_name: nginx_proxy
+    restart: unless-stopped
+    ports:
+      # Mapeia a porta 80 da sua máquina para a porta 80 do container
+      - "80:80"
+    volumes:
+      # Mapeia o seu arquivo de configuração local para dentro do container
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - api
+      - client
+
+# Declaração do volume nomeado para o Postgres
+volumes:
+  postgres-data:
