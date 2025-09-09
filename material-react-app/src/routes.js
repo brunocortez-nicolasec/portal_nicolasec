@@ -3,11 +3,9 @@
 import Dashboard from "layouts/dashboard";
 import Tables from "layouts/tables";
 import Billing from "layouts/billing";
-import RTL from "layouts/rtl";
 import Notifications from "layouts/notifications";
 import Profile from "layouts/profile";
-import SignIn from "layouts/authentication/sign-in";
-import SignUp from "layouts/authentication/sign-up";
+
 
 import UserProfile from "layouts/user-profile";
 import UserManagement from "layouts/user-management";
@@ -16,7 +14,10 @@ import Login from "auth/login";
 import Register from "auth/register";
 import ForgotPassword from "auth/forgot-password";
 import ResetPassword from "auth/reset-password";
-import Plataformas from "layouts/plataformas"; 
+import Plataformas from "layouts/plataformas";
+import GerenciarUsuarios from "layouts/administrar/usuarios";
+import GerenciarGrupos from "layouts/administrar/grupos";
+import GerenciarFuncoes from "layouts/administrar/funcoes";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -118,6 +119,40 @@ const routes = [
   route: "/plataformas",
   component: <Plataformas />,
 },
+  {
+    type: "collapse",
+    name: "Administrar",
+    key: "administrar",
+    icon: <Icon fontSize="small">admin_panel_settings</Icon>,
+    role: "Admin",
+    collapse: [
+    {
+      name: "Usuários",
+      key: "usuarios",
+      route: "/administrar/usuarios",
+      component: <GerenciarUsuarios />,
+      // --- ÍCONE ADICIONADO ---
+      icon: <Icon fontSize="small">group</Icon>, 
+    },
+    {
+      name: "Grupos",
+      key: "grupos",
+      route: "/administrar/grupos",
+      component: <GerenciarGrupos />,
+      // --- ÍCONE ADICIONADO ---
+      icon: <Icon fontSize="small">groups</Icon>,
+    },
+    {
+      name: "Funções",
+      key: "funcoes",
+      route: "/administrar/funcoes",
+      component: <GerenciarFuncoes />,
+      // --- ÍCONE ADICIONADO ---
+      icon: <Icon fontSize="small">security</Icon>,
+    },
+  ],
+},
+
 ];
 
 export default routes;

@@ -1,64 +1,62 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
-
-/**
-  This file is used for controlling the global states of the components,
-  you can customize the states for the different components here.
-*/
+// material-react-app/src/context/index.js - VERSÃO ATUALIZADA
 
 import { createContext, useContext, useReducer, useMemo, useState, useEffect } from "react";
-
-// prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
+import axios from "axios"; // Usaremos axios para chamadas à API
 
-// Material Dashboard 2 React main context
-const MaterialUI = createContext();
+// --- NOVO: Serviço de API ---
+const api = axios.create({
+  baseURL: "/", 
+});
 
-// authentication context
+api.interceptors.request.use(async (config) => {
+  const token = localStorage.getItem("token");
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// --- AuthContext Aprimorado ---
 export const AuthContext = createContext({
   isAuthenticated: false,
+  user: null, // Campo para guardar os dados do usuário
   login: () => {},
-  register: () => {},
   logout: () => {},
 });
 
-const AuthContextProvider = ({ children }) => {
+// Hook para facilitar o uso do contexto
+export const useAuth = () => useContext(AuthContext);
+
+export const AuthContextProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-
+  const [user, setUser] = useState(null); // Estado para o usuário
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const token = localStorage.getItem("token");
 
   useEffect(() => {
-    if (!token) return;
-
-    setIsAuthenticated(true);
-    navigate(location.pathname);
+    const initialize = async () => {
+      const token = localStorage.getItem("token");
+      if (token) {
+        try {
+          const response = await api.get("/me"); // Busca os dados do usuário
+          setUser(response.data);
+          setIsAuthenticated(true);
+        } catch (error) {
+          console.error("Token inválido, deslogando.", error);
+          localStorage.removeItem("token");
+          setIsAuthenticated(false);
+          setUser(null);
+        }
+      }
+    };
+    initialize();
   }, []);
 
-  useEffect(() => {
-    if (!token) return;
-
-    setIsAuthenticated(isAuthenticated);
-    navigate(location.pathname);
-  }, [isAuthenticated]);
-
-  const login = (token) => {
+  const login = async (token) => {
     localStorage.setItem("token", token);
+    const response = await api.get("/me");
+    setUser(response.data);
     setIsAuthenticated(true);
     navigate("/dashboard");
   };
@@ -66,17 +64,26 @@ const AuthContextProvider = ({ children }) => {
   const logout = () => {
     localStorage.removeItem("token");
     setIsAuthenticated(false);
+    setUser(null);
     navigate("/auth/login");
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout }}>
+    <AuthContext.Provider value={{ isAuthenticated, user, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
+AuthContextProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+};
+
+
+// --- O restante do seu arquivo (MaterialUIControllerProvider) permanece igual ---
+// ... (código do MaterialUI.displayName, reducer, MaterialUIControllerProvider, etc.) ...
 // Setting custom name for the context which is visible on react dev tools
+const MaterialUI = createContext();
 MaterialUI.displayName = "MaterialUIContext";
 
 // Material Dashboard 2 React reducer
@@ -171,7 +178,6 @@ const setLayout = (dispatch, value) => dispatch({ type: "LAYOUT", value });
 const setDarkMode = (dispatch, value) => dispatch({ type: "DARKMODE", value });
 
 export {
-  AuthContextProvider,
   MaterialUIControllerProvider,
   useMaterialUIController,
   setMiniSidenav,

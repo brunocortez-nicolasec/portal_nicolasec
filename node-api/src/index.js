@@ -22,8 +22,10 @@ const corsOptions = {
     const allowedOrigins = [
       process.env.APP_URL_CLIENT,
       'http://localhost:8080',
+      'http://localhost:3080',
+      'http://localhost:3080/',
       'http://localhost:8080/',
-      "http://192.168.100.110",
+      "http://192.168.0.120",
       "http://192.168.0.117"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
@@ -33,6 +35,8 @@ const corsOptions = {
     }
   },
   credentials: true,
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE", 
+  allowedHeaders: "Content-Type, Authorization", 
 };
 
 // REMOVIDO: A chamada dbConnect() não é mais necessária.

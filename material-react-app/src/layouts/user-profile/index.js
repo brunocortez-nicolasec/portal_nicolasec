@@ -1,4 +1,9 @@
+// material-react-app/src/layouts/user-profile/index.js - CORRIGIDO
+
 import { useState, useEffect } from "react";
+
+// --- MUDANÇA 1: Importar o hook useAuth do nosso contexto ---
+import { useAuth } from "context";
 
 // Componentes Material Dashboard
 import MDBox from "components/MDBox";
@@ -8,15 +13,13 @@ import MDButton from "components/MDButton";
 import MDAlert from "components/MDAlert";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import Footer from "examples/Footer";
-
-// O Header do caminho VERDADEIRO E DEFINITIVO
 import Header from "layouts/user-profile/Header"; 
-
-// Nosso serviço de API
 import AuthService from "../../services/auth-service";
 
 const UserProfile = () => {
+  // --- MUDANÇA 2: Pegar o usuário do nosso contexto de autenticação ---
+  const { user: authUser } = useAuth(); // Renomeamos para 'authUser' para evitar conflito
+
   const [notification, setNotification] = useState({ show: false, message: "", color: "info" });
   const [user, setUser] = useState({
     name: "",
@@ -26,27 +29,19 @@ const UserProfile = () => {
     confirmPassword: "",
   });
 
+  // --- MUDANÇA 3: Substituir a chamada de API pela leitura do contexto ---
   useEffect(() => {
-    const getUserData = async () => {
-      try {
-        const response = await AuthService.getProfile();
-        // A API com Prisma retorna os dados diretamente em response.data
-        if (response.data) {
-          setUser((prevUser) => ({
-            ...prevUser,
-            name: response.data.name || "", // Se for undefined, usa string vazia
-            email: response.data.email || "", // Se for undefined, usa string vazia
-            role: response.data.role || "", // Se for undefined, usa string vazia
-            // ...
-          }));
-        }
-      } catch (error) {
-        console.error("Failed to fetch user profile:", error);
-        setNotification({ show: true, message: "Erro ao carregar perfil.", color: "error" });
-      }
-    };
-    getUserData();
-  }, []); // O array vazio [] garante que a busca só acontece uma vez
+    // Só atualiza o estado local se o usuário do contexto existir
+    if (authUser && authUser.data && authUser.data.attributes) {
+      const { name, email, role } = authUser.data.attributes;
+      setUser((prevUser) => ({
+        ...prevUser,
+        name: name || "",
+        email: email || "",
+        role: role || "",
+      }));
+    }
+  }, [authUser]); // Este efeito roda sempre que o usuário do contexto carregar ou mudar
 
   const changeHandler = (e) => {
     setUser({
@@ -57,8 +52,14 @@ const UserProfile = () => {
 
   const submitHandler = async (e) => {
     e.preventDefault();
-    let dataToUpdate = { name: user.name, email: user.email };
+    
+    // Cria um objeto simples com os dados a serem atualizados
+    let dataToUpdate = {
+      name: user.name,
+      email: user.email,
+    };
 
+    // Adiciona a senha apenas se o campo foi preenchido
     if (user.newPassword) {
       if (user.newPassword.length < 8 || user.newPassword !== user.confirmPassword) {
         setNotification({ show: true, message: "As senhas devem ter no mínimo 8 caracteres e ser iguais.", color: "error" });
@@ -69,12 +70,14 @@ const UserProfile = () => {
     }
 
     try {
+      // Envia o objeto simples para o serviço
       await AuthService.updateProfile(dataToUpdate);
       setNotification({ show: true, message: "Perfil atualizado com sucesso!", color: "success" });
       setUser((prev) => ({ ...prev, newPassword: "", confirmPassword: "" }));
     } catch (error) {
+      const errorMessage = error.response?.data?.message || "Erro ao atualizar o perfil.";
       console.error("Failed to update profile:", error);
-      setNotification({ show: true, message: "Erro ao atualizar o perfil.", color: "error" });
+      setNotification({ show: true, message: errorMessage, color: "error" });
     }
   };
 
@@ -82,7 +85,7 @@ const UserProfile = () => {
     <DashboardLayout>
       <DashboardNavbar />
       <MDBox mb={2} />
-      {/* O UserProfile (pai) passa os dados 'name' e 'role' para o Header (filho) */}
+      {/* O Header receberá os dados corretos assim que o estado 'user' for preenchido */}
       <Header name={user.name} role={user.role}>
         {notification.show && (
           <MDAlert color={notification.color} mt="20px" dismissible>
@@ -111,13 +114,13 @@ const UserProfile = () => {
               <MDTypography variant="body2" color="text" ml={1} fontWeight="regular">
                 Nova Senha
               </MDTypography>
-              <MDInput type="password" fullWidth name="newPassword" value={user.newPassword} onChange={changeHandler} />
+              <MDInput type="password" fullWidth name="newPassword" value={user.newPassword} onChange={changeHandler} autoComplete="new-password"/>
             </MDBox>
             <MDBox flex="1" ml={1}>
               <MDTypography variant="body2" color="text" ml={1} fontWeight="regular">
                 Confirmação de Senha
               </MDTypography>
-              <MDInput type="password" fullWidth name="confirmPassword" value={user.confirmPassword} onChange={changeHandler} />
+              <MDInput type="password" fullWidth name="confirmPassword" value={user.confirmPassword} onChange={changeHandler} autoComplete="new-password"/>
             </MDBox>
           </MDBox>
           <MDBox mt={4} display="flex" justifyContent="end">
