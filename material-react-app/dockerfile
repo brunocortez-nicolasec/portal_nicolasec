@@ -1,23 +1,22 @@
-# --- Etapa 1: Build ---
-FROM node:18-alpine AS builder
+# material-react-app/Dockerfile - VERSÃO PARA DESENVOLVIMENTO
 
+# 1. Comece com uma imagem base do Node.js v18
+FROM node:18-alpine
+
+# 2. Defina o diretório de trabalho dentro do contêiner
 WORKDIR /app
 
+# 3. Copie os arquivos de dependências primeiro (para aproveitar o cache do Docker)
 COPY package*.json ./
+
+# 4. Instale as dependências
 RUN npm install
 
+# 5. Copie o resto do código da sua aplicação
 COPY . .
-# Compila o React para produção, criando arquivos estáticos otimizados
-RUN npm run build
 
-# --- Etapa 2: Servir ---
-FROM nginx:stable-alpine
+# 6. Exponha a porta 3000, que é onde o servidor de desenvolvimento do React roda
+EXPOSE 3000
 
-# Copia apenas os arquivos compilados da etapa de build para a pasta do Nginx
-COPY --from=builder /app/build /usr/share/nginx/html
-
-# Exponha a porta 80, que é a padrão do Nginx
-EXPOSE 80
-
-# Comando para iniciar o Nginx de forma que o container continue rodando
-CMD ["nginx", "-g", "daemon off;"]
+# 7. Defina o comando para iniciar a aplicação em modo de desenvolvimento
+CMD ["npm", "start"]
