@@ -30,6 +30,8 @@ services:
       - ./node-api:/usr/src/app
       # Adiciona uma exceção para a pasta node_modules
       - /usr/src/app/node_modules
+    ports:
+      - "5555:5555"
 
   # 3. Serviço do Frontend (Cliente React) - COM VOLUME ADICIONADO
   client:
