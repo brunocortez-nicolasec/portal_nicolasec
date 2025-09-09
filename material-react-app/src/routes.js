@@ -14,7 +14,9 @@ import Login from "auth/login";
 import Register from "auth/register";
 import ForgotPassword from "auth/forgot-password";
 import ResetPassword from "auth/reset-password";
-import Plataformas from "layouts/plataformas";
+import TruIM from "layouts/plataformas/TruIM";
+import TruPAM from "layouts/plataformas/TruPAM";
+import TruAM from "layouts/plataformas/TruAM";
 import GerenciarUsuarios from "layouts/administrar/usuarios";
 import GerenciarGrupos from "layouts/administrar/grupos";
 import GerenciarFuncoes from "layouts/administrar/funcoes";
@@ -112,14 +114,6 @@ const routes = [
     component: <ResetPassword />,
   },
   {
-  type: "collapse",
-  name: "Plataformas",
-  key: "plataformas",
-  icon: <Icon fontSize="small">device_hub</Icon>, // Ícone de exemplo
-  route: "/plataformas",
-  component: <Plataformas />,
-},
-  {
     type: "collapse",
     name: "Administrar",
     key: "administrar",
@@ -151,8 +145,37 @@ const routes = [
       icon: <Icon fontSize="small">security</Icon>,
     },
   ],
+  },
+{
+  type: "collapse",
+  name: "TAS",
+  key: "tas",
+  icon: <Icon fontSize="small">device_hub</Icon>,
+  role: "Admin",
+  collapse: [
+    {
+      name: "TruIM",
+      key: "truim",
+      route: "/plataformas/truim",
+      component: <TruIM />, // <-- ALTERADO
+      icon: <Icon fontSize="small">fact_check</Icon>,
+    },
+    {
+      name: "TruPAM",
+      key: "trupam",
+      route: "/plataformas/trupam",
+      component: <TruPAM />, // <-- ALTERADO
+      icon: <Icon fontSize="small">shield</Icon>,
+    },
+    {
+      name: "TruAM",
+      key: "truam",
+      route: "/plataformas/truam",
+      component: <TruAM />, // <-- ALTERADO
+      icon: <Icon fontSize="small">hub</Icon>,
+    },
+  ],
 },
-
 ];
 
 export default routes;
