@@ -15,29 +15,25 @@ import MDBox from "components/MDBox";
 import usersTableData from "./data/usersTableData";
 
 function GerenciarUsuarios() {
-  // --- NOVOS ESTADOS ---
-  const [users, setUsers] = useState([]); // Armazena a lista de usuários original da API
+  const [users, setUsers] = useState([]);
   const [notification, setNotification] = useState({ show: false, color: "info", message: "" });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-
-  // Estados antigos (sem alterações)
   const [tableData, setTableData] = useState({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
-  
-  // --- NOVA INSTÂNCIA DO AXIOS ---
-  // Para reutilizar a configuração do token
+
+  // --- MUDANÇA NECESSÁRIA AQUI ---
+  // A URL base agora é relativa ("/"), fazendo com que as chamadas vão para o Nginx.
   const api = axios.create({
-    baseURL: "http://localhost:8080",
+    baseURL: "/", 
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
 
-  // Função para buscar os usuários (sem alterações na lógica principal)
   const fetchUsers = async () => {
     try {
       setLoading(true);
       const response = await api.get("/users");
-      setUsers(response.data); // Salva a lista de usuários no novo estado
+      setUsers(response.data);
     } catch (error) {
       console.error("Erro ao buscar usuários:", error);
       setNotification({ show: true, color: "error", message: "Erro ao carregar usuários." });
@@ -50,46 +46,38 @@ function GerenciarUsuarios() {
     fetchUsers();
   }, []);
 
-  // --- NOVO useEffect ---
-  // Este efeito roda sempre que a lista 'users' for atualizada,
-  // e recria a tabela com as funções de clique corretas.
   useEffect(() => {
     const formattedData = usersTableData(users, handleEditClick, handleDeleteClick);
     setTableData(formattedData);
   }, [users]);
 
-  // --- NOVAS FUNÇÕES DE AÇÃO ---
-
-  // Abre o modal de edição com os dados do usuário clicado
+  // Funções de Ação (sem alterações)
   const handleEditClick = (user) => {
     setSelectedUser(user);
     setIsModalOpen(true);
   };
 
-  // Fecha o modal
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedUser(null);
   };
 
-  // Salva as alterações feitas no modal
   const handleSaveUser = async (id, updatedData) => {
     try {
       await api.patch(`/users/${id}`, updatedData);
       setNotification({ show: true, color: "success", message: "Usuário atualizado com sucesso!" });
-      fetchUsers(); // Re-busca os usuários para atualizar a tabela
+      fetchUsers();
     } catch (error) {
       setNotification({ show: true, color: "error", message: "Erro ao salvar alterações." });
     }
   };
 
-  // Deleta o usuário clicado
   const handleDeleteClick = async (id) => {
     if (window.confirm("Tem certeza que deseja deletar este usuário? Esta ação é irreversível.")) {
       try {
         await api.delete(`/users/${id}`);
         setNotification({ show: true, color: "success", message: "Usuário deletado com sucesso!" });
-        fetchUsers(); // Re-busca os usuários para atualizar a tabela
+        fetchUsers();
       } catch (error) {
         const message = error.response?.data?.message || "Erro ao deletar o usuário.";
         setNotification({ show: true, color: "error", message });
@@ -107,7 +95,6 @@ function GerenciarUsuarios() {
       buttonText="Adicionar Usuário"
       onButtonClick={handleAddUser}
     >
-      {/* --- NOVO: Bloco de Notificação --- */}
       <MDBox mt={2} mb={2}>
         {notification.show && (
           <MDAlert color={notification.color} dismissible onClose={() => setNotification({ ...notification, show: false })}>
@@ -121,17 +108,9 @@ function GerenciarUsuarios() {
       {loading ? (
         <MDTypography variant="body2" textAlign="center">Carregando usuários...</MDTypography>
       ) : (
-        <DataTable
-          table={tableData}
-          isSorted={false}
-          entriesPerPage={false}
-          showTotalEntries={false}
-          noEndBorder
-        />
+        <DataTable table={tableData} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder />
       )}
 
-      {/* --- NOVO: Renderiza o Modal de Edição --- */}
-      {/* Ele só aparece na tela quando 'isModalOpen' for true */}
       {selectedUser && (
         <EditUserModal
           open={isModalOpen}
