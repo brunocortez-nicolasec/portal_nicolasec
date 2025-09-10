@@ -74,14 +74,6 @@ const routes = [
     component: <UserProfile />,
   },
   {
-    type: "examples",
-    name: "Gerenciamento de perfis",
-    key: "user-management",
-    icon: <Icon fontSize="small">list</Icon>,
-    route: "/user-management",
-    component: <UserManagement />,
-  },
-  {
     type: "auth",
     name: "Login",
     key: "login",

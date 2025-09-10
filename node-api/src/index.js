@@ -4,12 +4,11 @@ import cors from "cors";
 import dotenv from "dotenv";
 import "./passport.js"; // Importa a configuração do Passport (agora com Prisma)
 import { meRoutes, authRoutes } from "./routes";
+import usersRoutes from "./services/users/index.js";
 import path from "path";
 import * as fs from "fs";
 
-// REMOVIDO: import { dbConnect } from "./mongo";
-// REMOVIDO: import cron from "node-cron";
-// REMOVIDO: import ReseedAction from "./mongo/ReseedAction";
+
 
 dotenv.config();
 
@@ -53,6 +52,7 @@ app.get("/", function (req, res) {
 // As rotas permanecem as mesmas
 app.use("/", authRoutes);
 app.use("/me", meRoutes);
+app.use("/users", usersRoutes);
 
 // REMOVIDO: O bloco 'cron' que chamava o ReseedAction do Mongo foi removido.
 // A forma de popular o banco com Prisma é diferente (usando um arquivo de seed).
