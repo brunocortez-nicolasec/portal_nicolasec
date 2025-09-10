@@ -5,9 +5,10 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDAvatar from "components/MDAvatar";
 import backgroundImage from "assets/images/bg-profile.jpeg";
-import burceMars from "assets/images/bruce-mars.jpg";
+import defaultAvatar from "../../../assets/images/default-avatar.jpg"; // Corrigido o caminho para .png se necessário
 
-function Header({ name, role, children }) {
+// --- MUDANÇA 1: Adicionada a prop "onAvatarClick" ---
+function Header({ name, role, profileImage, onAvatarClick, children }) {
   return (
     <MDBox position="relative" mb={5}>
       <MDBox
@@ -38,7 +39,15 @@ function Header({ name, role, children }) {
       >
         <Grid container spacing={3} alignItems="center">
           <Grid item>
-            <MDAvatar src={burceMars} alt="profile-image" size="xl" shadow="sm" />
+            {/* --- MUDANÇA 2: Adicionado onClick e o estilo do cursor --- */}
+            <MDAvatar
+              src={profileImage || defaultAvatar}
+              alt="profile-image"
+              size="xl"
+              shadow="sm"
+              onClick={onAvatarClick}
+              sx={{ cursor: "pointer" }}
+            />
           </Grid>
           <Grid item>
             <MDBox height="100%" mt={0.5} lineHeight={1}>
@@ -59,17 +68,21 @@ function Header({ name, role, children }) {
   );
 }
 
-// Valores padrão e tipos para as props
+// --- MUDANÇA 3: Adicionada a nova prop aos defaultProps e propTypes ---
 Header.defaultProps = {
   children: "",
   name: "",
   role: "",
+  profileImage: null,
+  onAvatarClick: () => {}, // Valor padrão para a função de clique
 };
 
 Header.propTypes = {
   children: PropTypes.node,
   name: PropTypes.string,
   role: PropTypes.string,
+  profileImage: PropTypes.string,
+  onAvatarClick: PropTypes.func, // Tipo da nova prop
 };
 
 export default Header;

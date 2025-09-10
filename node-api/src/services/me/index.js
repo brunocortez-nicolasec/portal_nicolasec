@@ -35,15 +35,15 @@ export const patchProfileRouteHandler = async (req, res) => {
   try {
     const currentUser = req.user; // Usuário identificado pelo token JWT
 
-    // --- MUDANÇA PRINCIPAL AQUI ---
-    // Lendo os dados do local correto (dentro de data.attributes)
-    const { name, email, newPassword, confirmPassword } = req.body.data.attributes;
+    // --- MUDANÇA: Adicionamos a leitura do profile_image ---
+    const { name, email, newPassword, confirmPassword, profile_image } = req.body.data.attributes;
     
     const dataToUpdate = {};
 
     // Adiciona os campos ao objeto de atualização apenas se eles foram fornecidos
     if (name) dataToUpdate.name = name;
     if (email) dataToUpdate.email = email;
+    if (profile_image) dataToUpdate.profile_image = profile_image; // <-- Linha adicionada
 
     if (newPassword) {
       if (newPassword.length < 8 || newPassword !== confirmPassword) {
