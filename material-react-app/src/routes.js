@@ -8,7 +8,6 @@ import Profile from "layouts/profile";
 
 
 import UserProfile from "layouts/user-profile";
-import UserManagement from "layouts/user-management";
 
 import Login from "auth/login";
 import Register from "auth/register";
@@ -20,6 +19,7 @@ import TruAM from "layouts/plataformas/TruAM";
 import GerenciarUsuarios from "layouts/administrar/usuarios";
 import GerenciarGrupos from "layouts/administrar/grupos";
 import GerenciarFuncoes from "layouts/administrar/funcoes";
+import Credenciais from "layouts/credenciais";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -167,6 +167,14 @@ const routes = [
       icon: <Icon fontSize="small">hub</Icon>,
     },
   ],
+},
+{
+  type: "collapse",
+  name: "Credenciais",
+  key: "credenciais",
+  icon: <Icon fontSize="small">vpn_key</Icon>,
+  route: "/credenciais",
+  component: <Credenciais />,
 },
 ];
 
