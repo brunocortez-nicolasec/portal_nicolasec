@@ -1,29 +1,32 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-// --- NOVOS IMPORTS ---
+// --- MUDANÇA: Importa o novo modal de adição ---
+import AddUserModal from "./components/AddUserModal"; 
+import EditUserModal from "./components/EditUserModal"; 
 import MDAlert from "components/MDAlert";
-import EditUserModal from "./components/EditUserModal"; // O modal de edição
 
-// Componentes do template (sem alterações)
+// Componentes do template
 import AdminPageLayout from "layouts/administrar/components/AdminPageLayout";
 import DataTable from "examples/Tables/DataTable";
 import MDTypography from "components/MDTypography";
 import MDBox from "components/MDBox";
 
-// Importa a função que formata os dados para a tabela (sem alterações)
+// Importa a função que formata os dados para a tabela
 import usersTableData from "./data/usersTableData";
 
 function GerenciarUsuarios() {
   const [users, setUsers] = useState([]);
   const [notification, setNotification] = useState({ show: false, color: "info", message: "" });
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // --- MUDANÇA: Estados para os dois modais ---
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
+  
   const [tableData, setTableData] = useState({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
 
-  // --- MUDANÇA NECESSÁRIA AQUI ---
-  // A URL base agora é relativa ("/"), fazendo com que as chamadas vão para o Nginx.
   const api = axios.create({
     baseURL: "/", 
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
@@ -51,29 +54,60 @@ function GerenciarUsuarios() {
     setTableData(formattedData);
   }, [users]);
 
-  // Funções de Ação (sem alterações)
+  // Funções para o Modal de Edição
   const handleEditClick = (user) => {
     setSelectedUser(user);
-    setIsModalOpen(true);
+    setIsEditModalOpen(true);
   };
 
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
+  const handleCloseEditModal = () => {
+    setIsEditModalOpen(false);
     setSelectedUser(null);
+  };
+  
+  // --- MUDANÇA: Nova função para abrir o modal de adição ---
+  const handleAddClick = () => {
+    setIsAddModalOpen(true);
+  };
+
+  // --- MUDANÇA: Nova função para fechar o modal de adição ---
+  const handleCloseAddModal = () => {
+    setIsAddModalOpen(false);
   };
 
   const handleSaveUser = async (id, updatedData) => {
     try {
-      await api.patch(`/users/${id}`, updatedData);
+      const payload = {
+        data: {
+          type: "users",
+          attributes: updatedData,
+        },
+      };
+      await api.patch(`/users/${id}`, payload);
       setNotification({ show: true, color: "success", message: "Usuário atualizado com sucesso!" });
       fetchUsers();
     } catch (error) {
+      console.error("Erro ao salvar usuário:", error);
       setNotification({ show: true, color: "error", message: "Erro ao salvar alterações." });
     }
   };
 
+  // --- MUDANÇA: Nova função para CRIAR o usuário ---
+  const handleCreateUser = async (newUserData) => {
+    try {
+      // O nosso backend espera um objeto JSON simples, sem o "pacote" data.attributes
+      await api.post("/users", newUserData);
+      setNotification({ show: true, color: "success", message: "Usuário criado com sucesso!" });
+      fetchUsers(); // Atualiza a lista de usuários
+    } catch (error) {
+      const message = error.response?.data?.message || "Erro ao criar o usuário.";
+      console.error("Erro ao criar usuário:", error);
+      setNotification({ show: true, color: "error", message });
+    }
+  };
+
   const handleDeleteClick = async (id) => {
-    if (window.confirm("Tem certeza que deseja deletar este usuário? Esta ação é irreversível.")) {
+    if (window.confirm("Tem certeza que deseja deletar este usuário?")) {
       try {
         await api.delete(`/users/${id}`);
         setNotification({ show: true, color: "success", message: "Usuário deletado com sucesso!" });
@@ -85,15 +119,11 @@ function GerenciarUsuarios() {
     }
   };
 
-  const handleAddUser = () => {
-    alert("Função 'Adicionar Novo Usuário' a ser implementada.");
-  };
-
   return (
     <AdminPageLayout
       title="Gerenciamento de Usuários"
       buttonText="Adicionar Usuário"
-      onButtonClick={handleAddUser}
+      onButtonClick={handleAddClick} // --- MUDANÇA: Chama a função correta
     >
       <MDBox mt={2} mb={2}>
         {notification.show && (
@@ -111,14 +141,22 @@ function GerenciarUsuarios() {
         <DataTable table={tableData} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder />
       )}
 
+      {/* Modal de Edição (sem alterações) */}
       {selectedUser && (
         <EditUserModal
-          open={isModalOpen}
-          onClose={handleCloseModal}
+          open={isEditModalOpen}
+          onClose={handleCloseEditModal}
           user={selectedUser}
           onSave={handleSaveUser}
         />
       )}
+
+      {/* --- MUDANÇA: Renderiza o novo modal de adição --- */}
+      <AddUserModal
+        open={isAddModalOpen}
+        onClose={handleCloseAddModal}
+        onSave={handleCreateUser}
+      />
     </AdminPageLayout>
   );
 }

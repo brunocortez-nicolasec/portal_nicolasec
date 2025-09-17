@@ -24,7 +24,7 @@ const corsOptions = {
       'http://localhost:3080',
       'http://localhost:3080/',
       'http://localhost:8080/',
-      "http://192.168.0.120",
+      "http://192.168.100.115",
       "http://192.168.0.117"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
@@ -45,7 +45,7 @@ app.use(cors(corsOptions));
 const jsonParser = bodyParser.json();
 
 // O seu bodyParser global para o formato JSON:API permanece o mesmo.
-app.use(bodyParser.json({ type: "application/vnd.api+json", strict: false }));
+app.use(express.json());
 
 app.get("/", function (req, res) {
   const __dirname = fs.realpathSync(".");

@@ -1,8 +1,9 @@
-// node-api/src/services/users/index.js - VERSÃO COM CORREÇÃO DO TIPO DE ID
+// node-api/src/services/users/index.js - VERSÃO COM ROTA DE CRIAÇÃO
 
 import express from "express";
 import passport from "passport";
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt'; // <-- 1. IMPORTAÇÃO ADICIONADA
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -33,25 +34,68 @@ router.get(
   }
 );
 
-// --- Rota PATCH /:id para ATUALIZAR um usuário (COM A CORREÇÃO) ---
+// --- 2. NOVA ROTA POST / para CRIAR um usuário ---
+router.post(
+  "/",
+  passport.authenticate("jwt", { session: false }),
+  isAdmin,
+  async (req, res) => {
+    try {
+      // Para simplificar, esperamos os dados diretamente no corpo da requisição
+      const { name, email, password, role } = req.body;
+
+      // Validação básica
+      if (!name || !email || !password || !role) {
+        return res.status(400).json({ message: "Todos os campos são obrigatórios: nome, email, senha e função." });
+      }
+
+      // Verifica se o usuário já existe
+      const existingUser = await prisma.user.findUnique({ where: { email } });
+      if (existingUser) {
+        return res.status(409).json({ message: "Este email já está em uso." });
+      }
+
+      // Criptografa a senha antes de salvar
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const newUser = await prisma.user.create({
+        data: {
+          name,
+          email,
+          password: hashedPassword,
+          role,
+        },
+        select: { id: true, name: true, email: true, role: true, createdAt: true }, // Retorna o usuário sem a senha
+      });
+
+      res.status(201).json(newUser); // 201 Created
+    } catch (error) {
+      console.error("Create User Error:", error);
+      res.status(500).json({ message: "Erro ao criar o usuário." });
+    }
+  }
+);
+
+
+// Rota PATCH /:id para ATUALIZAR um usuário (sem alterações)
 router.patch(
   "/:id",
   passport.authenticate("jwt", { session: false }),
   isAdmin,
   async (req, res) => {
     try {
-      // --- MUDANÇA: Converte o ID da URL (String) para um número (Int) ---
       const userId = parseInt(req.params.id, 10);
-      const { name, email, role } = req.body;
+      const { name, email, role } = req.body.data.attributes;
       
-      // Validação para garantir que o ID é um número válido
       if (isNaN(userId)) {
         return res.status(400).json({ message: "ID de usuário inválido." });
       }
 
+      const dataToUpdate = { name, email, role };
+
       const updatedUser = await prisma.user.update({
-        where: { id: userId }, // <-- Usa o ID convertido
-        data: { name, email, role },
+        where: { id: userId },
+        data: dataToUpdate,
       });
 
       res.status(200).json(updatedUser);
@@ -62,28 +106,25 @@ router.patch(
   }
 );
 
-// --- Rota DELETE /:id para DELETAR um usuário (COM A CORREÇÃO) ---
+// Rota DELETE /:id para DELETAR um usuário (sem alterações)
 router.delete(
   "/:id",
   passport.authenticate("jwt", { session: false }),
   isAdmin,
   async (req, res) => {
     try {
-      // --- MUDANÇA: Converte o ID da URL (String) para um número (Int) ---
       const userId = parseInt(req.params.id, 10);
-
-      // Validação para garantir que o ID é um número válido
+      
       if (isNaN(userId)) {
         return res.status(400).json({ message: "ID de usuário inválido." });
       }
       
-      // Proteção para não deletar o próprio usuário
-      if (req.user.id === userId) { // <-- Comparação agora funciona (número com número)
+      if (req.user.id === userId) {
         return res.status(400).json({ message: "Você não pode deletar sua própria conta." });
       }
 
       await prisma.user.delete({
-        where: { id: userId }, // <-- Usa o ID convertido
+        where: { id: userId },
       });
 
       res.status(200).json({ message: "Usuário deletado com sucesso." });

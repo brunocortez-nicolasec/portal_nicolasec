@@ -29,7 +29,11 @@ export class HttpService {
       method,
       url,
       data,
-      headers: { "Content-Type": "application/vnd.api+json", "Accept": "application/vnd.api+json", 'Access-Control-Allow-Credentials': true },
+      headers: { 
+        "Content-Type": "application/json", // <-- Corrigido
+        "Accept": "application/json",       // <-- Corrigido para consistência
+        'Access-Control-Allow-Credentials': true 
+      },
     };
   };
 

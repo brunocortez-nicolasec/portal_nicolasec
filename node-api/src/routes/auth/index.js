@@ -8,11 +8,13 @@ import {
 
 const router = express.Router();
 
-router.post("/auth/login", async (req, res, next) => {
-  const { email, password } = req.body.data.attributes;
-  await loginRouteHandler(req, res, email, password);
-});
+// --- MUDANÇA AQUI ---
+// A rota agora passa a requisição diretamente para o handler,
+// que é responsável por ler o corpo da requisição.
+router.post("/auth/login", loginRouteHandler);
 
+
+// O resto do arquivo permanece como está
 router.post("/auth/logout", (req, res) => {
   return res.sendStatus(204);
 });

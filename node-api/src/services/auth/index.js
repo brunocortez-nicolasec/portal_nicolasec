@@ -21,41 +21,38 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-export const loginRouteHandler = async (req, res, email, password) => {
+export const loginRouteHandler = async (req, res) => {
   try {
-    // Busca o usuário pelo email, que é um campo único
+    // 1. Lendo os dados diretamente do corpo da requisição
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email e senha são obrigatórios." });
+    }
+
     const foundUser = await prisma.user.findUnique({
       where: { email: email },
     });
 
     if (!foundUser) {
-      return res.status(400).json({
-        errors: [{ detail: "As credenciais não combinam com nenhum usuário existente" }],
-      });
+      return res.status(401).json({ message: "Email ou senha inválidos." });
     }
 
     const validPassword = await bcrypt.compare(password, foundUser.password);
     if (validPassword) {
-      // A lógica para gerar o token JWT permanece a mesma
       const token = jwt.sign(
-        { id: foundUser.id, email: foundUser.email },
+        { id: foundUser.id, email: foundUser.email, role: foundUser.role },
         process.env.JWT_SECRET,
         { expiresIn: "24h" }
       );
-      return res.json({
-        token_type: "Bearer",
-        expires_in: "24h",
-        access_token: token,
-        refresh_token: token,
-      });
+      // 2. Enviando a resposta no formato simplificado que o frontend espera
+      return res.status(200).json({ token: token });
     } else {
-      return res.status(400).json({
-        errors: [{ detail: "Senha Incorreta" }],
-      });
+      return res.status(401).json({ message: "Email ou senha inválidos." });
     }
   } catch (error) {
     console.error("Login Error:", error);
-    return res.status(500).json({ message: "An unexpected error occurred during login." });
+    return res.status(500).json({ message: "Ocorreu um erro interno no servidor." });
   }
 };
 

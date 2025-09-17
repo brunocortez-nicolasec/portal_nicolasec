@@ -24,10 +24,10 @@ function Action({ onEdit, onDelete }) {
   return (
     <MDBox>
       <MDTypography onClick={onEdit} component="a" href="#" variant="caption" color="text" fontWeight="medium" mr={2}>
-        Edit
+        Editar
       </MDTypography>
       <MDTypography onClick={onDelete} component="a" href="#" variant="caption" color="error" fontWeight="medium">
-        Delete
+        Deletar
       </MDTypography>
     </MDBox>
   );
