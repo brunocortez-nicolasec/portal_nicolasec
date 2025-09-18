@@ -148,21 +148,21 @@ const routes = [
     {
       name: "TruIM",
       key: "truim",
-      route: "/plataformas/truim",
+      route: "/tas/truim",
       component: <TruIM />, // <-- ALTERADO
       icon: <Icon fontSize="small">fact_check</Icon>,
     },
     {
       name: "TruPAM",
       key: "trupam",
-      route: "/plataformas/trupam",
+      route: "/tas/trupam",
       component: <TruPAM />, // <-- ALTERADO
       icon: <Icon fontSize="small">shield</Icon>,
     },
     {
       name: "TruAM",
       key: "truam",
-      route: "/plataformas/truam",
+      route: "/tas/truam",
       component: <TruAM />, // <-- ALTERADO
       icon: <Icon fontSize="small">hub</Icon>,
     },
