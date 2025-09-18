@@ -83,6 +83,7 @@ import dialogTitle from "assets/theme-dark/components/dialog/dialogTitle";
 import dialogContent from "assets/theme-dark/components/dialog/dialogContent";
 import dialogContentText from "assets/theme-dark/components/dialog/dialogContentText";
 import dialogActions from "assets/theme-dark/components/dialog/dialogActions";
+import formHelperText from "assets/theme-dark/components/form/formHelperText";
 
 export default createTheme({
   breakpoints: { ...breakpoints },
@@ -154,5 +155,6 @@ export default createTheme({
     MuiDialogContent: { ...dialogContent },
     MuiDialogContentText: { ...dialogContentText },
     MuiDialogActions: { ...dialogActions },
+    MuiFormHelperText: { ...formHelperText },
   },
 });
