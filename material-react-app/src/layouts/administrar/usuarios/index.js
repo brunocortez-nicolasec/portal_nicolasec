@@ -64,15 +64,12 @@ function GerenciarUsuarios() {
     setIsAddModalOpen(false);
   };
 
-  // --- FUNÇÃO DE SALVAR (COM A CORREÇÃO) ---
   const handleSaveUser = async (id, updatedData) => {
     try {
-      // MUDANÇA: Removemos o "payload" e enviamos os dados diretamente.
       await api.patch(`/users/${id}`, updatedData);
-      
       setNotification({ show: true, color: "success", message: "Usuário atualizado com sucesso!" });
       fetchUsers();
-      handleCloseEditModal(); // Fecha o modal após o sucesso
+      handleCloseEditModal();
     } catch (error) {
       console.error("Erro ao salvar usuário:", error);
       setNotification({ show: true, color: "error", message: "Erro ao salvar alterações." });
@@ -84,7 +81,7 @@ function GerenciarUsuarios() {
       await api.post("/users", newUserData);
       setNotification({ show: true, color: "success", message: "Usuário criado com sucesso!" });
       fetchUsers();
-      handleCloseAddModal(); // Fecha o modal após o sucesso
+      handleCloseAddModal();
     } catch (error) {
       const message = error.response?.data?.message || "Erro ao criar o usuário.";
       console.error("Erro ao criar usuário:", error);
@@ -113,7 +110,13 @@ function GerenciarUsuarios() {
     >
       <MDBox mt={2} mb={2}>
         {notification.show && (
-          <MDAlert color={notification.color} dismissible onClose={() => setNotification({ ...notification, show: false })}>
+          <MDAlert
+            // --- CORREÇÃO APLICADA ---
+            key={Date.now()}
+            color={notification.color}
+            dismissible
+            onClose={() => setNotification({ show: false, message: "", color: "info" })}
+          >
             <MDTypography variant="body2" color="white">
               {notification.message}
             </MDTypography>

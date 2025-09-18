@@ -89,7 +89,6 @@ function GerenciarGrupos() {
     }
   };
 
-  // --- FUNÇÃO DE ATUALIZAÇÃO (COM DEBUG) ---
   const handleUpdateGroup = async (groupId, updatedData) => {
     try {
       await api.patch(`/groups/${groupId}`, updatedData);
@@ -124,9 +123,10 @@ function GerenciarGrupos() {
       <MDBox mt={2} mb={2}>
         {notification.show && (
           <MDAlert
+            key={Date.now()}
             color={notification.color}
             dismissible
-            onClose={() => setNotification({ ...notification, show: false })}
+            onClose={() => setNotification({ show: false, message: "", color: "info" })}
           >
             <MDTypography variant="body2" color="white">
               {notification.message}
