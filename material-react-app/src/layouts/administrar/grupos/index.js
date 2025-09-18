@@ -5,7 +5,7 @@ import axios from "axios";
 
 import AddGroupModal from "./components/AddGroupModal";
 import EditGroupModal from "./components/EditGroupModal";
-import ViewMembersModal from "./components/ViewMembersModal"; // 1. Importa o novo modal
+import ViewMembersModal from "./components/ViewMembersModal";
 
 import AdminPageLayout from "layouts/administrar/components/AdminPageLayout";
 import DataTable from "examples/Tables/DataTable";
@@ -19,10 +19,9 @@ function GerenciarGrupos() {
   const [tableData, setTableData] = useState({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({ show: false, color: "info", message: "" });
-  
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  // --- 2. Novos estados para o modal de visualização ---
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState(null);
 
@@ -49,14 +48,18 @@ function GerenciarGrupos() {
   }, []);
 
   useEffect(() => {
-    // --- 3. Passa a nova função 'handleViewClick' para a tabela ---
-    const formattedData = groupsTableData(groups, handleViewClick, handleEditClick, handleDeleteClick);
+    const formattedData = groupsTableData(
+      groups,
+      handleViewClick,
+      handleEditClick,
+      handleDeleteClick
+    );
     setTableData(formattedData);
   }, [groups]);
 
   const handleAddGroupClick = () => setIsAddModalOpen(true);
   const handleCloseAddModal = () => setIsAddModalOpen(false);
-  
+
   const handleEditClick = (group) => {
     setSelectedGroup(group);
     setIsEditModalOpen(true);
@@ -66,7 +69,6 @@ function GerenciarGrupos() {
     setIsEditModalOpen(false);
   };
 
-  // --- 4. Novas funções para controlar o modal de visualização ---
   const handleViewClick = (group) => {
     setSelectedGroup(group);
     setIsViewModalOpen(true);
@@ -75,10 +77,43 @@ function GerenciarGrupos() {
     setSelectedGroup(null);
     setIsViewModalOpen(false);
   };
-  
-  const handleCreateGroup = async (newGroupData) => { /* ... (sem alterações) ... */ };
-  const handleUpdateGroup = async (groupId, updatedData) => { /* ... (sem alterações) ... */ };
-  const handleDeleteClick = async (groupId) => { /* ... (sem alterações) ... */ };
+
+  const handleCreateGroup = async (newGroupData) => {
+    try {
+      await api.post("/groups", newGroupData);
+      setNotification({ show: true, color: "success", message: "Grupo criado com sucesso!" });
+      fetchGroups();
+    } catch (error) {
+      const message = error.response?.data?.message || "Erro ao criar o grupo.";
+      setNotification({ show: true, color: "error", message });
+    }
+  };
+
+  // --- FUNÇÃO DE ATUALIZAÇÃO (COM DEBUG) ---
+  const handleUpdateGroup = async (groupId, updatedData) => {
+    try {
+      await api.patch(`/groups/${groupId}`, updatedData);
+      setNotification({ show: true, color: "success", message: "Grupo atualizado com sucesso!" });
+      fetchGroups();
+    } catch (error) {
+      console.error("Erro ao salvar grupo:", error);
+      const message = error.response?.data?.message || "Erro ao atualizar o grupo.";
+      setNotification({ show: true, color: "error", message });
+    }
+  };
+
+  const handleDeleteClick = async (groupId) => {
+    if (window.confirm("Tem certeza que deseja deletar este grupo?")) {
+      try {
+        await api.delete(`/groups/${groupId}`);
+        setNotification({ show: true, color: "success", message: "Grupo deletado com sucesso!" });
+        fetchGroups();
+      } catch (error) {
+        const message = error.response?.data?.message || "Erro ao deletar o grupo.";
+        setNotification({ show: true, color: "error", message });
+      }
+    }
+  };
 
   return (
     <AdminPageLayout
@@ -87,20 +122,34 @@ function GerenciarGrupos() {
       onButtonClick={handleAddGroupClick}
     >
       <MDBox mt={2} mb={2}>
-        {/* ... (notificações sem alterações) ... */}
+        {notification.show && (
+          <MDAlert
+            color={notification.color}
+            dismissible
+            onClose={() => setNotification({ ...notification, show: false })}
+          >
+            <MDTypography variant="body2" color="white">
+              {notification.message}
+            </MDTypography>
+          </MDAlert>
+        )}
       </MDBox>
-      
+
       {loading ? (
-        <MDTypography variant="body2" textAlign="center">Carregando grupos...</MDTypography>
+        <MDTypography variant="body2" textAlign="center">
+          Carregando grupos...
+        </MDTypography>
       ) : (
-        <DataTable table={tableData} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder />
+        <DataTable
+          table={tableData}
+          isSorted={false}
+          entriesPerPage={false}
+          showTotalEntries={false}
+          noEndBorder
+        />
       )}
-      
-      <AddGroupModal
-        open={isAddModalOpen}
-        onClose={handleCloseAddModal}
-        onSave={handleCreateGroup}
-      />
+
+      <AddGroupModal open={isAddModalOpen} onClose={handleCloseAddModal} onSave={handleCreateGroup} />
 
       <EditGroupModal
         open={isEditModalOpen}
@@ -108,14 +157,12 @@ function GerenciarGrupos() {
         onSave={handleUpdateGroup}
         group={selectedGroup}
       />
-      
-      {/* --- 5. Renderiza o novo modal de visualização --- */}
+
       <ViewMembersModal
         open={isViewModalOpen}
         onClose={handleCloseViewModal}
         group={selectedGroup}
       />
-
     </AdminPageLayout>
   );
 }

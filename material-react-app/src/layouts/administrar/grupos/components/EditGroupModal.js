@@ -4,8 +4,9 @@ import { useState, useEffect, useMemo } from "react";
 import PropTypes from "prop-types";
 import axios from "axios";
 
-import { Checkbox } from "@mui/material";
+// Componentes do template
 import DataTable from "examples/Tables/DataTable";
+import Autocomplete from "@mui/material/Autocomplete";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
@@ -14,29 +15,16 @@ import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
-import MDAvatar from "components/MDAvatar";
-import defaultAvatar from "assets/images/default-avatar.jpg";
 
-// Componente interno para renderizar o usuário
-function User({ image, name }) {
-  return (
-    <MDBox display="flex" alignItems="center" lineHeight={1}>
-      <MDAvatar src={image || defaultAvatar} name={name} size="sm" />
-      <MDBox ml={2} lineHeight={1}>
-        <MDTypography display="block" variant="button" fontWeight="medium">
-          {name}
-        </MDTypography>
-      </MDBox>
-    </MDBox>
-  );
-}
+import membersListTableData from "../data/membersListTableData";
 
 function EditGroupModal({ open, onClose, onSave, group }) {
   const [name, setName] = useState("");
+  const [members, setMembers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-  const [memberIds, setMemberIds] = useState(new Set());
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [userToAdd, setUserToAdd] = useState(null);
 
   const api = axios.create({
     baseURL: "/",
@@ -54,8 +42,7 @@ function EditGroupModal({ open, onClose, onSave, group }) {
         ]);
         setAllUsers(usersResponse.data);
         setName(groupDetailsResponse.data.name);
-        const currentMemberIds = new Set(groupDetailsResponse.data.users.map((user) => user.id));
-        setMemberIds(currentMemberIds);
+        setMembers(groupDetailsResponse.data.users || []);
       } catch (error) {
         console.error("Erro ao buscar dados para o modal:", error);
       } finally {
@@ -65,60 +52,34 @@ function EditGroupModal({ open, onClose, onSave, group }) {
     if (open) {
       fetchData();
       setSearchText("");
+      setUserToAdd(null);
     }
   }, [open, group]);
 
-  const handleToggleMember = (userId) => {
-    const newMemberIds = new Set(memberIds);
-    if (newMemberIds.has(userId)) {
-      newMemberIds.delete(userId);
-    } else {
-      newMemberIds.add(userId);
-    }
-    setMemberIds(newMemberIds);
+  const handleRemoveMember = (userIdToRemove) => {
+    setMembers((currentMembers) => currentMembers.filter((member) => member.id !== userIdToRemove));
   };
 
+  // --- FUNÇÃO DE SALVAR (COM DEBUG) ---
   const handleSave = () => {
-    const userIds = Array.from(memberIds);
+    const userIds = members.map((member) => member.id);
     onSave(group.id, { name, userIds });
     onClose();
   };
 
-  // --- LÓGICA DA TABELA AGORA DENTRO DO COMPONENTE ---
-  const tableData = useMemo(() => {
-    const filteredUsers = allUsers.filter((user) =>
-      user.name.toLowerCase().includes(searchText.toLowerCase())
-    );
+  const filteredMembers = members.filter((member) =>
+    member.name.toLowerCase().includes(searchText.toLowerCase())
+  );
 
-    return {
-      columns: [
-        {
-          Header: "",
-          accessor: "id",
-          width: "5%",
-          align: "center",
-          Cell: ({ row }) => (
-            <Checkbox
-              color="info"
-              checked={memberIds.has(row.original.id)}
-              onChange={() => handleToggleMember(row.original.id)}
-            />
-          ),
-        },
-        {
-          Header: "usuário",
-          accessor: "name",
-          Cell: ({ row }) => <User image={row.original.profile_image} name={row.original.name} />,
-        },
-        {
-          Header: "email",
-          accessor: "email",
-          Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography>,
-        },
-      ],
-      rows: filteredUsers,
-    };
-  }, [searchText, allUsers, memberIds]); // Recalcula a tabela apenas quando necessário
+  const tableData = useMemo(
+    () => membersListTableData(filteredMembers, handleRemoveMember),
+    [filteredMembers]
+  );
+
+  const usersAvailableToAdd = useMemo(
+    () => allUsers.filter((user) => !members.some((member) => member.id === user.id)),
+    [allUsers, members]
+  );
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="md">
@@ -134,10 +95,13 @@ function EditGroupModal({ open, onClose, onSave, group }) {
               onChange={(e) => setName(e.target.value)}
             />
           </MDBox>
-          <MDBox mb={2}>
+          <MDTypography variant="h6" fontWeight="medium">
+            Membros Atuais
+          </MDTypography>
+          <MDBox my={2}>
             <MDInput
               type="text"
-              label="Pesquisar Usuários na Lista..."
+              label="Pesquisar na lista de membros..."
               fullWidth
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
@@ -145,9 +109,11 @@ function EditGroupModal({ open, onClose, onSave, group }) {
           </MDBox>
 
           {loading ? (
-            <MDTypography variant="body2" textAlign="center">Carregando...</MDTypography>
+            <MDTypography variant="body2" textAlign="center">
+              Carregando...
+            </MDTypography>
           ) : (
-            <MDBox sx={{ maxHeight: 440, overflow: "auto" }}>
+            <MDBox sx={{ maxHeight: 300, overflow: "auto" }}>
               <DataTable
                 table={tableData}
                 isSorted={false}
@@ -157,6 +123,26 @@ function EditGroupModal({ open, onClose, onSave, group }) {
               />
             </MDBox>
           )}
+
+          <MDTypography variant="h6" fontWeight="medium" mt={4}>
+            Adicionar Novo Membro
+          </MDTypography>
+          <MDBox mt={2}>
+            <Autocomplete
+              options={usersAvailableToAdd}
+              getOptionLabel={(option) => option.name}
+              value={userToAdd}
+              onChange={(event, newValue) => {
+                if (newValue) {
+                  setMembers((currentMembers) => [...currentMembers, newValue]);
+                  setUserToAdd(null);
+                }
+              }}
+              renderInput={(params) => (
+                <MDInput {...params} label="Pesquisar usuário para adicionar..." />
+              )}
+            />
+          </MDBox>
         </MDBox>
       </DialogContent>
       <DialogActions>
@@ -176,12 +162,6 @@ EditGroupModal.propTypes = {
   onClose: PropTypes.func.isRequired,
   onSave: PropTypes.func.isRequired,
   group: PropTypes.object,
-};
-
-// PropType para o componente User interno
-User.propTypes = {
-  image: PropTypes.string,
-  name: PropTypes.string.isRequired,
 };
 
 export default EditGroupModal;

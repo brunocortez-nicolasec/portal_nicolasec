@@ -54,13 +54,12 @@ router.get(
         where: { id: groupId },
         include: {
           users: {
-            // --- MUDANÇA PRINCIPAL AQUI ---
             select: {
               id: true,
               name: true,
               email: true,
-              profile_image: true, // 1. Adiciona a imagem de perfil
-              role: {              // 2. Seleciona o nome da função relacionada
+              profile_image: true,
+              role: {
                 select: {
                   name: true,
                 },
@@ -110,7 +109,7 @@ router.post(
   }
 );
 
-// ROTA PATCH /:id: Atualiza um grupo
+// --- ROTA PATCH /:id: (COM DEBUG) ---
 router.patch(
   "/:id",
   passport.authenticate("jwt", { session: false }),
@@ -119,16 +118,27 @@ router.patch(
     try {
       const groupId = parseInt(req.params.id, 10);
       const { name, userIds } = req.body;
+
+      // --- DEBUG 1: VERIFICAR O QUE A API ESTÁ RECEBENDO ---
+      console.log(`Recebido para atualizar Grupo ID ${groupId}:`, req.body);
+
       if (isNaN(groupId)) {
         return res.status(400).json({ message: "ID de grupo inválido." });
       }
+      
+      const dataToUpdate = {
+        name,
+        users: userIds ? { set: userIds.map(id => ({ id })) } : undefined,
+      };
+
+      // --- DEBUG 2: VERIFICAR O QUE ESTÁ SENDO ENVIADO PARA O BANCO ---
+      console.log(`Dados preparados para o Prisma.update:`, dataToUpdate);
+
       const updatedGroup = await prisma.group.update({
         where: { id: groupId },
-        data: {
-          name,
-          users: userIds ? { set: userIds.map(id => ({ id })) } : undefined,
-        },
+        data: dataToUpdate,
       });
+
       res.status(200).json(updatedGroup);
     } catch (error) {
       if (error.code === 'P2002') {
