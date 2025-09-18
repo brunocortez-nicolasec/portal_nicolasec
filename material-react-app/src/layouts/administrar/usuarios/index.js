@@ -1,34 +1,26 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-// --- MUDANÇA: Importa o novo modal de adição ---
-import AddUserModal from "./components/AddUserModal"; 
-import EditUserModal from "./components/EditUserModal"; 
+import AddUserModal from "./components/AddUserModal";
+import EditUserModal from "./components/EditUserModal";
 import MDAlert from "components/MDAlert";
-
-// Componentes do template
 import AdminPageLayout from "layouts/administrar/components/AdminPageLayout";
 import DataTable from "examples/Tables/DataTable";
 import MDTypography from "components/MDTypography";
 import MDBox from "components/MDBox";
-
-// Importa a função que formata os dados para a tabela
 import usersTableData from "./data/usersTableData";
 
 function GerenciarUsuarios() {
   const [users, setUsers] = useState([]);
   const [notification, setNotification] = useState({ show: false, color: "info", message: "" });
-  
-  // --- MUDANÇA: Estados para os dois modais ---
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  
   const [tableData, setTableData] = useState({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
 
   const api = axios.create({
-    baseURL: "/", 
+    baseURL: "/",
     headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
   });
 
@@ -54,7 +46,6 @@ function GerenciarUsuarios() {
     setTableData(formattedData);
   }, [users]);
 
-  // Funções para o Modal de Edição
   const handleEditClick = (user) => {
     setSelectedUser(user);
     setIsEditModalOpen(true);
@@ -64,41 +55,36 @@ function GerenciarUsuarios() {
     setIsEditModalOpen(false);
     setSelectedUser(null);
   };
-  
-  // --- MUDANÇA: Nova função para abrir o modal de adição ---
+
   const handleAddClick = () => {
     setIsAddModalOpen(true);
   };
 
-  // --- MUDANÇA: Nova função para fechar o modal de adição ---
   const handleCloseAddModal = () => {
     setIsAddModalOpen(false);
   };
 
+  // --- FUNÇÃO DE SALVAR (COM A CORREÇÃO) ---
   const handleSaveUser = async (id, updatedData) => {
     try {
-      const payload = {
-        data: {
-          type: "users",
-          attributes: updatedData,
-        },
-      };
-      await api.patch(`/users/${id}`, payload);
+      // MUDANÇA: Removemos o "payload" e enviamos os dados diretamente.
+      await api.patch(`/users/${id}`, updatedData);
+      
       setNotification({ show: true, color: "success", message: "Usuário atualizado com sucesso!" });
       fetchUsers();
+      handleCloseEditModal(); // Fecha o modal após o sucesso
     } catch (error) {
       console.error("Erro ao salvar usuário:", error);
       setNotification({ show: true, color: "error", message: "Erro ao salvar alterações." });
     }
   };
 
-  // --- MUDANÇA: Nova função para CRIAR o usuário ---
   const handleCreateUser = async (newUserData) => {
     try {
-      // O nosso backend espera um objeto JSON simples, sem o "pacote" data.attributes
       await api.post("/users", newUserData);
       setNotification({ show: true, color: "success", message: "Usuário criado com sucesso!" });
-      fetchUsers(); // Atualiza a lista de usuários
+      fetchUsers();
+      handleCloseAddModal(); // Fecha o modal após o sucesso
     } catch (error) {
       const message = error.response?.data?.message || "Erro ao criar o usuário.";
       console.error("Erro ao criar usuário:", error);
@@ -123,7 +109,7 @@ function GerenciarUsuarios() {
     <AdminPageLayout
       title="Gerenciamento de Usuários"
       buttonText="Adicionar Usuário"
-      onButtonClick={handleAddClick} // --- MUDANÇA: Chama a função correta
+      onButtonClick={handleAddClick}
     >
       <MDBox mt={2} mb={2}>
         {notification.show && (
@@ -141,7 +127,6 @@ function GerenciarUsuarios() {
         <DataTable table={tableData} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder />
       )}
 
-      {/* Modal de Edição (sem alterações) */}
       {selectedUser && (
         <EditUserModal
           open={isEditModalOpen}
@@ -151,7 +136,6 @@ function GerenciarUsuarios() {
         />
       )}
 
-      {/* --- MUDANÇA: Renderiza o novo modal de adição --- */}
       <AddUserModal
         open={isAddModalOpen}
         onClose={handleCloseAddModal}

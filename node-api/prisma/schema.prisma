@@ -1,6 +1,5 @@
 generator client {
   provider      = "prisma-client-js"
-  // Esta linha força o Prisma a gerar o motor moderno compatível com OpenSSL 3.0
   binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
@@ -15,9 +14,12 @@ model User {
   email         String   @unique
   password      String
   profile_image String?
-  role          String   @default("Membro") // <-- LINHA ADICIONADA
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  // --- MUDANÇA: O campo de texto 'role' foi substituído pelo relacionamento abaixo ---
+  roleId        Int     // Armazena o ID da função
+  role          Role     @relation(fields: [roleId], references: [id]) // Define a conexão com a tabela Role
 
   @@map("users")
 }
@@ -27,15 +29,28 @@ model PasswordReset {
   email     String
   token     String   @unique
   createdAt DateTime @default(now())
+
   @@map("password_resets")
 }
 
 model Credential {
   id        String   @id @default(cuid())
-  name      String   
+  name      String
   path      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("credentials")
+}
+
+// --- NOVO MODELO: Tabela dedicada para armazenar as Funções ---
+model Role {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // Garante que não hajam funções com nomes duplicados
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[] // Define que uma função pode estar associada a vários usuários
+
+  @@map("roles")
 }

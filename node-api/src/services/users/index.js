@@ -1,23 +1,22 @@
-// node-api/src/services/users/index.js - VERSÃO COM ROTA DE CRIAÇÃO
+// node-api/src/services/users/index.js
 
 import express from "express";
 import passport from "passport";
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt'; // <-- 1. IMPORTAÇÃO ADICIONADA
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Middleware de verificação de Admin (sem alterações)
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role === 'Admin') {
+  if (req.user && req.user.role?.name === 'Admin') {
     next();
   } else {
     res.status(403).json({ message: "Acesso negado. Apenas administradores." });
   }
 };
 
-// Rota GET / para buscar todos os usuários (sem alterações)
+// Rota GET (Correta)
 router.get(
   "/",
   passport.authenticate("jwt", { session: false }),
@@ -25,50 +24,44 @@ router.get(
   async (req, res) => {
     try {
       const users = await prisma.user.findMany({
-        select: { id: true, name: true, email: true, role: true, profile_image: true, createdAt: true },
+        include: { role: true },
+        orderBy: { createdAt: 'desc' }
       });
       res.status(200).json(users);
     } catch (error) {
+      console.error("List Users Error:", error);
       res.status(500).json({ message: "Erro ao buscar usuários." });
     }
   }
 );
 
-// --- 2. NOVA ROTA POST / para CRIAR um usuário ---
+// Rota POST (Correta)
 router.post(
   "/",
   passport.authenticate("jwt", { session: false }),
   isAdmin,
   async (req, res) => {
     try {
-      // Para simplificar, esperamos os dados diretamente no corpo da requisição
       const { name, email, password, role } = req.body;
-
-      // Validação básica
-      if (!name || !email || !password || !role) {
-        return res.status(400).json({ message: "Todos os campos são obrigatórios: nome, email, senha e função." });
+      const roleObject = await prisma.role.findUnique({ where: { name: role } });
+      if (!roleObject) {
+        return res.status(400).json({ message: `A função '${role}' não é válida.` });
       }
-
-      // Verifica se o usuário já existe
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
         return res.status(409).json({ message: "Este email já está em uso." });
       }
-
-      // Criptografa a senha antes de salvar
       const hashedPassword = await bcrypt.hash(password, 10);
-
       const newUser = await prisma.user.create({
         data: {
           name,
           email,
           password: hashedPassword,
-          role,
+          roleId: roleObject.id,
         },
-        select: { id: true, name: true, email: true, role: true, createdAt: true }, // Retorna o usuário sem a senha
+        include: { role: true },
       });
-
-      res.status(201).json(newUser); // 201 Created
+      res.status(201).json(newUser);
     } catch (error) {
       console.error("Create User Error:", error);
       res.status(500).json({ message: "Erro ao criar o usuário." });
@@ -76,8 +69,7 @@ router.post(
   }
 );
 
-
-// Rota PATCH /:id para ATUALIZAR um usuário (sem alterações)
+// Rota PATCH (Agora Padronizada)
 router.patch(
   "/:id",
   passport.authenticate("jwt", { session: false }),
@@ -85,19 +77,31 @@ router.patch(
   async (req, res) => {
     try {
       const userId = parseInt(req.params.id, 10);
-      const { name, email, role } = req.body.data.attributes;
+      // --- MUDANÇA FINAL: Lendo de req.body, e não de req.body.data.attributes ---
+      const { name, email, role } = req.body; 
       
       if (isNaN(userId)) {
         return res.status(400).json({ message: "ID de usuário inválido." });
       }
-
-      const dataToUpdate = { name, email, role };
-
+      
+      const dataToUpdate = { name, email };
+      
+      if (role) {
+        const roleNameToFind = typeof role === 'string' ? role : role.name;
+        const roleObject = await prisma.role.findUnique({ where: { name: roleNameToFind } });
+        
+        if (!roleObject) {
+          return res.status(400).json({ message: `A função '${roleNameToFind}' não é válida.` });
+        }
+        dataToUpdate.roleId = roleObject.id;
+      }
+      
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: dataToUpdate,
+        include: { role: true },
       });
-
+      
       res.status(200).json(updatedUser);
     } catch (error) {
       console.error("Update User Error:", error);
@@ -106,7 +110,7 @@ router.patch(
   }
 );
 
-// Rota DELETE /:id para DELETAR um usuário (sem alterações)
+// Rota DELETE (Correta)
 router.delete(
   "/:id",
   passport.authenticate("jwt", { session: false }),
@@ -114,19 +118,15 @@ router.delete(
   async (req, res) => {
     try {
       const userId = parseInt(req.params.id, 10);
-      
       if (isNaN(userId)) {
         return res.status(400).json({ message: "ID de usuário inválido." });
       }
-      
       if (req.user.id === userId) {
         return res.status(400).json({ message: "Você não pode deletar sua própria conta." });
       }
-
       await prisma.user.delete({
         where: { id: userId },
       });
-
       res.status(200).json({ message: "Usuário deletado com sucesso." });
     } catch (error) {
       console.error("Delete User Error:", error);

@@ -1,11 +1,9 @@
-import { ExtractJwt, Strategy as JWTStrategy } from "passport-jwt"; // Apenas uma otimização na importação
+import { ExtractJwt, Strategy as JWTStrategy } from "passport-jwt";
 import dotenv from "dotenv";
 import passport from "passport";
 
-// --- MUDANÇA PRINCIPAL: Importando o Prisma Client ---
 import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
-// A importação do Mongoose 'userModel' foi removida.
 
 dotenv.config();
 
@@ -15,24 +13,26 @@ passport.use(
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       secretOrKey: process.env.JWT_SECRET,
     },
-    // A função agora é 'async' para podermos usar 'await'
     async function (jwtPayload, done) {
       try {
-        // ANTES (Mongoose): userModel.findOne({ _id: jwtPayload.id })
-        // DEPOIS (Prisma):
+        // --- MUDANÇA PRINCIPAL AQUI ---
+        // Adicionamos 'include: { role: true }' para buscar os dados da função relacionada
         const user = await prisma.user.findUnique({
           where: {
             id: jwtPayload.id,
           },
+          include: {
+            role: true, // Garante que o objeto 'role' seja incluído
+          },
         });
 
         if (user) {
-          return done(null, user); // Usuário encontrado, anexa ao request
+          return done(null, user);
         } else {
-          return done(null, false); // Usuário não encontrado no banco
+          return done(null, false);
         }
       } catch (error) {
-        return done(error, false); // Erro inesperado no servidor
+        return done(error, false);
       }
     }
   )

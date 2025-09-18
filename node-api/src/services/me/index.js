@@ -5,21 +5,38 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 dotenv.config();
 
-// Sua função de buscar o perfil (sem alterações)
+// --- FUNÇÃO DE BUSCAR O PERFIL (COM A CORREÇÃO) ---
 export const getProfileRouteHandler = async (req, res) => {
   try {
-    const meUser = req.user;
+    // 1. Pega o ID do usuário a partir do token (única informação que vamos usar dele)
+    const userId = req.user.id;
+
+    // 2. Busca o usuário mais recente do banco de dados, incluindo sua função (role)
+    const foundUser = await prisma.user.findUnique({
+      where: { id: userId },
+      // A mágica acontece aqui: "include" busca os dados da tabela relacionada
+      include: {
+        role: true, // Isso vai incluir um objeto "role" com "id" e "name"
+      },
+    });
+
+    if (!foundUser) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    // 3. Monta o objeto de resposta com os dados corretos e atualizados
     const sentData = {
       data: {
         type: 'users',
-        id: meUser.id,
+        id: foundUser.id,
         attributes: {
-          name: meUser.name,
-          email: meUser.email,
-          profile_image: meUser.profile_image,
-          role: meUser.role,
-          createdAt: meUser.createdAt,
-          updatedAt: meUser.updatedAt
+          name: foundUser.name,
+          email: foundUser.email,
+          profile_image: foundUser.profile_image,
+          // Agora passamos o NOME da função
+          role: foundUser.role ? foundUser.role.name : "Sem função", 
+          createdAt: foundUser.createdAt,
+          updatedAt: foundUser.updatedAt
         }
       }
     }
@@ -30,37 +47,31 @@ export const getProfileRouteHandler = async (req, res) => {
   }
 };
 
-// Sua função de atualizar o perfil (COM AS CORREÇÕES)
+// --- FUNÇÃO DE ATUALIZAR O PERFIL (SEM ALTERAÇÕES) ---
 export const patchProfileRouteHandler = async (req, res) => {
   try {
-    const currentUser = req.user; // Usuário identificado pelo token JWT
-
-    // --- MUDANÇA: Adicionamos a leitura do profile_image ---
+    const currentUser = req.user;
     const { name, email, newPassword, confirmPassword, profile_image } = req.body.data.attributes;
     
     const dataToUpdate = {};
 
-    // Adiciona os campos ao objeto de atualização apenas se eles foram fornecidos
     if (name) dataToUpdate.name = name;
     if (email) dataToUpdate.email = email;
-    if (profile_image) dataToUpdate.profile_image = profile_image; // <-- Linha adicionada
+    if (profile_image) dataToUpdate.profile_image = profile_image;
 
     if (newPassword) {
       if (newPassword.length < 8 || newPassword !== confirmPassword) {
-        // Padronizando a resposta de erro para ser mais simples
         return res.status(400).json({ message: "As senhas devem ter no mínimo 8 caracteres e ser iguais." });
       }
       const salt = await bcrypt.genSalt(10);
       dataToUpdate.password = await bcrypt.hash(newPassword, salt);
     }
     
-    // Atualiza o usuário no banco usando o ID do token
     await prisma.user.update({
       where: { id: currentUser.id },
       data: dataToUpdate,
     });
     
-    // Padronizando a resposta de sucesso
     res.status(200).json({ message: "Perfil atualizado com sucesso." });
 
   } catch (error) {

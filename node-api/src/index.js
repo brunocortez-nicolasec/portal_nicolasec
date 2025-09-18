@@ -6,6 +6,7 @@ import "./passport.js";
 import { meRoutes, authRoutes } from "./routes";
 import usersRoutes from "./services/users/index.js";
 import conjurRoutes from "./services/conjur/index.js";
+import rolesRoutes from "./services/roles/index.js";
 import path from "path";
 import * as fs from "fs";
 
@@ -57,5 +58,6 @@ app.use("/", authRoutes);
 app.use("/me", meRoutes);
 app.use("/users", usersRoutes);
 app.use("/conjur", jsonParser, conjurRoutes);
+app.use("/roles", rolesRoutes);
 
 app.listen(PORT, () => console.log(`Server listening to port ${PORT}`));
