@@ -17,9 +17,11 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  // --- MUDANÇA: O campo de texto 'role' foi substituído pelo relacionamento abaixo ---
-  roleId        Int     // Armazena o ID da função
-  role          Role     @relation(fields: [roleId], references: [id]) // Define a conexão com a tabela Role
+  roleId        Int
+  role          Role     @relation(fields: [roleId], references: [id])
+
+  // --- MUDANÇA: Adiciona a relação com Grupos ---
+  groups        Group[]  // Indica que um usuário pode estar em vários grupos
 
   @@map("users")
 }
@@ -43,14 +45,25 @@ model Credential {
   @@map("credentials")
 }
 
-// --- NOVO MODELO: Tabela dedicada para armazenar as Funções ---
 model Role {
   id        Int      @id @default(autoincrement())
-  name      String   @unique // Garante que não hajam funções com nomes duplicados
+  name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users     User[] // Define que uma função pode estar associada a vários usuários
+  users     User[]
 
   @@map("roles")
+}
+
+// --- NOVO MODELO: Tabela dedicada para armazenar os Grupos ---
+model Group {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // Garante que não hajam grupos com nomes duplicados
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]   // Indica que um grupo pode ter vários usuários
+
+  @@map("groups")
 }

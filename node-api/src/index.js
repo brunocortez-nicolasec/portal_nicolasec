@@ -7,6 +7,7 @@ import { meRoutes, authRoutes } from "./routes";
 import usersRoutes from "./services/users/index.js";
 import conjurRoutes from "./services/conjur/index.js";
 import rolesRoutes from "./services/roles/index.js";
+import groupsRoutes from "./services/groups/index.js"; 
 import path from "path";
 import * as fs from "fs";
 
@@ -59,5 +60,6 @@ app.use("/me", meRoutes);
 app.use("/users", usersRoutes);
 app.use("/conjur", jsonParser, conjurRoutes);
 app.use("/roles", rolesRoutes);
+app.use("/groups", groupsRoutes);
 
 app.listen(PORT, () => console.log(`Server listening to port ${PORT}`));
