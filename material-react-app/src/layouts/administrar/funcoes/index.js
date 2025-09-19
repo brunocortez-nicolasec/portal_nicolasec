@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
-// --- NOVOS IMPORTS ---
+import Collapse from "@mui/material/Collapse";
 import AddRoleModal from "./components/AddRoleModal";
-import EditRoleModal from "./components/EditRoleModal"; // Importa o modal de edição
-
+import EditRoleModal from "./components/EditRoleModal";
 import AdminPageLayout from "layouts/administrar/components/AdminPageLayout";
 import DataTable from "examples/Tables/DataTable";
 import MDTypography from "components/MDTypography";
@@ -19,8 +18,6 @@ function GerenciarFuncoes() {
   const [tableData, setTableData] = useState({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({ show: false, color: "info", message: "" });
-  
-  // --- NOVOS ESTADOS PARA O MODAL DE EDIÇÃO ---
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState(null);
@@ -48,16 +45,21 @@ function GerenciarFuncoes() {
   }, []);
 
   useEffect(() => {
-    // Passa as funções de clique atualizadas para o formatador da tabela
+    if (notification.show) {
+      const timer = setTimeout(() => {
+        setNotification((prevState) => ({ ...prevState, show: false }));
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  useEffect(() => {
     const formattedData = rolesTableData(roles, handleEditClick, handleDeleteClick);
     setTableData(formattedData);
   }, [roles]);
 
-  // --- Funções para o Modal de Adição (sem alterações) ---
   const handleAddRoleClick = () => setIsAddModalOpen(true);
   const handleCloseAddModal = () => setIsAddModalOpen(false);
-  
-  // --- Funções para o Modal de Edição ---
   const handleEditClick = (role) => {
     setSelectedRole(role);
     setIsEditModalOpen(true);
@@ -67,7 +69,6 @@ function GerenciarFuncoes() {
     setIsEditModalOpen(false);
   };
 
-  // --- Funções de CRUD (Criar, Atualizar, Deletar) ---
   const handleCreateRole = async (newRoleData) => {
     try {
       await api.post("/roles", newRoleData);
@@ -110,11 +111,13 @@ function GerenciarFuncoes() {
       onButtonClick={handleAddRoleClick}
     >
       <MDBox mt={2} mb={2}>
-        {notification.show && (
-          <MDAlert color={notification.color} dismissible onClose={() => setNotification({ ...notification, show: false })}>
-            <MDTypography variant="body2" color="white">{notification.message}</MDTypography>
+        <Collapse in={notification.show}>
+          <MDAlert color={notification.color}>
+            <MDTypography variant="body2" color="white">
+              {notification.message}
+            </MDTypography>
           </MDAlert>
-        )}
+        </Collapse>
       </MDBox>
       
       {loading ? (
@@ -129,7 +132,6 @@ function GerenciarFuncoes() {
         onSave={handleCreateRole}
       />
 
-      {/* --- RENDERIZA O MODAL DE EDIÇÃO --- */}
       <EditRoleModal 
         open={isEditModalOpen}
         onClose={handleCloseEditModal}

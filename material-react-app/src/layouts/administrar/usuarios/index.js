@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
+import Collapse from "@mui/material/Collapse";
 import AddUserModal from "./components/AddUserModal";
 import EditUserModal from "./components/EditUserModal";
 import MDAlert from "components/MDAlert";
@@ -42,6 +43,15 @@ function GerenciarUsuarios() {
   }, []);
 
   useEffect(() => {
+    if (notification.show) {
+      const timer = setTimeout(() => {
+        setNotification((prevState) => ({ ...prevState, show: false }));
+      }, 5000); // 5 segundos
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  useEffect(() => {
     const formattedData = usersTableData(users, handleEditClick, handleDeleteClick);
     setTableData(formattedData);
   }, [users]);
@@ -50,16 +60,13 @@ function GerenciarUsuarios() {
     setSelectedUser(user);
     setIsEditModalOpen(true);
   };
-
   const handleCloseEditModal = () => {
     setIsEditModalOpen(false);
     setSelectedUser(null);
   };
-
   const handleAddClick = () => {
     setIsAddModalOpen(true);
   };
-
   const handleCloseAddModal = () => {
     setIsAddModalOpen(false);
   };
@@ -109,25 +116,27 @@ function GerenciarUsuarios() {
       onButtonClick={handleAddClick}
     >
       <MDBox mt={2} mb={2}>
-        {notification.show && (
-          <MDAlert
-            // --- CORREÇÃO APLICADA ---
-            key={Date.now()}
-            color={notification.color}
-            dismissible
-            onClose={() => setNotification({ show: false, message: "", color: "info" })}
-          >
+        <Collapse in={notification.show}>
+          <MDAlert color={notification.color}>
             <MDTypography variant="body2" color="white">
               {notification.message}
             </MDTypography>
           </MDAlert>
-        )}
+        </Collapse>
       </MDBox>
-      
+
       {loading ? (
-        <MDTypography variant="body2" textAlign="center">Carregando usuários...</MDTypography>
+        <MDTypography variant="body2" textAlign="center">
+          Carregando usuários...
+        </MDTypography>
       ) : (
-        <DataTable table={tableData} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder />
+        <DataTable
+          table={tableData}
+          isSorted={false}
+          entriesPerPage={false}
+          showTotalEntries={false}
+          noEndBorder
+        />
       )}
 
       {selectedUser && (
@@ -138,7 +147,6 @@ function GerenciarUsuarios() {
           onSave={handleSaveUser}
         />
       )}
-
       <AddUserModal
         open={isAddModalOpen}
         onClose={handleCloseAddModal}

@@ -26,8 +26,8 @@ const corsOptions = {
       'http://localhost:3080',
       'http://localhost:3080/',
       'http://localhost:8080/',
-      "http://192.168.100.115",
-      "http://192.168.0.117"
+      "http://192.168.100.102",
+      "http://192.168.0.119"
     ];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);

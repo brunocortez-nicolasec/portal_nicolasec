@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import axios from "axios";
 
+import Collapse from "@mui/material/Collapse";
 import AddGroupModal from "./components/AddGroupModal";
 import EditGroupModal from "./components/EditGroupModal";
 import ViewMembersModal from "./components/ViewMembersModal";
@@ -19,7 +20,6 @@ function GerenciarGrupos() {
   const [tableData, setTableData] = useState({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
   const [notification, setNotification] = useState({ show: false, color: "info", message: "" });
-
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -48,6 +48,15 @@ function GerenciarGrupos() {
   }, []);
 
   useEffect(() => {
+    if (notification.show) {
+      const timer = setTimeout(() => {
+        setNotification((prevState) => ({ ...prevState, show: false }));
+      }, 5000); // 5 segundos
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+
+  useEffect(() => {
     const formattedData = groupsTableData(
       groups,
       handleViewClick,
@@ -59,7 +68,6 @@ function GerenciarGrupos() {
 
   const handleAddGroupClick = () => setIsAddModalOpen(true);
   const handleCloseAddModal = () => setIsAddModalOpen(false);
-
   const handleEditClick = (group) => {
     setSelectedGroup(group);
     setIsEditModalOpen(true);
@@ -68,7 +76,6 @@ function GerenciarGrupos() {
     setSelectedGroup(null);
     setIsEditModalOpen(false);
   };
-
   const handleViewClick = (group) => {
     setSelectedGroup(group);
     setIsViewModalOpen(true);
@@ -121,18 +128,13 @@ function GerenciarGrupos() {
       onButtonClick={handleAddGroupClick}
     >
       <MDBox mt={2} mb={2}>
-        {notification.show && (
-          <MDAlert
-            key={Date.now()}
-            color={notification.color}
-            dismissible
-            onClose={() => setNotification({ show: false, message: "", color: "info" })}
-          >
+        <Collapse in={notification.show}>
+          <MDAlert color={notification.color}>
             <MDTypography variant="body2" color="white">
               {notification.message}
             </MDTypography>
           </MDAlert>
-        )}
+        </Collapse>
       </MDBox>
 
       {loading ? (
@@ -150,14 +152,12 @@ function GerenciarGrupos() {
       )}
 
       <AddGroupModal open={isAddModalOpen} onClose={handleCloseAddModal} onSave={handleCreateGroup} />
-
       <EditGroupModal
         open={isEditModalOpen}
         onClose={handleCloseEditModal}
         onSave={handleUpdateGroup}
         group={selectedGroup}
       />
-
       <ViewMembersModal
         open={isViewModalOpen}
         onClose={handleCloseViewModal}
