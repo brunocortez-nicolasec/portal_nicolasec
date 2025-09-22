@@ -1,5 +1,8 @@
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
+import axios from "axios"; // 1. Importa o axios
+
+// Componentes do Material UI
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
 import Select from "@mui/material/Select";
@@ -21,9 +24,27 @@ function AddUserModal({ open, onClose, onSave }) {
   });
   
   const [isPasswordValid, setIsPasswordValid] = useState(false);
+  // 2. Novo estado para armazenar a lista de funções
+  const [roles, setRoles] = useState([]);
 
+  // 3. useEffect para buscar as funções da API quando o modal abre
   useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const api = axios.create({
+          baseURL: "/",
+          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+        });
+        const response = await api.get("/roles");
+        setRoles(response.data);
+      } catch (error) {
+        console.error("Erro ao buscar funções:", error);
+      }
+    };
+
     if (open) {
+      fetchRoles();
+      // Reseta o formulário
       setUserData({
         name: "",
         email: "",
@@ -64,7 +85,6 @@ function AddUserModal({ open, onClose, onSave }) {
               fullWidth
               value={userData.name}
               onChange={handleChange}
-              // --- MUDANÇA: Adiciona espaço reservado para alinhamento ---
               helperText=" "
             />
           </MDBox>
@@ -76,7 +96,6 @@ function AddUserModal({ open, onClose, onSave }) {
               fullWidth
               value={userData.email}
               onChange={handleChange}
-              // --- MUDANÇA: Adiciona espaço reservado para alinhamento ---
               helperText=" "
             />
           </MDBox>
@@ -94,7 +113,6 @@ function AddUserModal({ open, onClose, onSave }) {
             />
           </MDBox>
 
-          {/* O Dropdown não precisa de helperText pois seu espaçamento é diferente */}
           <MDBox mb={2}>
             <FormControl fullWidth>
               <InputLabel id="role-select-label">Função</InputLabel>
@@ -107,9 +125,12 @@ function AddUserModal({ open, onClose, onSave }) {
                 onChange={handleChange}
                 sx={{ height: "44px" }}
               >
-                <MenuItem value="Admin">Admin</MenuItem>
-                <MenuItem value="Membro">Membro</MenuItem>
-                <MenuItem value="Terceiro">Terceiro</MenuItem>
+                {/* 4. Mapeia as funções buscadas para as opções do dropdown */}
+                {roles.map((role) => (
+                  <MenuItem key={role.id} value={role.name}>
+                    {role.name}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </MDBox>
