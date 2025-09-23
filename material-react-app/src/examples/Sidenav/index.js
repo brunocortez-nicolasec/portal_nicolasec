@@ -1,6 +1,4 @@
-// material-react-app/src/examples/Sidenav/index.js - COM LEITURA CORRETA DA ROLE
-
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useLocation, NavLink } from "react-router-dom";
 import PropTypes from "prop-types";
 import List from "@mui/material/List";
@@ -28,8 +26,16 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
   
   const { user } = useAuth();
   
-  // --- MUDANÇA CRÍTICA: Lendo a role do lugar certo ---
-  const userRole = user && user.data && user.data.attributes ? user.data.attributes.role : null;
+  const { userRole, userPackage, userPlatformKeys } = useMemo(() => {
+    const attributes = user?.data?.attributes;
+    if (!attributes) {
+      return { userRole: null, userPackage: null, userPlatformKeys: [] };
+    }
+    const userRole = attributes.role;
+    const userPackage = attributes.package;
+    const userPlatformKeys = userPackage?.platforms?.map(p => p.key) || [];
+    return { userRole, userPackage, userPlatformKeys };
+  }, [user]);
 
   let textColor = "white";
   if (transparentSidenav || (whiteSidenav && !darkMode)) {
@@ -49,7 +55,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     window.addEventListener("resize", handleMiniSidenav);
     handleMiniSidenav();
     return () => window.removeEventListener("resize", handleMiniSidenav);
-  }, [dispatch, location]);
+  }, [dispatch, location, transparentSidenav, whiteSidenav]);
 
   const renderRoutes = routes.map(
     ({ type, name, icon, title, noCollapse, key, href, route, collapse, role }) => {
@@ -58,8 +64,30 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
       if (role && role !== userRole) {
         return null;
       }
-
-      if (type === "collapse") {
+      
+      if (key === "tas") {
+        const isAdmin = userRole === "Admin";
+        if (!isAdmin && !userPackage) {
+          return null;
+        }
+        let platformsToShow = collapse;
+        if (!isAdmin && userPackage) {
+          platformsToShow = collapse.filter(platform => userPlatformKeys.includes(platform.key));
+        }
+        if (platformsToShow.length === 0) {
+          return null;
+        }
+        
+        returnValue = (
+          <SidenavCollapse
+            key={key}
+            name={name}
+            icon={icon}
+            active={location.pathname.startsWith(`/${key}`)}
+            collapse={platformsToShow}
+          />
+        );
+      } else if (type === "collapse") {
         if (collapse) {
           returnValue = (
             <SidenavCollapse
@@ -73,12 +101,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         } else if (href) {
           returnValue = (
             <Link href={href} key={key} target="_blank" rel="noreferrer" sx={{ textDecoration: "none" }}>
-              <SidenavCollapse
-                name={name}
-                icon={icon}
-                active={key === collapseName}
-                noCollapse={noCollapse}
-              />
+              <SidenavCollapse name={name} icon={icon} active={key === collapseName} noCollapse={noCollapse} />
             </Link>
           );
         } else {
@@ -89,7 +112,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
           );
         }
       } else if (type === "title") {
-         returnValue = (
+        returnValue = (
           <MDTypography
             key={key}
             color={textColor}
@@ -106,7 +129,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
           </MDTypography>
         );
       } else if (type === "divider") {
-         returnValue = (
+        returnValue = (
           <Divider
             key={key}
             light={
@@ -120,7 +143,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     }
   );
   
-   const renderExampleRoutes = routes.map(
+  const renderExampleRoutes = routes.map(
     ({ type, name, icon, noCollapse, key, href, route }) => {
       let returnValue;
       if (type === "examples") {
@@ -177,9 +200,9 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         }
       />
       <List>
-        <MDBox display="flex flex-col" alignItems="center">
+        <MDBox display="flex" flexDirection="column">
           {!miniSidenav && (
-            <MDTypography color={textColor} variant="body2" fontWeight="medium" pl="1.5rem">
+            <MDTypography color={textColor} variant="body2" fontWeight="medium" pl="1.5rem" alignSelf="flex-start">
               Gerenciamento
             </MDTypography>
           )}
@@ -189,11 +212,11 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
           light={
             (!darkMode && !whiteSidenav && !transparentSidenav) ||
             (darkMode && !transparentSidenav && whiteSidenav)
-        }
-      />
-      {renderRoutes}
-    </List>
-  </SidenavRoot>
+          }
+        />
+        {renderRoutes}
+      </List>
+    </SidenavRoot>
   );
 }
 

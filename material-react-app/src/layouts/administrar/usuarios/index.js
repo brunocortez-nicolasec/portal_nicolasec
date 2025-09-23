@@ -1,6 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
-
 import Collapse from "@mui/material/Collapse";
 import AddUserModal from "./components/AddUserModal";
 import EditUserModal from "./components/EditUserModal";
@@ -10,6 +9,7 @@ import DataTable from "examples/Tables/DataTable";
 import MDTypography from "components/MDTypography";
 import MDBox from "components/MDBox";
 import usersTableData from "./data/usersTableData";
+import MDInput from "components/MDInput"; // Importa o MDInput para a busca
 
 function GerenciarUsuarios() {
   const [users, setUsers] = useState([]);
@@ -19,6 +19,9 @@ function GerenciarUsuarios() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [tableData, setTableData] = useState({ columns: [], rows: [] });
   const [loading, setLoading] = useState(true);
+  
+  // Novo estado para o texto da busca
+  const [searchText, setSearchText] = useState("");
 
   const api = axios.create({
     baseURL: "/",
@@ -46,15 +49,22 @@ function GerenciarUsuarios() {
     if (notification.show) {
       const timer = setTimeout(() => {
         setNotification((prevState) => ({ ...prevState, show: false }));
-      }, 5000); // 5 segundos
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [notification]);
 
+  // Filtra os usuários com base no texto de busca
+  const filteredUsers = useMemo(() =>
+    users.filter(user =>
+      user.name.toLowerCase().includes(searchText.toLowerCase())
+    ), [users, searchText]);
+
   useEffect(() => {
-    const formattedData = usersTableData(users, handleEditClick, handleDeleteClick);
+    // A tabela agora usará os usuários filtrados
+    const formattedData = usersTableData(filteredUsers, handleEditClick, handleDeleteClick);
     setTableData(formattedData);
-  }, [users]);
+  }, [filteredUsers]);
 
   const handleEditClick = (user) => {
     setSelectedUser(user);
@@ -125,18 +135,20 @@ function GerenciarUsuarios() {
         </Collapse>
       </MDBox>
 
-      {loading ? (
-        <MDTypography variant="body2" textAlign="center">
-          Carregando usuários...
-        </MDTypography>
-      ) : (
-        <DataTable
-          table={tableData}
-          isSorted={false}
-          entriesPerPage={false}
-          showTotalEntries={false}
-          noEndBorder
+      {/* Campo de busca adicionado */}
+      <MDBox mb={2}>
+        <MDInput 
+          label="Pesquisar por nome..."
+          fullWidth
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
         />
+      </MDBox>
+      
+      {loading ? (
+        <MDTypography variant="body2" textAlign="center">Carregando usuários...</MDTypography>
+      ) : (
+        <DataTable table={tableData} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder />
       )}
 
       {selectedUser && (

@@ -20,8 +20,11 @@ model User {
   roleId        Int
   role          Role     @relation(fields: [roleId], references: [id])
 
-  // --- MUDANÇA: Adiciona a relação com Grupos ---
-  groups        Group[]  // Indica que um usuário pode estar em vários grupos
+  groups        Group[]
+
+  // --- MUDANÇA: Adiciona a relação com Pacotes ---
+  packageId     Int?     // Armazena o ID do pacote (opcional)
+  package       Package? @relation(fields: [packageId], references: [id])
 
   @@map("users")
 }
@@ -31,7 +34,6 @@ model PasswordReset {
   email     String
   token     String   @unique
   createdAt DateTime @default(now())
-
   @@map("password_resets")
 }
 
@@ -41,7 +43,6 @@ model Credential {
   path      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   @@map("credentials")
 }
 
@@ -50,20 +51,44 @@ model Role {
   name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
   users     User[]
-
   @@map("roles")
 }
 
-// --- NOVO MODELO: Tabela dedicada para armazenar os Grupos ---
 model Group {
   id        Int      @id @default(autoincrement())
-  name      String   @unique // Garante que não hajam grupos com nomes duplicados
+  name      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  users     User[]   // Indica que um grupo pode ter vários usuários
-
+  users     User[]
   @@map("groups")
+}
+
+
+// --- NOVO MODELO: Tabela para as Plataformas (TruIM, etc.) ---
+model Platform {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique // Ex: "TruIM - Controle de Identidades"
+  key       String   @unique // Ex: "truim" (para usar na lógica do código)
+  route     String   @unique // Ex: "/tas/truim" (a rota no frontend)
+  icon      String?           // Ex: "fact_check" (nome do ícone)
+
+  packages  Package[] // Relação muitos-para-muitos com Pacotes
+
+  @@map("platforms")
+}
+
+
+// --- NOVO MODELO: Tabela para os Pacotes de Serviços ---
+model Package {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique // Ex: "Pacote Básico", "Pacote Premium"
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  platforms   Platform[] // Relação muitos-para-muitos com Plataformas
+  users       User[]     // Relação um-para-muitos com Usuários
+
+  @@map("packages")
 }

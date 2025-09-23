@@ -14,16 +14,21 @@ import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 
 function EditUserModal({ open, onClose, user, onSave }) {
-  const [userData, setUserData] = useState({ name: "", email: "", role: "" });
+  // Adiciona 'packageId' ao estado do formulário
+  const [userData, setUserData] = useState({ name: "", email: "", role: "", packageId: "" });
   const [roles, setRoles] = useState([]);
+  // Novo estado para armazenar a lista de pacotes
+  const [packages, setPackages] = useState([]);
 
   useEffect(() => {
+    const api = axios.create({
+      baseURL: "/",
+      headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+    });
+
+    // Busca as Funções (Roles)
     const fetchRoles = async () => {
       try {
-        const api = axios.create({
-          baseURL: "/",
-          headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
-        });
         const response = await api.get("/roles");
         setRoles(response.data);
       } catch (error) {
@@ -31,17 +36,31 @@ function EditUserModal({ open, onClose, user, onSave }) {
       }
     };
 
+    // Busca os Pacotes (Packages)
+    const fetchPackages = async () => {
+      try {
+        const response = await api.get("/packages");
+        setPackages(response.data);
+      } catch (error) {
+        console.error("Erro ao buscar pacotes:", error);
+      }
+    };
+
     if (open) {
       fetchRoles();
+      fetchPackages();
     }
   }, [open]);
 
+  // Popula o formulário com os dados do usuário quando ele é selecionado
   useEffect(() => {
     if (user) {
       setUserData({
         name: user.name || "",
         email: user.email || "",
         role: user.role?.name || "",
+        // Define o packageId, ou null se o usuário não tiver pacote
+        packageId: user.packageId || "",
       });
     }
   }, [user]);
@@ -51,6 +70,7 @@ function EditUserModal({ open, onClose, user, onSave }) {
   };
 
   const handleSave = () => {
+    // Ao salvar, passa o objeto completo, incluindo o novo packageId
     onSave(user.id, userData);
     onClose();
   };
@@ -59,9 +79,7 @@ function EditUserModal({ open, onClose, user, onSave }) {
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>Editar Usuário</DialogTitle>
       <DialogContent>
-        {/* --- MUDANÇA PRINCIPAL AQUI --- */}
         <MDBox component="form" role="form" pt={2}>
-          {/* 1. Campo 'Nome' agora usa a prop 'label' */}
           <MDBox mb={2}>
             <MDInput
               type="text"
@@ -72,8 +90,6 @@ function EditUserModal({ open, onClose, user, onSave }) {
               fullWidth
             />
           </MDBox>
-
-          {/* 2. Campo 'Email' agora usa a prop 'label' */}
           <MDBox mb={2}>
             <MDInput
               type="email"
@@ -84,8 +100,6 @@ function EditUserModal({ open, onClose, user, onSave }) {
               fullWidth
             />
           </MDBox>
-
-          {/* 3. Dropdown de Função (sem alteração de estrutura) */}
           <MDBox mb={2}>
             <FormControl fullWidth>
               <InputLabel id="role-select-label">Função (Role)</InputLabel>
@@ -105,6 +119,32 @@ function EditUserModal({ open, onClose, user, onSave }) {
               </Select>
             </FormControl>
           </MDBox>
+
+          {/* --- NOVO DROPDOWN DE PACOTES --- */}
+          <MDBox mb={2}>
+            <FormControl fullWidth>
+              <InputLabel id="package-select-label">Pacote</InputLabel>
+              <Select
+                labelId="package-select-label"
+                name="packageId"
+                value={userData.packageId}
+                label="Pacote"
+                onChange={handleChange}
+                sx={{ height: "44px" }}
+              >
+                {/* Opção para remover o pacote do usuário */}
+                <MenuItem value="">
+                  <em>Nenhum</em>
+                </MenuItem>
+                {packages.map((pkg) => (
+                  <MenuItem key={pkg.id} value={pkg.id}>
+                    {pkg.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </MDBox>
+          
         </MDBox>
       </DialogContent>
       <DialogActions>

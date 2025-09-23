@@ -5,18 +5,20 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 dotenv.config();
 
-// --- FUNÇÃO DE BUSCAR O PERFIL (COM A CORREÇÃO) ---
 export const getProfileRouteHandler = async (req, res) => {
   try {
-    // 1. Pega o ID do usuário a partir do token (única informação que vamos usar dele)
     const userId = req.user.id;
 
-    // 2. Busca o usuário mais recente do banco de dados, incluindo sua função (role)
+    // Busca o usuário e inclui a role e o package (com suas platforms)
     const foundUser = await prisma.user.findUnique({
       where: { id: userId },
-      // A mágica acontece aqui: "include" busca os dados da tabela relacionada
       include: {
-        role: true, // Isso vai incluir um objeto "role" com "id" e "name"
+        role: true,
+        package: {
+          include: {
+            platforms: true,
+          },
+        },
       },
     });
 
@@ -24,7 +26,7 @@ export const getProfileRouteHandler = async (req, res) => {
       return res.status(404).json({ message: "Usuário não encontrado." });
     }
 
-    // 3. Monta o objeto de resposta com os dados corretos e atualizados
+    // Monta a resposta, agora incluindo o objeto 'package' completo
     const sentData = {
       data: {
         type: 'users',
@@ -33,8 +35,8 @@ export const getProfileRouteHandler = async (req, res) => {
           name: foundUser.name,
           email: foundUser.email,
           profile_image: foundUser.profile_image,
-          // Agora passamos o NOME da função
-          role: foundUser.role ? foundUser.role.name : "Sem função", 
+          role: foundUser.role ? foundUser.role.name : "Sem função",
+          package: foundUser.package || null,
           createdAt: foundUser.createdAt,
           updatedAt: foundUser.updatedAt
         }
@@ -47,7 +49,6 @@ export const getProfileRouteHandler = async (req, res) => {
   }
 };
 
-// --- FUNÇÃO DE ATUALIZAR O PERFIL (SEM ALTERAÇÕES) ---
 export const patchProfileRouteHandler = async (req, res) => {
   try {
     const currentUser = req.user;

@@ -16,13 +16,18 @@ passport.use(
     async function (jwtPayload, done) {
       try {
         // --- MUDANÇA PRINCIPAL AQUI ---
-        // Adicionamos 'include: { role: true }' para buscar os dados da função relacionada
+        // Agora incluímos a role, o package, e as platforms dentro do package
         const user = await prisma.user.findUnique({
           where: {
             id: jwtPayload.id,
           },
           include: {
-            role: true, // Garante que o objeto 'role' seja incluído
+            role: true,
+            package: {
+              include: {
+                platforms: true,
+              },
+            },
           },
         });
 

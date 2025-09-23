@@ -20,6 +20,7 @@ import GerenciarUsuarios from "layouts/administrar/usuarios";
 import GerenciarGrupos from "layouts/administrar/grupos";
 import GerenciarFuncoes from "layouts/administrar/funcoes";
 import Credenciais from "layouts/credenciais";
+import GerenciarPacotes from "layouts/administrar/pacotes";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -136,6 +137,13 @@ const routes = [
       // --- ÍCONE ADICIONADO ---
       icon: <Icon fontSize="small">security</Icon>,
     },
+    {
+      name: "Pacotes",
+      key: "pacotes",
+      route: "/administrar/pacotes",
+      component: <GerenciarPacotes />,
+      icon: <Icon fontSize="small">inventory_2</Icon>,
+    },
   ],
   },
 {
@@ -143,7 +151,6 @@ const routes = [
   name: "TAS",
   key: "tas",
   icon: <Icon fontSize="small">device_hub</Icon>,
-  role: "Admin",
   collapse: [
     {
       name: "TruIM",

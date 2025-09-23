@@ -31,9 +31,11 @@ function Action({ onEdit, onDelete }) {
 
 export default function data(users, handleEdit, handleDelete) {
   const columns = [
-    { Header: "usuário", accessor: "user", width: "35%", align: "left" },
+    { Header: "usuário", accessor: "user", width: "30%", align: "left" },
     { Header: "email", accessor: "email", align: "left" },
     { Header: "função", accessor: "role", align: "center" },
+    // --- 1. NOVA COLUNA ADICIONADA ---
+    { Header: "pacote", accessor: "package", align: "center" },
     { Header: "criado em", accessor: "created", align: "center" },
     { Header: "ação", accessor: "action", align: "center" },
   ];
@@ -41,12 +43,13 @@ export default function data(users, handleEdit, handleDelete) {
   const rows = users.map(user => ({
     user: <Author image={user.profile_image} name={user.name} />,
     email: <MDTypography variant="caption">{user.email}</MDTypography>,
-    
-    // --- MUDANÇA PRINCIPAL AQUI ---
-    // Acessamos user.role.name para obter o nome da função.
-    // O '?.' (optional chaining) previne erros se a 'role' for nula.
     role: <MDTypography variant="caption">{user.role?.name || "Sem função"}</MDTypography>,
-    
+    // --- 2. NOVA PROPRIEDADE PARA EXIBIR O PACOTE ---
+    package: (
+      <MDTypography variant="caption" color="text" fontWeight="medium">
+        {user.package?.name || "Nenhum"}
+      </MDTypography>
+    ),
     created: (
       <MDTypography variant="caption">
         {new Date(user.createdAt).toLocaleDateString()}

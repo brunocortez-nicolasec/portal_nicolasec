@@ -16,7 +16,7 @@ const isAdmin = (req, res, next) => {
   }
 };
 
-// Rota GET (Correta)
+// Rota GET (sem alterações)
 router.get(
   "/",
   passport.authenticate("jwt", { session: false }),
@@ -24,7 +24,7 @@ router.get(
   async (req, res) => {
     try {
       const users = await prisma.user.findMany({
-        include: { role: true },
+        include: { role: true, package: true },
         orderBy: { createdAt: 'desc' }
       });
       res.status(200).json(users);
@@ -35,14 +35,14 @@ router.get(
   }
 );
 
-// Rota POST (Correta)
+// Rota POST (sem alterações)
 router.post(
   "/",
   passport.authenticate("jwt", { session: false }),
   isAdmin,
   async (req, res) => {
     try {
-      const { name, email, password, role } = req.body;
+      const { name, email, password, role, packageId } = req.body;
       const roleObject = await prisma.role.findUnique({ where: { name: role } });
       if (!roleObject) {
         return res.status(400).json({ message: `A função '${role}' não é válida.` });
@@ -52,14 +52,16 @@ router.post(
         return res.status(409).json({ message: "Este email já está em uso." });
       }
       const hashedPassword = await bcrypt.hash(password, 10);
+      
       const newUser = await prisma.user.create({
         data: {
           name,
           email,
           password: hashedPassword,
           roleId: roleObject.id,
+          packageId: packageId || null,
         },
-        include: { role: true },
+        include: { role: true, package: true },
       });
       res.status(201).json(newUser);
     } catch (error) {
@@ -69,7 +71,7 @@ router.post(
   }
 );
 
-// Rota PATCH (Agora Padronizada)
+// Rota PATCH (COM A CORREÇÃO)
 router.patch(
   "/:id",
   passport.authenticate("jwt", { session: false }),
@@ -77,8 +79,7 @@ router.patch(
   async (req, res) => {
     try {
       const userId = parseInt(req.params.id, 10);
-      // --- MUDANÇA FINAL: Lendo de req.body, e não de req.body.data.attributes ---
-      const { name, email, role } = req.body; 
+      const { name, email, role, packageId } = req.body; 
       
       if (isNaN(userId)) {
         return res.status(400).json({ message: "ID de usuário inválido." });
@@ -96,10 +97,17 @@ router.patch(
         dataToUpdate.roleId = roleObject.id;
       }
       
+      // --- MUDANÇA PRINCIPAL AQUI ---
+      if (packageId !== undefined) {
+          // Se packageId for um texto vazio (""), converte para null.
+          // Senão, usa o valor recebido (que deve ser um número).
+          dataToUpdate.packageId = packageId === "" ? null : packageId;
+      }
+      
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: dataToUpdate,
-        include: { role: true },
+        include: { role: true, package: true },
       });
       
       res.status(200).json(updatedUser);
@@ -110,7 +118,7 @@ router.patch(
   }
 );
 
-// Rota DELETE (Correta)
+// Rota DELETE (sem alterações)
 router.delete(
   "/:id",
   passport.authenticate("jwt", { session: false }),

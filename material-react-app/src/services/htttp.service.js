@@ -30,19 +30,29 @@ export class HttpService {
       url,
       data,
       headers: { 
-        "Content-Type": "application/json", // <-- Corrigido
-        "Accept": "application/json",       // <-- Corrigido para consistência
+        "Content-Type": "application/json",
+        "Accept": "application/json",
         'Access-Control-Allow-Credentials': true 
       },
     };
   };
 
+  // --- FUNÇÃO REQUEST CORRIGIDA ---
   request(options) {
     return new Promise((resolve, reject) => {
       this._axios
         .request(options)
         .then((res) => resolve(res.data))
-        .catch((ex) => reject(ex.response.data));
+        .catch((ex) => {
+          // 1. Verifica se existe uma resposta do servidor (erro de API, ex: 401, 404, 500)
+          if (ex.response && ex.response.data) {
+            reject(ex.response.data);
+          } else {
+            // 2. Se não houver resposta, é um erro de rede (servidor offline, etc.)
+            // Criamos um objeto de erro padrão para não quebrar a aplicação.
+            reject({ message: ex.message || "Erro de rede ou servidor indisponível." });
+          }
+        });
     });
   }
 }
