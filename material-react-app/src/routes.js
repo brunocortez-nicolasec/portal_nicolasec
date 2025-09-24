@@ -21,6 +21,9 @@ import GerenciarGrupos from "layouts/administrar/grupos";
 import GerenciarFuncoes from "layouts/administrar/funcoes";
 import Credenciais from "layouts/credenciais";
 import GerenciarPacotes from "layouts/administrar/pacotes";
+import DashboardTruIM from "layouts/observabilidade/truim";
+import DashboardTruPAM from "layouts/observabilidade/trupam";
+import DashboardTruAM from "layouts/observabilidade/truam";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -171,6 +174,35 @@ const routes = [
       key: "truam",
       route: "/tas/truam",
       component: <TruAM />, // <-- ALTERADO
+      icon: <Icon fontSize="small">hub</Icon>,
+    },
+  ],
+},
+{
+  type: "collapse",
+  name: "Observabilidade",
+  key: "observabilidade", // Chave para o menu pai
+  icon: <Icon fontSize="small">monitoring</Icon>,
+  collapse: [
+    {
+      name: "TruIM",
+      key: "truim",
+      route: "/observabilidade/truim", // Nova rota
+      component: <DashboardTruIM />,   // Novo componente que criaremos
+      icon: <Icon fontSize="small">fact_check</Icon>,
+    },
+    {
+      name: "TruPAM",
+      key: "trupam",
+      route: "/observabilidade/trupam", // Nova rota
+      component: <DashboardTruPAM />,  // Novo componente que criaremos
+      icon: <Icon fontSize="small">shield</Icon>,
+    },
+    {
+      name: "TruAM",
+      key: "truam",
+      route: "/observabilidade/truam", // Nova rota
+      component: <DashboardTruAM />,   // Novo componente que criaremos
       icon: <Icon fontSize="small">hub</Icon>,
     },
   ],

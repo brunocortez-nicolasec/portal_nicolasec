@@ -1,5 +1,3 @@
-// src/layouts/administrar/pacotes/data/packagesTableData.js
-
 import MDTypography from "components/MDTypography";
 import MDBox from "components/MDBox";
 import { Chip } from "@mui/material";
@@ -34,7 +32,8 @@ export default function data(packages, handleEdit, handleDelete) {
     platforms: (
       <MDBox sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
         {pkg.platforms.map(platform => (
-          <Chip key={platform.id} label={platform.name} size="small" />
+          // --- MUDANÇA AQUI ---
+          <Chip key={platform.id} label={platform.name} size="small" color="info" />
         ))}
       </MDBox>
     ),
