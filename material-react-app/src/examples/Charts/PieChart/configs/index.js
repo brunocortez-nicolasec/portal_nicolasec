@@ -1,51 +1,28 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
+// src/examples/Charts/PieChart/configs/index.js
 
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
-
-/* eslint-disable no-dupe-keys */
-// Material Dashboard 2 React base styles
 import colors from "assets/theme/base/colors";
 
-const { gradients, dark } = colors;
-
 function configs(labels, datasets) {
-  const backgroundColors = [];
-
-  if (datasets.backgroundColors) {
-    datasets.backgroundColors.forEach((color) =>
-      gradients[color]
-        ? backgroundColors.push(gradients[color].state)
-        : backgroundColors.push(dark.main)
-    );
-  } else {
-    backgroundColors.push(dark.main);
-  }
+  const backgroundColors = datasets.backgroundColors
+    ? datasets.backgroundColors
+    : ["info", "primary", "dark", "secondary", "success"];
 
   return {
     data: {
       labels,
       datasets: [
         {
-          label: datasets.label,
-          weight: 9,
-          cutout: 0,
-          tension: 0.9,
-          pointRadius: 2,
-          borderWidth: 2,
-          backgroundColor: backgroundColors,
+          label: datasets.label ? datasets.label : "Projects",
+          tension: 0.4,
+          borderWidth: 0,
+          pointRadius: 0,
+          borderColor: "#fff",
+          backgroundColor: backgroundColors.map((color) =>
+            colors[color] ? colors[color].main : colors.info.main
+          ),
+          data: datasets.data ? datasets.data : [],
           fill: false,
-          data: datasets.data,
+          hoverOffset: 15,
         },
       ],
     },
@@ -56,34 +33,34 @@ function configs(labels, datasets) {
         legend: {
           display: false,
         },
+        tooltip: { // Configurações do tooltip para melhor experiência
+          callbacks: {
+            label: (context) => {
+              let label = context.label || '';
+              if (label) {
+                label += ': ';
+              }
+              if (context.parsed !== null) {
+                label += context.parsed;
+              }
+              return label;
+            }
+          }
+        }
       },
       interaction: {
-        intersect: false,
-        mode: "index",
+        // --- MODIFICAÇÃO: Usar 'nearest' para melhor detecção de hover ---
+        intersect: true, // Permite a intersecção do mouse
+        mode: "nearest", // Detecta o elemento mais próximo do mouse
       },
-      scales: {
-        y: {
-          grid: {
-            drawBorder: false,
-            display: false,
-            drawOnChartArea: false,
-            drawTicks: false,
-          },
-          ticks: {
-            display: false,
-          },
-        },
-        x: {
-          grid: {
-            drawBorder: false,
-            display: false,
-            drawOnChartArea: false,
-            drawTicks: false,
-          },
-          ticks: {
-            display: false,
-          },
-        },
+      onHover: (event, chartElement) => {
+        // A lógica do cursor permanece, mas agora a detecção é mais precisa
+        const target = event.native.target;
+        if (chartElement.length) {
+          target.style.cursor = "pointer";
+        } else {
+          target.style.cursor = "default";
+        }
       },
     },
   };

@@ -1,39 +1,21 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
+// src/examples/Charts/PieChart/index.js
 
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
-
-import { useMemo } from "react";
-
-// porp-types is a library for typechecking of props
+import { useMemo, useRef } from "react";
 import PropTypes from "prop-types";
+import { Pie, getElementAtEvent } from "react-chartjs-2";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
 
-// react-chartjs-2 components
-import "chart.js/auto";
-import { Chart } from "react-chartjs-2";
-
-// @mui material components
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
-
-// Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 
-// PieChart configurations
 import configs from "examples/Charts/PieChart/configs";
 
-function PieChart({ icon, title, description, height, chart }) {
+ChartJS.register(ArcElement, Tooltip, Legend);
+
+function PieChart({ icon, title, description, chart, onClick }) {
+  const chartRef = useRef();
   const { data, options } = configs(chart.labels || [], chart.datasets || {});
 
   const renderChart = (
@@ -70,45 +52,47 @@ function PieChart({ icon, title, description, height, chart }) {
       ) : null}
       {useMemo(
         () => (
-          <MDBox height={height}>
-            <Chart type="pie" data={data} options={options} />
+          <MDBox height="18rem">
+            <Pie
+              ref={chartRef}
+              data={data}
+              options={options}
+              onClick={(event) => {
+                if (onClick) {
+                  const element = getElementAtEvent(chartRef.current, event);
+                  onClick(event, element);
+                }
+              }}
+            />
           </MDBox>
         ),
-        [chart, height]
+        [chart]
       )}
     </MDBox>
   );
-
-  return title || description ? <Card>{renderChart}</Card> : renderChart;
+  
+  // --- MODIFICAÇÃO: Adicionada a propriedade sx={{ height: "100%" }} ---
+  return title || description ? <Card sx={{ height: "100%" }}>{renderChart}</Card> : renderChart;
 }
 
-// Setting default values for the props of PieChart
 PieChart.defaultProps = {
   icon: { color: "info", component: "" },
   title: "",
   description: "",
-  height: "19.125rem",
+  onClick: () => {},
 };
 
-// Typechecking props for the PieChart
 PieChart.propTypes = {
   icon: PropTypes.shape({
     color: PropTypes.oneOf([
-      "primary",
-      "secondary",
-      "info",
-      "success",
-      "warning",
-      "error",
-      "light",
-      "dark",
+      "primary", "secondary", "info", "success", "warning", "error", "light", "dark",
     ]),
     component: PropTypes.node,
   }),
   title: PropTypes.string,
   description: PropTypes.oneOfType([PropTypes.string, PropTypes.node]),
-  height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
   chart: PropTypes.objectOf(PropTypes.oneOfType([PropTypes.array, PropTypes.object])).isRequired,
+  onClick: PropTypes.func,
 };
 
 export default PieChart;
