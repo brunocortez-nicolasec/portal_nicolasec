@@ -7,6 +7,9 @@ import Icon from "@mui/material/Icon";
 import Papa from "papaparse";
 import Modal from "@mui/material/Modal";
 
+// --- MODIFICAÇÃO: Importar o hook de contexto ---
+import { useDashboard } from "context/DashboardContext";
+
 // Componentes do Template
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
@@ -23,7 +26,6 @@ import PieChart from "examples/Charts/PieChart";
 import TimelineList from "examples/Timeline/TimelineList";
 import TimelineItem from "examples/Timeline/TimelineItem";
 
-// Componente para a tela inicial de upload
 function InitialState({ onImportClick }) {
   return (
     <MDBox textAlign="center" py={10}>
@@ -42,88 +44,36 @@ function InitialState({ onImportClick }) {
 }
 
 function DashboardTruPAM() {
-  const [dashboardData, setDashboardData] = useState(null);
+  // --- MODIFICAÇÃO: Usar o estado do contexto global ---
+  const { truPAMData, updateTruPAMData } = useDashboard();
+
+  // Estado local para controlar o que é exibido na tela
+  const [displayData, setDisplayData] = useState(null);
+
+  // Estados locais para controle da UI
   const [csvFileName, setCsvFileName] = useState(null);
   const fileInputRef = useRef(null);
-  const [originalCsvData, setOriginalCsvData] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
 
   const handleOpenModal = () => setIsModalOpen(true);
   const handleCloseModal = () => setIsModalOpen(false);
+  const handleImportClick = () => fileInputRef.current.click();
 
-  useEffect(() => {
-    if (originalCsvData.length > 0) {
-      transformCsvData(originalCsvData);
+  const transformAndSetData = (rawData) => {
+    if (!rawData || rawData.length === 0) {
+      setDisplayData(null);
+      return;
     }
-  }, [startDate, endDate]);
 
-  const handleImportClick = () => {
-    fileInputRef.current.click();
-  };
-
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setCsvFileName(file.name);
-      setStartDate("");
-      setEndDate("");
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          setOriginalCsvData(results.data);
-          transformCsvData(results.data);
-        },
-        error: (error) => console.error("Erro ao processar o CSV:", error),
-      });
-    }
-  };
-  
-  const handlePieChartClick = (event, elements) => {
-    if (!elements || elements.length === 0 || !dashboardData) return;
-    
-    const { index } = elements[0];
-    const clickedLabel = dashboardData.conformidadeSenhas.labels[index];
-    const filterMap = {
-      "Em conformidade": "em_conformidade",
-      "Expiradas": "expirada",
-      "Fora do Padrão": "fora_do_padrao",
-    };
-    const filterValue = filterMap[clickedLabel];
-
-    if (filterValue) {
-      const detailedData = originalCsvData.filter(row => row.status_senha === filterValue);
-
-      setModalContent({
-        title: `Detalhes: Contas com Senhas ${clickedLabel}`,
-        data: {
-          columns: [
-            { Header: "Usuário Privilegiado", accessor: "usuario" },
-            { Header: "Sistema de Destino", accessor: "sistema" },
-            { Header: "Status da Senha", accessor: "status" },
-          ],
-          rows: detailedData.map(row => ({
-            usuario: row.usuario_privilegiado,
-            sistema: row.sistema_destino,
-            status: clickedLabel,
-          }))
-        }
-      });
-      handleOpenModal();
-    }
-  };
-
-  const transformCsvData = (csvData) => {
-    let filteredData = csvData;
+    let filteredData = rawData;
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      filteredData = csvData.filter(row => {
+      filteredData = rawData.filter(row => {
         const rowDate = row.data_sessao ? new Date(row.data_sessao) : null;
         return rowDate && rowDate >= start && rowDate <= end;
       });
@@ -167,9 +117,7 @@ function DashboardTruPAM() {
         return <MDTypography variant="caption" color={colorMap[status] || "dark"} fontWeight="medium">{status}</MDTypography>
     }
     const auditoriaSessoes = {
-        columns: [
-            { Header: "usuário", accessor: "user", width: "25%" }, { Header: "sistema de destino", accessor: "target", width: "30%" }, { Header: "pontuação de risco", accessor: "riskScore", align: "center" }, { Header: "duração", accessor: "duration", align: "center" }, { Header: "status", accessor: "status", align: "center" },
-        ],
+        columns: [ { Header: "usuário", accessor: "user", width: "25%" }, { Header: "sistema de destino", accessor: "target", width: "30%" }, { Header: "pontuação de risco", accessor: "riskScore", align: "center" }, { Header: "duração", accessor: "duration", align: "center" }, { Header: "status", accessor: "status", align: "center" } ],
         rows: filteredData.map(row => ({ user: row.usuario_privilegiado, target: row.sistema_destino, riskScore: row.pontuacao_risco_sessao, duration: `${row.duracao_sessao_min} min`, status: getStatusComponent(row.status_auditoria_sessao) })),
     };
 
@@ -195,37 +143,74 @@ function DashboardTruPAM() {
 
     const newData = {
       kpis: { contasPrivilegiadas, sessoesAtivas, segredosNoCofre, alertasCriticos },
-      sessoesPrivilegiadas,
-      conformidadeSenhas,
-      auditoriaSessoes,
-      comandosDeRisco,
-      atividadesRecentes,
+      sessoesPrivilegiadas, conformidadeSenhas, auditoriaSessoes, comandosDeRisco, atividadesRecentes,
       impactoFinanceiro: {
         custoMedioViolacao: "R$ 25 Milhões", perdaPotencialAcessoIndevido: "R$ 1.47 Bilhão", riscoReputacional: "Incalculável", mitigacao: "95%", perdaEvitadaAnual: "R$ 1.4 Bilhão",
       }
     };
-    setDashboardData(newData);
+    setDisplayData(newData);
+  };
+  
+  useEffect(() => {
+    if (truPAMData) {
+      transformAndSetData(truPAMData);
+    } else {
+      setDisplayData(null);
+    }
+  }, [truPAMData, startDate, endDate]);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setCsvFileName(file.name);
+      setStartDate("");
+      setEndDate("");
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          updateTruPAMData(results.data);
+        },
+        error: (error) => console.error("Erro ao processar o CSV:", error),
+      });
+    }
+  };
+  
+  const handlePieChartClick = (event, elements) => {
+    if (!elements || elements.length === 0 || !displayData) return;
+    
+    const { index } = elements[0];
+    const clickedLabel = displayData.conformidadeSenhas.labels[index];
+    const filterMap = {
+      "Em conformidade": "em_conformidade", "Expiradas": "expirada", "Fora do Padrão": "fora_do_padrao",
+    };
+    const filterValue = filterMap[clickedLabel];
+
+    if (filterValue) {
+      const detailedData = truPAMData.filter(row => row.status_senha === filterValue);
+
+      setModalContent({
+        title: `Detalhes: Contas com Senhas ${clickedLabel}`,
+        data: {
+          columns: [ { Header: "Usuário Privilegiado", accessor: "usuario" }, { Header: "Sistema de Destino", accessor: "sistema" }, { Header: "Status da Senha", accessor: "status" } ],
+          rows: detailedData.map(row => ({ usuario: row.usuario_privilegiado, sistema: row.sistema_destino, status: clickedLabel }))
+        }
+      });
+      handleOpenModal();
+    }
   };
   
   return (
     <DashboardLayout>
       <DashboardNavbar />
-      
       <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
         <Card sx={{ width: "80%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
           <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
             <MDTypography variant="h6">{modalContent.title}</MDTypography>
-            <MDButton iconOnly onClick={handleCloseModal}>
-              <Icon>close</Icon>
-            </MDButton>
+            <MDButton iconOnly onClick={handleCloseModal}><Icon>close</Icon></MDButton>
           </MDBox>
           <MDBox p={2}>
-            <DataTable
-              table={modalContent.data}
-              isSorted={false}
-              entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }}
-              showTotalEntries
-            />
+            <DataTable table={modalContent.data} isSorted={false} entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }} showTotalEntries />
           </MDBox>
         </Card>
       </Modal>
@@ -233,7 +218,7 @@ function DashboardTruPAM() {
       <MDBox py={3}>
         <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
         
-        {!dashboardData ? (
+        {!displayData ? (
           <InitialState onImportClick={handleImportClick} />
         ) : (
           <>
@@ -253,7 +238,7 @@ function DashboardTruPAM() {
               </MDBox>
             </MDBox>
             
-            {dashboardData.kpis.contasPrivilegiadas === 0 ? (
+            {!displayData.kpis || displayData.kpis.contasPrivilegiadas === 0 ? (
                <MDBox textAlign="center" py={5}>
                 <MDTypography variant="h5" color="text">Nenhum dado encontrado para os filtros selecionados.</MDTypography>
               </MDBox>
@@ -261,23 +246,23 @@ function DashboardTruPAM() {
               <>
                 <MDBox mb={3}>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="admin_panel_settings" title="Contas Privilegiadas" count={dashboardData.kpis.contasPrivilegiadas} percentage={{ color: "success", label: "no período" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="cast_connected" title="Sessões Ativas" count={dashboardData.kpis.sessoesAtivas} percentage={{ color: "info", label: "atualmente em uso" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="secondary" icon="key" title="Segredos no Cofre" count={dashboardData.kpis.segredosNoCofre} percentage={{ color: "secondary", label: "segredos no período" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="notification_important" title="Alertas de Risco Crítico" count={dashboardData.kpis.alertasCriticos} percentage={{ color: "error", label: "eventos de alta severidade" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="admin_panel_settings" title="Contas Privilegiadas" count={displayData.kpis.contasPrivilegiadas} percentage={{ color: "success", label: "no período" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="cast_connected" title="Sessões Ativas" count={displayData.kpis.sessoesAtivas} percentage={{ color: "info", label: "atualmente em uso" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="secondary" icon="key" title="Segredos no Cofre" count={displayData.kpis.segredosNoCofre} percentage={{ color: "secondary", label: "segredos no período" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="notification_important" title="Alertas de Risco Crítico" count={displayData.kpis.alertasCriticos} percentage={{ color: "error", label: "eventos de alta severidade" }} /></Grid>
                   </Grid>
                 </MDBox>
 
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={3}>Análise de Sessões e Conformidade</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><DefaultLineChart icon={{ component: "insights" }} title="Tendência de Sessões Privilegiadas" description="Volume de sessões por tipo de sistema nos últimos 7 dias." chart={dashboardData.sessoesPrivilegiadas} /></Grid>
+                    <Grid item xs={12} lg={7}><DefaultLineChart icon={{ component: "insights" }} title="Tendência de Sessões Privilegiadas" description="Volume de sessões por tipo de sistema nos últimos 7 dias." chart={displayData.sessoesPrivilegiadas} /></Grid>
                     <Grid item xs={12} lg={5}>
                       <PieChart 
                         icon={{ component: "task_alt" }} 
                         title="Conformidade de Rotação de Senhas" 
-                        description={<><strong>{dashboardData.kpis.contasPrivilegiadas}</strong> contas monitoradas</>} 
-                        chart={dashboardData.conformidadeSenhas}
+                        description={<><strong>{displayData.kpis.contasPrivilegiadas}</strong> contas monitoradas</>} 
+                        chart={displayData.conformidadeSenhas}
                         onClick={handlePieChartClick}
                       />
                     </Grid>
@@ -287,7 +272,7 @@ function DashboardTruPAM() {
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={2}>Governança e Auditoria de Sessões</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12}><Card><MDBox pt={3} px={2}><MDTypography variant="h6">Gravações Recentes para Auditoria</MDTypography></MDBox><MDBox p={2}><DataTable table={dashboardData.auditoriaSessoes} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder /></MDBox></Card></Grid>
+                    <Grid item xs={12}><Card><MDBox pt={3} px={2}><MDTypography variant="h6">Gravações Recentes para Auditoria</MDTypography></MDBox><MDBox p={2}><DataTable table={displayData.auditoriaSessoes} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder /></MDBox></Card></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="fact_check" title="Relatórios de Auditoria" description="Relatórios gerados vs. relatórios pendentes de revisão." value="152 Gerados / 12 Pendentes" /></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="lock_clock" title="Acessos de Emergência" description="Usos do 'break-glass' nos últimos 30 dias." value="3 utilizações" /></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="policy" title="Conformidade de Comandos" description="Percentual de comandos executados dentro das políticas." value="99.8% em conformidade" /></Grid>
@@ -297,20 +282,20 @@ function DashboardTruPAM() {
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={3}>Análise de Ameaças e Riscos</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><ReportsBarChart color="error" title="Top 5 Comandos de Risco Executados" description="Comandos perigosos mais frequentes em sessões privilegiadas." chart={dashboardData.comandosDeRisco} /></Grid>
-                    <Grid item xs={12} lg={5}><TimelineList title="Atividades Recentes de Risco">{dashboardData.atividadesRecentes.map(item => (<TimelineItem key={item.title} color={item.color} icon={item.icon} title={item.title} dateTime={item.dateTime} />))}</TimelineList></Grid>
+                    <Grid item xs={12} lg={7}><ReportsBarChart color="error" title="Top 5 Comandos de Risco Executados" description="Comandos perigosos mais frequentes em sessões privilegiadas." chart={displayData.comandosDeRisco} /></Grid>
+                    <Grid item xs={12} lg={5}><TimelineList title="Atividades Recentes de Risco">{displayData.atividadesRecentes.map(item => (<TimelineItem key={item.title} color={item.color} icon={item.icon} title={item.title} dateTime={item.dateTime} />))}</TimelineList></Grid>
                   </Grid>
                 </MDBox>
                 
                 <MDBox mb={3}>
                   <MDTypography variant="h5" mb={3}>Análise de Impacto Financeiro (ROI)</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="security" title="Custo Médio de Violação" count={dashboardData.impactoFinanceiro.custoMedioViolacao} percentage={{ color: "error", amount: "segundo a indústria", label: "" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="business" title="Perda por Acesso Indevido" count={dashboardData.impactoFinanceiro.perdaPotencialAcessoIndevido} percentage={{ color: "error", amount: "em caso de incidente", label: "grave" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="dark" icon="public" title="Risco Reputacional" count={dashboardData.impactoFinanceiro.riscoReputacional} percentage={{ color: "warning", amount: "perda de confiança", label: "do mercado" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="shield" title="Mitigação com TruPAM" count={dashboardData.impactoFinanceiro.mitigacao} percentage={{ color: "success", amount: "prevenção de ameaças", label: "avançadas" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="security" title="Custo Médio de Violação" count={displayData.impactoFinanceiro.custoMedioViolacao} percentage={{ color: "error", amount: "segundo a indústria", label: "" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="business" title="Perda por Acesso Indevido" count={displayData.impactoFinanceiro.perdaPotencialAcessoIndevido} percentage={{ color: "error", amount: "em caso de incidente", label: "grave" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="dark" icon="public" title="Risco Reputacional" count={displayData.impactoFinanceiro.riscoReputacional} percentage={{ color: "warning", amount: "perda de confiança", label: "do mercado" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="shield" title="Mitigação com TruPAM" count={displayData.impactoFinanceiro.mitigacao} percentage={{ color: "success", amount: "prevenção de ameaças", label: "avançadas" }} /></Grid>
                   </Grid>
-                  <Grid container justifyContent="center" sx={{ mt: 3 }}><Grid item xs={12} md={8} lg={7}><DefaultInfoCard icon="payments" title="Valor Anual Evitado com TruPAM" description="Nossa plataforma protege seus ativos mais críticos, prevenindo perdas catastróficas por violação de acessos privilegiados." value={<MDTypography variant="h2" fontWeight="medium" textGradient color="success">{dashboardData.impactoFinanceiro.perdaEvitadaAnual}</MDTypography>} /></Grid></Grid>
+                  <Grid container justifyContent="center" sx={{ mt: 3 }}><Grid item xs={12} md={8} lg={7}><DefaultInfoCard icon="payments" title="Valor Anual Evitado com TruPAM" description="Nossa plataforma protege seus ativos mais críticos, prevenindo perdas catastróficas por violação de acessos privilegiados." value={<MDTypography variant="h2" fontWeight="medium" textGradient color="success">{displayData.impactoFinanceiro.perdaEvitadaAnual}</MDTypography>} /></Grid></Grid>
                 </MDBox>
               </>
             )}

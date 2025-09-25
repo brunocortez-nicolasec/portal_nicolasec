@@ -5,7 +5,11 @@ import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
 import Papa from "papaparse";
-import Modal from "@mui/material/Modal"; // Adicionado para a janela de detalhes
+import Modal from "@mui/material/Modal";
+import Chip from "@mui/material/Chip";
+
+// --- MODIFICAÇÃO: Importar nosso hook de contexto ---
+import { useDashboard } from "context/DashboardContext";
 
 // Componentes do Template
 import MDBox from "components/MDBox";
@@ -41,99 +45,48 @@ function InitialState({ onImportClick }) {
 }
 
 function DashboardTruIM() {
-  const [dashboardData, setDashboardData] = useState(null);
+  // --- MODIFICAÇÃO: Usar o estado do contexto global ---
+  const { truIMData, updateTruIMData } = useDashboard();
+  
+  // Estado local para controlar o que é exibido na tela
+  const [displayData, setDisplayData] = useState(null);
+  
+  // Estados locais para controle da UI
   const [csvFileName, setCsvFileName] = useState(null);
   const fileInputRef = useRef(null);
-  const [originalCsvData, setOriginalCsvData] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
-  // --- MODIFICAÇÃO: Estados para controlar o modal ---
+  const [activeChartFilter, setActiveChartFilter] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
 
   const handleOpenModal = () => setIsModalOpen(true);
   const handleCloseModal = () => setIsModalOpen(false);
+  const handleImportClick = () => fileInputRef.current.click();
+  const clearChartFilter = () => setActiveChartFilter(null);
 
-
-  useEffect(() => {
-    if (originalCsvData.length > 0) {
-      transformCsvData(originalCsvData);
+  const transformAndSetData = (rawData) => {
+    if (!rawData || rawData.length === 0) {
+      setDisplayData(null);
+      return;
     }
-  }, [startDate, endDate]);
 
-  const handleImportClick = () => {
-    fileInputRef.current.click();
-  };
-
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setCsvFileName(file.name);
-      setStartDate("");
-      setEndDate("");
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          setOriginalCsvData(results.data);
-          transformCsvData(results.data);
-        },
-        error: (error) => console.error("Erro ao processar o CSV:", error),
-      });
-    }
-  };
-
-  // --- MODIFICAÇÃO: Nova função de clique que abre o modal ---
-  const handlePieChartClick = (event, elements) => {
-    if (!elements || elements.length === 0 || !dashboardData) return;
-    
-    const { index } = elements[0];
-    const clickedLabel = dashboardData.solicitacoesAcesso.labels[index];
-    const filterMap = {
-      "Aprovadas Automaticamente": "aprovada_auto",
-      "Aprovadas Manualmente": "aprovada_manual",
-      "Negadas": "negada",
-      "Pendentes": "pendente",
-    };
-    const filterValue = filterMap[clickedLabel];
-
-    if (filterValue) {
-      // Filtra os dados originais (sem filtro de data) para o modal
-      const detailedData = originalCsvData.filter(row => row.status_solicitacao === filterValue);
-
-      // Prepara os dados para a DataTable do modal
-      setModalContent({
-        title: `Detalhes: Solicitações ${clickedLabel}`,
-        data: {
-          columns: [
-            { Header: "ID do Usuário", accessor: "id_usuario" },
-            { Header: "Data", accessor: "data" },
-            { Header: "Aplicação", accessor: "aplicacao" },
-          ],
-          rows: detailedData.map(row => ({
-            id_usuario: row.id_usuario,
-            data: new Date(row.data_provisionamento).toLocaleDateString("pt-BR"),
-            aplicacao: row.aplicacao_violacao || "N/A",
-          }))
-        }
-      });
-      handleOpenModal();
-    }
-  };
-
-  const transformCsvData = (csvData) => {
-    let filteredData = csvData;
+    let filteredData = rawData;
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      filteredData = csvData.filter(row => {
+      filteredData = rawData.filter(row => {
         const rowDate = row.data_provisionamento ? new Date(row.data_provisionamento) : null;
         return rowDate && rowDate >= start && rowDate <= end;
       });
     }
+
+    if (activeChartFilter) {
+      filteredData = filteredData.filter(row => row[activeChartFilter.type] === activeChartFilter.value);
+    }
     
+    // Lógica de transformação
     const hoje = new Date().setHours(0, 0, 0, 0);
     const novosUsuariosHoje = filteredData.filter(row => new Date(row.data_provisionamento).setHours(0, 0, 0, 0) === hoje).length;
     const solicitacoesPendentes = filteredData.filter(row => row.status_solicitacao === 'pendente').length;
@@ -202,36 +155,77 @@ function DashboardTruIM() {
         perdaHora: "R$ 1.68 Milhão", perdaDia: "R$ 40.2 Milhões", perdaMes: "R$ 1.2 Bilhão", mitigacao: "90%", perdaEvitadaAnual: "R$ 1.296 Bilhão",
       }
     };
-    setDashboardData(newData);
+    setDisplayData(newData);
+  };
+  
+  // Efeito principal que reage a mudanças nos dados brutos (do contexto) ou nos filtros locais
+  useEffect(() => {
+    if (truIMData) {
+      transformAndSetData(truIMData);
+    } else {
+      setDisplayData(null);
+    }
+  }, [truIMData, startDate, endDate, activeChartFilter]);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setCsvFileName(file.name);
+      setStartDate("");
+      setEndDate("");
+      setActiveChartFilter(null);
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          // Ação principal: salva os dados brutos no contexto global
+          updateTruIMData(results.data);
+        },
+        error: (error) => console.error("Erro ao processar o CSV:", error),
+      });
+    }
+  };
+  
+  const handlePieChartClick = (event, elements) => {
+    if (!elements || elements.length === 0 || !displayData) return;
+    const { index } = elements[0];
+    const clickedLabel = displayData.solicitacoesAcesso.labels[index];
+    const filterMap = {
+      "Aprovadas Automaticamente": "aprovada_auto", "Aprovadas Manualmente": "aprovada_manual", "Negadas": "negada", "Pendentes": "pendente",
+    };
+    const filterValue = filterMap[clickedLabel];
+    if (filterValue) {
+      const detailedData = truIMData.filter(row => row.status_solicitacao === filterValue);
+      setModalContent({
+        title: `Detalhes: Solicitações ${clickedLabel}`,
+        data: {
+          columns: [ { Header: "ID do Usuário", accessor: "id_usuario" }, { Header: "Data", accessor: "data" }, { Header: "Aplicação", accessor: "aplicacao" } ],
+          rows: detailedData.map(row => ({ id_usuario: row.id_usuario, data: new Date(row.data_provisionamento).toLocaleDateString("pt-BR"), aplicacao: row.aplicacao_violacao || "N/A" }))
+        }
+      });
+      handleOpenModal();
+    }
   };
 
   return (
     <DashboardLayout>
       <DashboardNavbar />
       
-      {/* --- MODIFICAÇÃO: Componente Modal para detalhes --- */}
       <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
         <Card sx={{ width: "80%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
           <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
             <MDTypography variant="h6">{modalContent.title}</MDTypography>
-            <MDButton iconOnly onClick={handleCloseModal}>
-              <Icon>close</Icon>
-            </MDButton>
+            <MDButton iconOnly onClick={handleCloseModal}><Icon>close</Icon></MDButton>
           </MDBox>
           <MDBox p={2}>
-            <DataTable
-              table={modalContent.data}
-              isSorted={false}
-              entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }}
-              showTotalEntries
-            />
+            <DataTable table={modalContent.data} isSorted={false} entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }} showTotalEntries />
           </MDBox>
         </Card>
       </Modal>
 
       <MDBox py={3}>
         <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
-        {!dashboardData ? (
+        {!displayData ? (
           <InitialState onImportClick={handleImportClick} />
         ) : (
           <>
@@ -241,6 +235,14 @@ function DashboardTruIM() {
                 <MDInput type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} sx={{mr: 1, mb: {xs: 1, md: 0}}} />
                 <MDTypography variant="body2" color="text" mx={1}>até</MDTypography>
                 <MDInput type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} sx={{mr: 2, mb: {xs: 1, md: 0}}}/>
+                {activeChartFilter && (
+                    <Chip 
+                        label={`Filtro: ${activeChartFilter.label}`} 
+                        onDelete={clearChartFilter} 
+                        color="info" 
+                        sx={{ height: "auto", "& .MuiChip-label": { lineHeight: "1.5", p: 1 } }}
+                    />
+                )}
               </MDBox>
 
               <MDBox display="flex" alignItems="center" mt={2}>
@@ -252,7 +254,7 @@ function DashboardTruIM() {
               </MDBox>
             </MDBox>
             
-            {dashboardData.kpis.totalIdentidades === 0 ? (
+            {displayData.kpis.totalIdentidades === 0 ? (
               <MDBox textAlign="center" py={5}>
                 <MDTypography variant="h5" color="text">Nenhum dado encontrado para os filtros selecionados.</MDTypography>
               </MDBox>
@@ -260,23 +262,23 @@ function DashboardTruIM() {
               <>
                 <MDBox mb={3}>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="people" title="Total de Identidades" count={dashboardData.kpis.totalIdentidades} percentage={{ color: "success", amount: "", label: "no período selecionado" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="person_add" title="Novos Usuários (Hoje)" count={dashboardData.kpis.novosUsuariosHoje} percentage={{ color: "success", amount: "", label: "provisionados hoje" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="pending_actions" title="Solicitações Pendentes" count={dashboardData.kpis.solicitacoesPendentes} percentage={{ color: "warning", amount: "", label: "no período" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="secondary" icon="no_accounts" title="Contas Órfãs" count={dashboardData.kpis.identidadesOrfas} percentage={{ color: "secondary", amount: "", label: "encontradas no período" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="people" title="Total de Identidades" count={displayData.kpis.totalIdentidades} percentage={{ color: "success", amount: "", label: "no período selecionado" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="person_add" title="Novos Usuários (Hoje)" count={displayData.kpis.novosUsuariosHoje} percentage={{ color: "success", amount: "", label: "provisionados hoje" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="pending_actions" title="Solicitações Pendentes" count={displayData.kpis.solicitacoesPendentes} percentage={{ color: "warning", amount: "", label: "no período" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="secondary" icon="no_accounts" title="Contas Órfãs" count={displayData.kpis.identidadesOrfas} percentage={{ color: "secondary", amount: "", label: "encontradas no período" }} /></Grid>
                   </Grid>
                 </MDBox>
             
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={3}>Análise de Ciclo de Vida e Acessos</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><DefaultLineChart icon={{ component: "leaderboard" }} title="Ciclo de Vida de Usuários" description="Fluxo de entradas e saídas de colaboradores." chart={dashboardData.cicloDeVida} /></Grid>
+                    <Grid item xs={12} lg={7}><DefaultLineChart icon={{ component: "leaderboard" }} title="Ciclo de Vida de Usuários" description="Fluxo de entradas e saídas de colaboradores." chart={displayData.cicloDeVida} /></Grid>
                     <Grid item xs={12} lg={5}>
                       <PieChart 
                         icon={{ component: "rule" }} 
                         title="Status das Solicitações de Acesso" 
-                        description={<><strong>{dashboardData.solicitacoesAcesso.datasets.data.reduce((a, b) => a + b, 0)}</strong> solicitações no total</>} 
-                        chart={dashboardData.solicitacoesAcesso}
+                        description={<><strong>{displayData.solicitacoesAcesso.datasets.data.reduce((a, b) => a + b, 0)}</strong> solicitações no total</>} 
+                        chart={displayData.solicitacoesAcesso}
                         onClick={handlePieChartClick}
                       />
                     </Grid>
@@ -286,7 +288,7 @@ function DashboardTruIM() {
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={2}>Governança e Conformidade</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12}><Card><MDBox pt={3} px={2}><MDTypography variant="h6">Campanhas de Revisão de Acesso</MDTypography></MDBox><MDBox p={2}><DataTable table={dashboardData.revisoesAcesso} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder /></MDBox></Card></Grid>
+                    <Grid item xs={12}><Card><MDBox pt={3} px={2}><MDTypography variant="h6">Campanhas de Revisão de Acesso</MDTypography></MDBox><MDBox p={2}><DataTable table={displayData.revisoesAcesso} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder /></MDBox></Card></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="policy" title="Conformidade de Políticas" description="Verificação automática de segregação de função (SoD)." value="98.5% em conformidade" /></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="gpp_bad" title="Violações de SoD" description="Conflitos de segregação de função detectados." value="12 violações ativas" /></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="timer" title="Tempo Médio de Acesso" description="Tempo médio para aprovar e provisionar um novo acesso." value="2.5 horas" /></Grid>
@@ -296,20 +298,20 @@ function DashboardTruIM() {
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={3}>Atividades e Alertas de Risco</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><ReportsBarChart color="info" title="Aplicações com Violações de SoD" description="Total de violações de política de segregação de função por aplicação." chart={dashboardData.violacoesPorApp} /></Grid>
-                    <Grid item xs={12} lg={5}><TimelineList title="Atividades Recentes de Risco">{dashboardData.atividadesRecentes.map(item => (<TimelineItem key={item.title} color={item.color} icon={item.icon} title={item.title} dateTime={item.dateTime} />))}</TimelineList></Grid>
+                    <Grid item xs={12} lg={7}><ReportsBarChart color="info" title="Aplicações com Violações de SoD" description="Total de violações de política de segregação de função por aplicação." chart={displayData.violacoesPorApp} /></Grid>
+                    <Grid item xs={12} lg={5}><TimelineList title="Atividades Recentes de Risco">{displayData.atividadesRecentes.map(item => (<TimelineItem key={item.title} color={item.color} icon={item.icon} title={item.title} dateTime={item.dateTime} />))}</TimelineList></Grid>
                   </Grid>
                 </MDBox>
                 
                 <MDBox mb={3}>
                   <MDTypography variant="h5" mb={3}>Análise de Impacto Financeiro (ROI)</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="timer" title="Perda Potencial (1 Hora)" count={dashboardData.impactoFinanceiro.perdaHora} percentage={{ color: "error", amount: "criticidade", label: "altíssima" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="calendar_today" title="Perda Potencial (1 Dia)" count={dashboardData.impactoFinanceiro.perdaDia} percentage={{ color: "error", amount: "paralisação", label: "de operações" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="dark" icon="event" title="Perda Potencial (30 dias)" count={dashboardData.impactoFinanceiro.perdaMes} percentage={{ color: "error", amount: "impacto", label: "estratégico" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="shield" title="Mitigação com TruIM" count={dashboardData.impactoFinanceiro.mitigacao} percentage={{ color: "success", amount: "alta disponibilidade", label: "da plataforma" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="timer" title="Perda Potencial (1 Hora)" count={displayData.impactoFinanceiro.perdaHora} percentage={{ color: "error", amount: "criticidade", label: "altíssima" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="calendar_today" title="Perda Potencial (1 Dia)" count={displayData.impactoFinanceiro.perdaDia} percentage={{ color: "error", amount: "paralisação", label: "de operações" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="dark" icon="event" title="Perda Potencial (30 dias)" count={displayData.impactoFinanceiro.perdaMes} percentage={{ color: "error", amount: "impacto", label: "estratégico" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="shield" title="Mitigação com TruIM" count={displayData.impactoFinanceiro.mitigacao} percentage={{ color: "success", amount: "alta disponibilidade", label: "da plataforma" }} /></Grid>
                   </Grid>
-                  <Grid container justifyContent="center" sx={{ mt: 3 }}><Grid item xs={12} md={8} lg={7}><DefaultInfoCard icon="payments" title="Valor Anual Evitado com TruIM" description="Nossa plataforma garante a continuidade do seu negócio, evitando perdas anuais bilionárias com falhas de acesso e identidade." value={<MDTypography variant="h2" fontWeight="medium" textGradient color="success">{dashboardData.impactoFinanceiro.perdaEvitadaAnual}</MDTypography>} /></Grid></Grid>
+                  <Grid container justifyContent="center" sx={{ mt: 3 }}><Grid item xs={12} md={8} lg={7}><DefaultInfoCard icon="payments" title="Valor Anual Evitado com TruIM" description="Nossa plataforma garante a continuidade do seu negócio, evitando perdas anuais bilionárias com falhas de acesso e identidade." value={<MDTypography variant="h2" fontWeight="medium" textGradient color="success">{displayData.impactoFinanceiro.perdaEvitadaAnual}</MDTypography>} /></Grid></Grid>
                 </MDBox>
               </>
             )}

@@ -7,6 +7,9 @@ import Icon from "@mui/material/Icon";
 import Papa from "papaparse";
 import Modal from "@mui/material/Modal";
 
+// --- MODIFICAÇÃO: Importar o hook de contexto ---
+import { useDashboard } from "context/DashboardContext";
+
 // Componentes do Template
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
@@ -41,94 +44,41 @@ function InitialState({ onImportClick }) {
 }
 
 function DashboardTruAM() {
-  const [dashboardData, setDashboardData] = useState(null);
+  // --- MODIFICAÇÃO: Usar o estado do contexto global ---
+  const { truAMData, updateTruAMData } = useDashboard();
+  
+  // Estado local para controlar o que é exibido na tela
+  const [displayData, setDisplayData] = useState(null);
+
+  // Estados locais para controle da UI
   const [csvFileName, setCsvFileName] = useState(null);
   const fileInputRef = useRef(null);
-  const [originalCsvData, setOriginalCsvData] = useState([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
 
   const handleOpenModal = () => setIsModalOpen(true);
   const handleCloseModal = () => setIsModalOpen(false);
+  const handleImportClick = () => fileInputRef.current.click();
 
-  useEffect(() => {
-    if (originalCsvData.length > 0) {
-      transformCsvData(originalCsvData);
+  const transformAndSetData = (rawData) => {
+    if (!rawData || rawData.length === 0) {
+      setDisplayData(null);
+      return;
     }
-  }, [startDate, endDate]);
 
-  const handleImportClick = () => {
-    fileInputRef.current.click();
-  };
-
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setCsvFileName(file.name);
-      setStartDate("");
-      setEndDate("");
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          setOriginalCsvData(results.data);
-          transformCsvData(results.data);
-        },
-        error: (error) => console.error("Erro ao processar o CSV:", error),
-      });
-    }
-  };
-
-  const handlePieChartClick = (event, elements) => {
-    if (!elements || elements.length === 0 || !dashboardData) return;
-    
-    const { index } = elements[0];
-    const clickedLabel = dashboardData.metodosMFA.labels[index];
-    const filterMap = {
-      "Push": "push",
-      "OTP": "otp",
-      "Biometria": "biometria",
-      "SMS": "sms",
-    };
-    const filterValue = filterMap[clickedLabel];
-
-    if (filterValue) {
-      const detailedData = originalCsvData.filter(row => row.metodo_mfa === filterValue);
-
-      setModalContent({
-        title: `Detalhes: Autenticações via ${clickedLabel}`,
-        data: {
-          columns: [
-            { Header: "Usuário", accessor: "usuario" },
-            { Header: "Aplicação", accessor: "aplicacao" },
-            { Header: "Data do Login", accessor: "data" },
-          ],
-          rows: detailedData.map(row => ({
-            usuario: row.usuario,
-            aplicacao: row.aplicacao,
-            data: new Date(row.data_login).toLocaleString("pt-BR"),
-          }))
-        }
-      });
-      handleOpenModal();
-    }
-  };
-
-  const transformCsvData = (csvData) => {
-    let filteredData = csvData;
+    let filteredData = rawData;
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      filteredData = csvData.filter(row => {
+      filteredData = rawData.filter(row => {
         const rowDate = row.data_login ? new Date(row.data_login) : null;
         return rowDate && rowDate >= start && rowDate <= end;
       });
     }
-    
+
     const hoje = new Date().setHours(0, 0, 0, 0);
     const appsIntegradas = new Set(filteredData.map(row => row.aplicacao)).size;
     const loginsSSOHoje = filteredData.filter(row => new Date(row.data_login).setHours(0, 0, 0, 0) === hoje && row.status_login === 'sucesso').length;
@@ -192,20 +142,66 @@ function DashboardTruAM() {
         horasProdutividade: "21.6 mil horas/ano", reducaoHelpDesk: "R$ 500 mil/ano", custoAccountTakeover: "R$ 2.5 Milhões", mitigacao: "99.9%", ganhoAnual: "R$ 1.5 Milhão+",
       }
     };
-    setDashboardData(newData);
+    setDisplayData(newData);
+  };
+  
+  useEffect(() => {
+    if (truAMData) {
+      transformAndSetData(truAMData);
+    } else {
+      setDisplayData(null);
+    }
+  }, [truAMData, startDate, endDate]);
+
+  const handleFileChange = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      setCsvFileName(file.name);
+      setStartDate("");
+      setEndDate("");
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          updateTruAMData(results.data);
+        },
+        error: (error) => console.error("Erro ao processar o CSV:", error),
+      });
+    }
+  };
+
+  const handlePieChartClick = (event, elements) => {
+    if (!elements || elements.length === 0 || !displayData) return;
+    
+    const { index } = elements[0];
+    const clickedLabel = displayData.metodosMFA.labels[index];
+    const filterMap = {
+      "Push": "push", "OTP": "otp", "Biometria": "biometria", "SMS": "sms",
+    };
+    const filterValue = filterMap[clickedLabel];
+
+    if (filterValue) {
+      const detailedData = truAMData.filter(row => row.metodo_mfa === filterValue);
+      setModalContent({
+        title: `Detalhes: Autenticações via ${clickedLabel}`,
+        data: {
+          columns: [ { Header: "Usuário", accessor: "usuario" }, { Header: "Aplicação", accessor: "aplicacao" }, { Header: "Data do Login", accessor: "data" } ],
+          rows: detailedData.map(row => ({ usuario: row.usuario, aplicacao: row.aplicacao, data: new Date(row.data_login).toLocaleString("pt-BR") }))
+        }
+      });
+      handleOpenModal();
+    }
   };
   
   return (
     <DashboardLayout>
       <DashboardNavbar />
-
+      
       <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
         <Card sx={{ width: "80%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
           <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
             <MDTypography variant="h6">{modalContent.title}</MDTypography>
-            <MDButton iconOnly onClick={handleCloseModal}>
-              <Icon>close</Icon>
-            </MDButton>
+            <MDButton iconOnly onClick={handleCloseModal}><Icon>close</Icon></MDButton>
           </MDBox>
           <MDBox p={2}>
             <DataTable table={modalContent.data} isSorted={false} entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }} showTotalEntries />
@@ -215,7 +211,7 @@ function DashboardTruAM() {
 
       <MDBox py={3}>
         <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
-        {!dashboardData ? (
+        {!displayData ? (
           <InitialState onImportClick={handleImportClick} />
         ) : (
           <>
@@ -235,7 +231,7 @@ function DashboardTruAM() {
               </MDBox>
             </MDBox>
             
-            {dashboardData.kpis.appsIntegradas === 0 ? (
+            {!displayData.kpis || displayData.kpis.appsIntegradas === 0 ? (
                <MDBox textAlign="center" py={5}>
                 <MDTypography variant="h5" color="text">Nenhum dado encontrado para os filtros selecionados.</MDTypography>
               </MDBox>
@@ -243,23 +239,23 @@ function DashboardTruAM() {
               <>
                 <MDBox mb={3}>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="apps" title="Aplicações Integradas" count={dashboardData.kpis.appsIntegradas} percentage={{ color: "success", label: "no período" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="login" title="Logins via SSO (Hoje)" count={dashboardData.kpis.loginsSSOHoje} percentage={{ color: "info", label: "autenticações hoje" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="phonelink_lock" title="Adoção de MFA" count={dashboardData.kpis.adocaoMFA} percentage={{ color: "success", label: "dos logins no período" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="report_problem" title="Acessos Suspeitos" count={dashboardData.kpis.acessosSuspeitos} percentage={{ color: "error", label: "eventos de risco" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="apps" title="Aplicações Integradas" count={displayData.kpis.appsIntegradas} percentage={{ color: "success", label: "no período" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="login" title="Logins via SSO (Hoje)" count={displayData.kpis.loginsSSOHoje} percentage={{ color: "info", label: "autenticações hoje" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="phonelink_lock" title="Adoção de MFA" count={displayData.kpis.adocaoMFA} percentage={{ color: "success", label: "dos logins no período" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="report_problem" title="Acessos Suspeitos" count={displayData.kpis.acessosSuspeitos} percentage={{ color: "error", label: "eventos de risco" }} /></Grid>
                   </Grid>
                 </MDBox>
 
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={3}>Análise de Autenticação e Uso</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><DefaultLineChart icon={{ component: "assessment" }} title="Volume de Logins" description="Logins com sucesso vs. falhas nos últimos 7 dias." chart={dashboardData.volumeLogins} /></Grid>
+                    <Grid item xs={12} lg={7}><DefaultLineChart icon={{ component: "assessment" }} title="Volume de Logins" description="Logins com sucesso vs. falhas nos últimos 7 dias." chart={displayData.volumeLogins} /></Grid>
                     <Grid item xs={12} lg={5}>
                       <PieChart 
                         icon={{ component: "fingerprint" }} 
                         title="Métodos de MFA Utilizados" 
                         description="Distribuição dos fatores de autenticação." 
-                        chart={dashboardData.metodosMFA}
+                        chart={displayData.metodosMFA}
                         onClick={handlePieChartClick}
                       />
                     </Grid>
@@ -269,7 +265,7 @@ function DashboardTruAM() {
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={2}>Governança e Provisionamento de Aplicações</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12}><Card><MDBox pt={3} px={2}><MDTypography variant="h6">Logs de Provisionamento Recentes</MDTypography></MDBox><MDBox p={2}><DataTable table={dashboardData.statusProvisionamento} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder /></MDBox></Card></Grid>
+                    <Grid item xs={12}><Card><MDBox pt={3} px={2}><MDTypography variant="h6">Logs de Provisionamento Recentes</MDTypography></MDBox><MDBox p={2}><DataTable table={displayData.statusProvisionamento} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder /></MDBox></Card></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="star" title="Aplicação Mais Utilizada" description="App com o maior volume de logins SSO no mês." value="Office 365" /></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="savings" title="Otimização de Licenças" description="Potencial de redução de custos baseado em apps não utilizados." value="~ R$ 85 mil / mês" /></Grid>
                     <Grid item xs={12} md={4}><DefaultInfoCard icon="speed" title="Tempo Médio de Login" description="Tempo economizado por usuário com o uso de SSO." value="~ 45s por login" /></Grid>
@@ -279,18 +275,18 @@ function DashboardTruAM() {
                 <MDBox mb={4.5}>
                   <MDTypography variant="h5" mb={3}>Análise de Risco e Comportamento</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><ReportsBarChart color="warning" title="Top 5 Aplicações com Falhas de Login" description="Aplicações com maior número de tentativas de acesso mal sucedidas." chart={dashboardData.appsComFalhas} /></Grid>
-                    <Grid item xs={12} lg={5}><TimelineList title="Eventos de Segurança Recentes">{dashboardData.atividadesRecentes.map(item => (<TimelineItem key={item.title} color={item.color} icon={item.icon} title={item.title} dateTime={item.dateTime} />))}</TimelineList></Grid>
+                    <Grid item xs={12} lg={7}><ReportsBarChart color="warning" title="Top 5 Aplicações com Falhas de Login" description="Aplicações com maior número de tentativas de acesso mal sucedidas." chart={displayData.appsComFalhas} /></Grid>
+                    <Grid item xs={12} lg={5}><TimelineList title="Eventos de Segurança Recentes">{displayData.atividadesRecentes.map(item => (<TimelineItem key={item.title} color={item.color} icon={item.icon} title={item.title} dateTime={item.dateTime} />))}</TimelineList></Grid>
                   </Grid>
                 </MDBox>
 
                 <MDBox mb={3}>
                   <MDTypography variant="h5" mb={3}>Análise de Impacto Financeiro (ROI)</MDTypography>
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="work_history" title="Produtividade Ganha" count={dashboardData.impactoFinanceiro.horasProdutividade} percentage={{ color: "success", amount: "via SSO e autoatendimento", label: "" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="secondary" icon="support_agent" title="Redução de Custos" count={dashboardData.impactoFinanceiro.reducaoHelpDesk} percentage={{ color: "success", amount: "em tickets de senha", label: "" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="person_off" title="Custo de Account Takeover" count={dashboardData.impactoFinanceiro.custoAccountTakeover} percentage={{ color: "error", amount: "risco mitigado", label: "com MFA" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="verified_user" title="Mitigação com TruAM" count={dashboardData.impactoFinanceiro.mitigacao} percentage={{ color: "success", amount: "em prevenção a fraudes", label: "" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="work_history" title="Produtividade Ganha" count={displayData.impactoFinanceiro.horasProdutividade} percentage={{ color: "success", amount: "via SSO e autoatendimento", label: "" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="secondary" icon="support_agent" title="Redução de Custos" count={displayData.impactoFinanceiro.reducaoHelpDesk} percentage={{ color: "success", amount: "em tickets de senha", label: "" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="person_off" title="Custo de Account Takeover" count={displayData.impactoFinanceiro.custoAccountTakeover} percentage={{ color: "error", amount: "risco mitigado", label: "com MFA" }} /></Grid>
+                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="verified_user" title="Mitigação com TruAM" count={displayData.impactoFinanceiro.mitigacao} percentage={{ color: "success", amount: "em prevenção a fraudes", label: "" }} /></Grid>
                   </Grid>
                   <Grid container justifyContent="center" sx={{ mt: 3 }}>
                     <Grid item xs={12} md={8} lg={7}>
@@ -298,7 +294,7 @@ function DashboardTruAM() {
                         icon="payments"
                         title="Ganho Anual Estimado com TruAM"
                         description="Somando ganhos de produtividade e redução de custos, o valor gerado pela plataforma para o negócio é de..."
-                        value={<MDTypography variant="h2" fontWeight="medium" textGradient color="success">{dashboardData.impactoFinanceiro.ganhoAnual}</MDTypography>}
+                        value={<MDTypography variant="h2" fontWeight="medium" textGradient color="success">{displayData.impactoFinanceiro.ganhoAnual}</MDTypography>}
                       />
                     </Grid>
                   </Grid>

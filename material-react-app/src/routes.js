@@ -24,6 +24,7 @@ import GerenciarPacotes from "layouts/administrar/pacotes";
 import DashboardTruIM from "layouts/observabilidade/truim";
 import DashboardTruPAM from "layouts/observabilidade/trupam";
 import DashboardTruAM from "layouts/observabilidade/truam";
+import VisaoGeral from "layouts/observabilidade/geral";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -204,6 +205,14 @@ const routes = [
       route: "/observabilidade/truam", // Nova rota
       component: <DashboardTruAM />,   // Novo componente que criaremos
       icon: <Icon fontSize="small">hub</Icon>,
+    },
+    {
+      type: "item",
+      name: "Visão Geral",
+      key: "visao-geral-obs",
+      route: "/observabilidade/geral",
+      icon: <Icon fontSize="small">dashboard</Icon>,
+      component: <VisaoGeral />,
     },
   ],
 },
