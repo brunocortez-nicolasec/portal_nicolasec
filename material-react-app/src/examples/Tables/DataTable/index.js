@@ -1,5 +1,3 @@
-// src/examples/Tables/DataTable/index.js
-
 import { useMemo, useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { useTable, useGlobalFilter, useAsyncDebounce, useSortBy, usePagination } from "react-table";
@@ -112,7 +110,6 @@ function DataTable({
                   </option>
                 ))}
               </select>
-              {/* --- MODIFICAÇÃO: Tradução do texto --- */}
               <MDTypography variant="caption" color="secondary">
                 &nbsp;&nbsp;entradas por página
               </MDTypography>
@@ -181,7 +178,6 @@ function DataTable({
       >
         {showTotalEntries && (
           <MDBox mb={{ xs: 3, sm: 0 }}>
-            {/* --- MODIFICAÇÃO: Tradução do texto --- */}
             <MDTypography variant="button" color="secondary" fontWeight="regular">
               Mostrando de {entriesStart} a {entriesEnd} de {rows.length} entradas
             </MDTypography>
