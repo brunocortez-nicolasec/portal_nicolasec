@@ -1,5 +1,3 @@
-// src/context/DashboardContext.js
-
 import { createContext, useState, useContext } from "react";
 
 const DashboardContext = createContext();
@@ -25,34 +23,50 @@ const saveToSession = (key, data) => {
 };
 
 export function DashboardProvider({ children }) {
-  // Inicializa o estado com os dados da sessão, se existirem
-  const [truIMData, setTruIMData] = useState(() => loadFromSession("truIMData"));
-  const [truPAMData, setTruPAMData] = useState(() => loadFromSession("truPAMData"));
-  const [truAMData, setTruAMData] = useState(() => loadFromSession("truAMData"));
+  // --- ESTRUTURA DE ESTADO REFATORADA ---
 
-  // Funções que atualizam o estado E salvam na sessão
-  const updateTruIMData = (data) => {
-    setTruIMData(data);
-    saveToSession("truIMData", data);
+  // Estado unificado para os dados de todas as plataformas
+  const [plataformasData, setPlataformasData] = useState(() => {
+    const dadosSalvos = loadFromSession("plataformasData");
+    if (dadosSalvos) {
+      return dadosSalvos;
+    }
+    // Lógica de migração: se a nova estrutura não existir,
+    // tenta carregar os dados da estrutura antiga para não perder a sessão atual.
+    const initialData = {
+      TruIM: loadFromSession("truIMData") || [],
+      TruPAM: loadFromSession("truPAMData") || [],
+      TruAM: loadFromSession("truAMData") || [],
+    };
+    return initialData;
+  });
+
+  // Estado para controlar a plataforma selecionada
+  const [plataformaSelecionada, setPlataformaSelecionadaState] = useState(() => {
+    return loadFromSession("plataformaSelecionada") || "Geral";
+  });
+
+  // --- NOVAS FUNÇÕES ---
+
+  // Função para alterar a plataforma selecionada
+  const setPlataformaSelecionada = (plataforma) => {
+    setPlataformaSelecionadaState(plataforma);
+    saveToSession("plataformaSelecionada", plataforma);
   };
 
-  const updateTruPAMData = (data) => {
-    setTruPAMData(data);
-    saveToSession("truPAMData", data);
+  // Função para atualizar os dados de uma plataforma específica (usado pelo importador de CSV)
+  const updatePlataformaData = (plataforma, data) => {
+    const novosDados = { ...plataformasData, [plataforma]: data };
+    setPlataformasData(novosDados);
+    saveToSession("plataformasData", novosDados);
   };
-
-  const updateTruAMData = (data) => {
-    setTruAMData(data);
-    saveToSession("truAMData", data);
-  };
-
+  
+  // O valor fornecido pelo Context agora contém a nova estrutura
   const value = {
-    truIMData,
-    updateTruIMData,
-    truPAMData,
-    updateTruPAMData,
-    truAMData,
-    updateTruAMData,
+    plataformasData,
+    plataformaSelecionada,
+    setPlataformaSelecionada,
+    updatePlataformaData,
   };
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;

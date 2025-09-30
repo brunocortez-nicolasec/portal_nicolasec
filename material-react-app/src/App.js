@@ -4,8 +4,6 @@ import { useState, useEffect, useMemo, useContext } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
-import Icon from "@mui/material/Icon";
-import MDBox from "components/MDBox";
 import Sidenav from "examples/Sidenav";
 import Configurator from "examples/Configurator";
 import theme from "assets/theme";
@@ -17,7 +15,7 @@ import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import routes from "routes";
 import { useMaterialUIController, setMiniSidenav, setOpenConfigurator } from "context";
-import { DashboardProvider } from "context/DashboardContext"; // Importação já estava correta
+import { DashboardProvider } from "context/DashboardContext";
 import brandWhite from "assets/images/logo-ct.png";
 import brandDark from "assets/images/logo-ct-dark.png";
 import { setupAxiosInterceptors } from "./services/interceptor";
@@ -29,7 +27,6 @@ import Register from "auth/register";
 import { AuthContext } from "context";
 import UserProfile from "layouts/user-profile";
 import UserManagement from "layouts/user-management";
-import { Helmet } from "react-helmet";
 
 export default function App() {
   const authContext = useContext(AuthContext);
@@ -74,7 +71,8 @@ export default function App() {
       setOnMouseEnter(false);
     }
   };
-
+  
+  // This handler is needed for the button in the navbar
   const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
 
   const navigate = useNavigate();
@@ -114,31 +112,6 @@ export default function App() {
       return null;
     });
 
-  const configsButton = (
-    <MDBox
-      display="flex"
-      justifyContent="center"
-      alignItems="center"
-      width="3.25rem"
-      height="3.25rem"
-      bgColor="white"
-      shadow="sm"
-      borderRadius="50%"
-      position="fixed"
-      right="2rem"
-      bottom="2rem"
-      zIndex={99}
-      color="dark"
-      sx={{ cursor: "pointer" }}
-      onClick={handleConfiguratorOpen}
-    >
-      <Icon fontSize="small" color="inherit">
-        settings
-      </Icon>
-    </MDBox>
-  );
-
-  // --- MODIFICAÇÃO: Removido o DashboardProvider daqui de fora ---
   return direction === "rtl" ? (
     <CacheProvider value={rtlCache}>
       <ThemeProvider theme={darkMode ? themeDarkRTL : themeRTL}>
@@ -154,11 +127,9 @@ export default function App() {
               onMouseLeave={handleOnMouseLeave}
             />
             <Configurator />
-            {configsButton}
           </>
         )}
         {layout === "vr" && <Configurator />}
-        {/* --- MODIFICAÇÃO: DashboardProvider agora envolve apenas as rotas --- */}
         <DashboardProvider>
           <Routes>
             <Route path="login" element={<Navigate to="/auth/login" />} />
@@ -182,11 +153,9 @@ export default function App() {
             routes={routes}
           />
           <Configurator />
-          {configsButton}
         </>
       )}
       {layout === "vr" && <Configurator />}
-      {/* --- MODIFICAÇÃO: DashboardProvider agora envolve apenas as rotas --- */}
       <DashboardProvider>
         <Routes>
           <Route path="/auth/login" element={<Login />} />

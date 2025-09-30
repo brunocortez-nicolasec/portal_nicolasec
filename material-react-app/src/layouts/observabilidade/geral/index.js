@@ -19,8 +19,7 @@ import { useDashboard } from "context/DashboardContext";
 import LiveFeed from "./components/LiveFeed";
 import Painel from "./components/Painel";
 
-// --- COMPONENTES CUSTOMIZADOS (que ainda são usados nesta página) ---
-// --- ALTERAÇÃO APLICADA AQUI ---
+// --- COMPONENTES CUSTOMIZADOS ---
 function KpiStack({ title, items, defaultColor = "dark" }) {
     return ( <Card sx={{height: "100%"}}> <MDBox pt={2} px={2} textAlign="center"> <MDTypography variant="button" fontWeight="bold" textTransform="uppercase" color="secondary">{title}</MDTypography> </MDBox> <MDBox p={2} pt={0}> {items.map(item => ( <MDBox key={item.label} mt={2.5} lineHeight={1} textAlign="center"> <MDTypography variant="caption" color="text" fontWeight="light" textTransform="uppercase">{item.label}</MDTypography> <MDTypography variant="h3" fontWeight="bold" color={item.color || defaultColor}>{item.value}</MDTypography> </MDBox> ))} </MDBox> </Card> );
 }
@@ -30,34 +29,48 @@ const ModalContent = React.forwardRef(({ title, data, onClose }, ref) => (
         <Card sx={{ width: "80vw", maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
             <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
                 <MDTypography variant="h6">{title}</MDTypography>
-                <MDButton iconOnly onClick={onClose}>
-                    <Icon>close</Icon>
-                </MDButton>
+                <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
             </MDBox>
             <MDBox p={2} pt={0}>
-                <DataTable
-                    table={data}
-                    isSorted={false}
-                    entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }}
-                    showTotalEntries
-                    canSearch
-                />
+                <DataTable table={data} isSorted={false} entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }} showTotalEntries canSearch />
             </MDBox>
         </Card>
     </Box>
 ));
 
 function VisaoGeral() {
-    const { truIMData, truPAMData, truAMData } = useDashboard();
+    const { 
+        plataformasData, 
+        plataformaSelecionada, 
+        setPlataformaSelecionada, 
+        updatePlataformaData 
+    } = useDashboard();
+    
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
+
+    const handlePlatformChange = (plataforma) => {
+        setPlataformaSelecionada(plataforma);
+    };
+
+    const handleCsvImport = (plataforma, dados) => {
+        const targetPlatform = plataforma === "Geral" ? "TruIM" : plataforma;
+        updatePlataformaData(targetPlatform, dados);
+        alert(`Dados para a plataforma ${targetPlatform} foram importados com sucesso!`);
+    };
 
     const handleOpenModal = () => setIsModalOpen(true);
     const handleCloseModal = () => setIsModalOpen(false);
 
     const displayData = useMemo(() => {
-        const imData = truIMData || [];
-        const pamData = truPAMData || [];
+        let imData = [];
+        if (plataformaSelecionada === "Geral") {
+            imData = Object.values(plataformasData).flat();
+        } else {
+            imData = plataformasData[plataformaSelecionada] || [];
+        }
+        
+        const pamData = plataformasData["TruPAM"] || [];
 
         const custoPorDivergencia = 25000;
         const inativosRHAtivosAppCount = imData.filter(r => r.status_rh === 'inativo' && r.status_app === 'ativo').length;
@@ -67,8 +80,19 @@ function VisaoGeral() {
         const prejuizoMitigado = valorMitigado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
         const imDisplay = {
-            pills: { total: imData.length, ativos: imData.filter(r => r.status_app === 'ativo').length, inativos: imData.filter(r => r.status_app === 'inativo').length, desconhecido: imData.filter(r => r.status_app === 'desconhecido').length, },
-            tipos: imData.reduce((acc, r) => { (acc[r.tipo_usuario] = (acc[r.tipo_usuario] || 0) + 1); return acc; }, {}),
+            pills: { 
+                total: imData.length, 
+                ativos: imData.filter(r => r.status_app === 'ativo').length, 
+                inativos: imData.filter(r => r.status_app === 'inativo').length, 
+                // --- LÓGICA DO PILL CORRIGIDA ---
+                desconhecido: imData.filter(r => !r.tipo_usuario).length, 
+            },
+            // --- LÓGICA DOS TIPOS CORRIGIDA ---
+            tipos: imData.reduce((acc, r) => {
+                const key = r.tipo_usuario || "Desconhecido";
+                acc[key] = (acc[key] || 0) + 1;
+                return acc;
+            }, {}),
             divergencias: { 
                 inativosRHAtivosApp: inativosRHAtivosAppCount, 
                 ativosNaoEncontradosRH: imData.filter(r => !r.status_rh && r.status_app === 'ativo').length,
@@ -82,24 +106,20 @@ function VisaoGeral() {
                 contasDormentes: imData.filter(r => { if (r.status_app !== 'ativo' || !r.ultimo_login) return false; const ultimoLogin = new Date(r.ultimo_login); const diffTime = Math.abs(new Date() - ultimoLogin); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); return diffDays > 90; }).length, 
                 acessoPrivilegiado: imData.filter(r => r.perfil === 'admin' && r.status_app === 'ativo').length, 
             },
-            tiposChart: (() => { const tipos = imData.reduce((acc, r) => { if (r.tipo_usuario) acc[r.tipo_usuario] = (acc[r.tipo_usuario] || 0) + 1; return acc; }, {}); return { labels: Object.keys(tipos), datasets: { label: "Tipos", backgroundColors: ["info", "primary", "warning", "secondary", "error", "light"], data: Object.values(tipos) }, }; })(),
+            tiposChart: (() => {
+                const tipos = imData.reduce((acc, r) => {
+                    const key = r.tipo_usuario || "Desconhecido";
+                    acc[key] = (acc[key] || 0) + 1;
+                    return acc;
+                }, {});
+                return { labels: Object.keys(tipos), datasets: { label: "Tipos", backgroundColors: ["info", "primary", "warning", "secondary", "error", "light"], data: Object.values(tipos) }, };
+            })(),
         };
         
-        const tiposList = Object.entries(imDisplay.tipos).map(([key, val]) => ({
-            label: key,
-            value: val,
-        }));
-        tiposList.push({
-            label: "Ativo Não Encontrado",
-            value: imDisplay.divergencias.ativosNaoEncontradosRH,
-            color: "error",
-        });
+        const tiposList = Object.entries(imDisplay.tipos).map(([key, val]) => ({ label: key, value: val, }));
+        tiposList.push({ label: "Ativo Não Encontrado", value: imDisplay.divergencias.ativosNaoEncontradosRH, color: "error", });
         const inativosNaoEncontradosRH = imData.filter(r => !r.status_rh && r.status_app === 'inativo').length;
-        tiposList.push({
-            label: "Inativo Não Encontrado",
-            value: inativosNaoEncontradosRH,
-            color: "warning",
-        });
+        tiposList.push({ label: "Inativo Não Encontrado", value: inativosNaoEncontradosRH, color: "warning", });
         imDisplay.tiposList = tiposList;
 
         const pamDisplay = { riscos: { acessosIndevidos: pamData.filter(r => r.acesso_indevido === 'sim').length, } };
@@ -113,44 +133,26 @@ function VisaoGeral() {
                 const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                 isDormente = diffDays > 90;
             }
-
-            return (
-                (r.status_rh === 'inativo' && r.status_app === 'ativo') ||
-                !r.status_rh ||
-                (r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual) ||
-                (r.cpf_rh && r.cpf_app && r.cpf_rh !== r.cpf_app) ||
-                (r.email_rh && r.email_app && r.email_rh !== r.email_app) ||
-                isDormente
-            );
+            return ( (r.status_rh === 'inativo' && r.status_app === 'ativo') || !r.status_rh || (r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual) || (r.cpf_rh && r.cpf_app && r.cpf_rh !== r.cpf_app) || (r.email_rh && r.email_app && r.email_rh !== r.email_app) || isDormente );
         };
 
         const totalComDivergencia = imData.filter(temDivergencia).length;
         const totalIdentidades = imData.length;
-        const indiceConformidade = totalIdentidades > 0 
-            ? (((totalIdentidades - totalComDivergencia) / totalIdentidades) * 100).toFixed(1)
-            : '100.0';
+        const indiceConformidade = totalIdentidades > 0 ? (((totalIdentidades - totalComDivergencia) / totalIdentidades) * 100).toFixed(1) : '100.0';
+        const riscosEmContasPrivilegiadas = imData.filter(r => r.perfil === 'admin' && temDivergencia(r)).length;
 
-        const riscosEmContasPrivilegiadas = imData.filter(r => 
-            r.perfil === 'admin' && temDivergencia(r)
-        ).length;
-
-        return { 
-            imDisplay, 
-            pamDisplay, 
-            riscosConsolidadosChart, 
-            prejuizoPotencial, 
-            prejuizoMitigado,
-            indiceConformidade,
-            riscosEmContasPrivilegiadas
-        };
-    }, [truIMData, truPAMData]);
+        return { imDisplay, pamDisplay, riscosConsolidadosChart, prejuizoPotencial, prejuizoMitigado, indiceConformidade, riscosEmContasPrivilegiadas };
+    }, [plataformasData, plataformaSelecionada]);
 
     const handlePieChartClick = (event, elements) => {
-        if (!elements || elements.length === 0 || !displayData || !truIMData) return;
+        if (!elements || elements.length === 0 || !displayData) return;
+        const currentData = plataformaSelecionada === "Geral" ? Object.values(plataformasData).flat() : (plataformasData[plataformaSelecionada] || []);
+        if (!currentData.length) return;
+
         const { index } = elements[0];
         const clickedLabel = displayData.imDisplay.tiposChart.labels[index];
         if (clickedLabel) {
-            const filteredData = truIMData.filter(user => user.tipo_usuario === clickedLabel);
+            const filteredData = currentData.filter(user => (user.tipo_usuario || "Desconhecido") === clickedLabel);
             setModalContent({
                 title: `Detalhes: Tipo de Usuário "${clickedLabel}"`,
                 data: {
@@ -164,42 +166,42 @@ function VisaoGeral() {
     
     const handleBarChartClick = (event, elements) => {
         if (!elements || elements.length === 0 || !displayData) return;
+        
+        const pamData = plataformasData["TruPAM"] || [];
+        const imData = Object.values(plataformasData).filter(key => key !== 'TruPAM' && key !== 'TruAM').flat();
+
         const { index } = elements[0];
         const clickedLabel = displayData.riscosConsolidadosChart.labels[index];
         let filteredData = [];
         let columns = [];
+
         switch (index) {
             case 0:
-                filteredData = truPAMData.filter(r => r.acesso_indevido === 'sim');
+                filteredData = pamData.filter(r => r.acesso_indevido === 'sim');
                 columns = [ { Header: "Usuário Privilegiado", accessor: "usuario_privilegiado" }, { Header: "Sistema", accessor: "sistema" }, { Header: "Data do Evento", accessor: "data_evento" }, ];
                 break;
             case 1:
-                filteredData = truIMData.filter(r => r.status_rh === 'inativo' && r.status_app === 'ativo');
+                filteredData = imData.filter(r => r.status_rh === 'inativo' && r.status_app === 'ativo');
                 columns = [ { Header: "ID do Usuário", accessor: "id_usuario" }, { Header: "Nome", accessor: "nome_colaborador" }, { Header: "Status RH", accessor: "status_rh" }, { Header: "Status App", accessor: "status_app" }, ];
                 break;
             case 2:
-                filteredData = truIMData.filter(r => r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual);
+                filteredData = imData.filter(r => r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual);
                 columns = [ { Header: "ID do Usuário", accessor: "id_usuario" }, { Header: "Nome", accessor: "nome_colaborador" }, { Header: "Login Esperado", accessor: "login_esperado" }, { Header: "Login Atual", accessor: "login_atual" }, ];
                 break;
             default:
                 return;
         }
-        setModalContent({
-            title: `Detalhes: ${clickedLabel}`,
-            data: { columns, rows: filteredData }
-        });
+        setModalContent({ title: `Detalhes: ${clickedLabel}`, data: { columns, rows: filteredData } });
         handleOpenModal();
     };
+
+    const allDataForLiveFeed = useMemo(() => Object.values(plataformasData).flat(), [plataformasData]);
 
     return (
         <DashboardLayout>
             <DashboardNavbar />
             <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
-                <ModalContent
-                    title={modalContent.title}
-                    data={modalContent.data}
-                    onClose={handleCloseModal}
-                />
+                <ModalContent title={modalContent.title} data={modalContent.data} onClose={handleCloseModal} />
             </Modal>
             <MDBox py={3}>
                 <Grid container spacing={3} sx={{ mb: 3 }}>
@@ -208,6 +210,9 @@ function VisaoGeral() {
                             <Painel 
                                 imDisplay={displayData.imDisplay}
                                 onPieChartClick={handlePieChartClick}
+                                onPlatformChange={handlePlatformChange}
+                                onCsvImport={handleCsvImport}
+                                selectedPlatform={plataformaSelecionada}
                             />
                         )}
                     </Grid>
@@ -246,30 +251,14 @@ function VisaoGeral() {
                             <Grid item>
                                 <Card>
                                     <MDBox p={2} textAlign="center">
-                                        <MDBox
-                                            display="grid"
-                                            justifyContent="center"
-                                            alignItems="center"
-                                            bgColor="error"
-                                            color="white"
-                                            width="4rem"
-                                            height="4rem"
-                                            shadow="md"
-                                            borderRadius="lg"
-                                            variant="gradient"
-                                            sx={{ mt: -3, mb: 2, mx: 'auto' }}
-                                        >
+                                        <MDBox display="grid" justifyContent="center" alignItems="center" bgColor="error" color="white" width="4rem" height="4rem" shadow="md" borderRadius="lg" variant="gradient" sx={{ mt: -3, mb: 2, mx: 'auto' }}>
                                             <Icon fontSize="large">money_off</Icon>
                                         </MDBox>
                                         <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>Prejuízo Potencial (Mensal)</MDTypography>
-                                        <MDTypography variant="body2" color="text" sx={{mb: 3}}>
-                                            Custo com riscos devido a contas &apos;RH Inativo / App Ativo&apos;.
-                                        </MDTypography>
+                                        <MDTypography variant="body2" color="text" sx={{mb: 3}}> Custo com riscos devido a contas &apos;RH Inativo / App Ativo&apos;. </MDTypography>
                                         <Card>
                                             <MDBox p={1}>
-                                                <MDTypography variant="h2" fontWeight="bold" color="error"> 
-                                                    {displayData.prejuizoPotencial}
-                                                </MDTypography>
+                                                <MDTypography variant="h2" fontWeight="bold" color="warning"> {displayData.prejuizoPotencial} </MDTypography>
                                             </MDBox>
                                         </Card>
                                     </MDBox>
@@ -278,30 +267,14 @@ function VisaoGeral() {
                             <Grid item>
                                 <Card>
                                     <MDBox p={2} textAlign="center">
-                                        <MDBox
-                                            display="grid"
-                                            justifyContent="center"
-                                            alignItems="center"
-                                            bgColor="success"
-                                            color="white"
-                                            width="4rem"
-                                            height="4rem"
-                                            shadow="md"
-                                            borderRadius="lg"
-                                            variant="gradient"
-                                            sx={{ mt: -3, mb: 2, mx: 'auto' }}
-                                        >
+                                        <MDBox display="grid" justifyContent="center" alignItems="center" bgColor="success" color="white" width="4rem" height="4rem" shadow="md" borderRadius="lg" variant="gradient" sx={{ mt: -3, mb: 2, mx: 'auto' }}>
                                             <Icon fontSize="large">savings</Icon>
                                         </MDBox>
                                         <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>Valor Mitigado com TruIM</MDTypography>
-                                        <MDTypography variant="body2" color="text" sx={{mb: 3}}>
-                                          Redução de 95% do prejuízo potencial com governança.
-                                        </MDTypography>
+                                        <MDTypography variant="body2" color="text" sx={{mb: 3}}> Redução de 95% do prejuízo potencial com governança. </MDTypography>
                                         <Card>
                                             <MDBox p={1}>
-                                                <MDTypography variant="h2" fontWeight="bold" color="success">
-                                                    {displayData.prejuizoMitigado}
-                                                </MDTypography>
+                                                <MDTypography variant="h2" fontWeight="bold" color="success"> {displayData.prejuizoMitigado} </MDTypography>
                                             </MDBox>
                                         </Card>
                                     </MDBox>
@@ -325,9 +298,9 @@ function VisaoGeral() {
                 <Grid container spacing={3}>
                     <Grid item xs={12}>
                         <LiveFeed 
-                            truIMData={truIMData}
-                            truPAMData={truPAMData}
-                            truAMData={truAMData}
+                            truIMData={allDataForLiveFeed}
+                            truPAMData={plataformasData["TruPAM"] || []}
+                            truAMData={plataformasData["TruAM"] || []}
                         />
                     </Grid>
                 </Grid>
