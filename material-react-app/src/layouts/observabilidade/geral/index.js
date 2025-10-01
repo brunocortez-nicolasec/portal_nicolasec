@@ -72,6 +72,24 @@ function VisaoGeral() {
         
         const pamData = plataformasData["TruPAM"] || [];
 
+        // --- LÓGICA DO ÍNDICE DE CONFORMIDADE CORRIGIDA ---
+        const temDivergencia = (r) => {
+            let isDormente = false;
+            if (r.status_app === 'ativo' && r.ultimo_login) {
+                const ultimoLogin = new Date(r.ultimo_login);
+                const diffTime = Math.abs(new Date() - ultimoLogin);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                isDormente = diffDays > 90;
+            }
+            return ( (r.status_rh === 'inativo' && r.status_app === 'ativo') || !r.status_rh || (r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual) || (r.cpf_rh && r.cpf_app && r.cpf_rh !== r.cpf_app) || (r.email_rh && r.email_app && r.email_rh !== r.email_app) || isDormente );
+        };
+
+        const totalComDivergencia = imData.filter(temDivergencia).length;
+        const totalIdentidades = imData.length;
+        const indiceConformidade = totalIdentidades > 0 ? (((totalIdentidades - totalComDivergencia) / totalIdentidades) * 100).toFixed(1) : '100.0';
+        const riscosEmContasPrivilegiadas = imData.filter(r => r.perfil === 'admin' && temDivergencia(r)).length;
+        // --- FIM DA CORREÇÃO ---
+
         const custoPorDivergencia = 25000;
         const inativosRHAtivosAppCount = imData.filter(r => r.status_rh === 'inativo' && r.status_app === 'ativo').length;
         const prejuizoCalculado = inativosRHAtivosAppCount * custoPorDivergencia;
@@ -84,10 +102,9 @@ function VisaoGeral() {
                 total: imData.length, 
                 ativos: imData.filter(r => r.status_app === 'ativo').length, 
                 inativos: imData.filter(r => r.status_app === 'inativo').length, 
-                // --- LÓGICA DO PILL CORRIGIDA ---
+                // --- LÓGICA DO "DESCONHECIDO" CORRIGIDA ---
                 desconhecido: imData.filter(r => !r.tipo_usuario).length, 
             },
-            // --- LÓGICA DOS TIPOS CORRIGIDA ---
             tipos: imData.reduce((acc, r) => {
                 const key = r.tipo_usuario || "Desconhecido";
                 acc[key] = (acc[key] || 0) + 1;
@@ -124,22 +141,6 @@ function VisaoGeral() {
 
         const pamDisplay = { riscos: { acessosIndevidos: pamData.filter(r => r.acesso_indevido === 'sim').length, } };
         const riscosConsolidadosChart = { labels: ["Acessos Indevidos (PAM)", "RH Inativo/App Ativo (IM)", "Divergência de Login (IM)"], datasets: [{ label: "Total de Eventos de Risco", color: "error", data: [ pamDisplay.riscos.acessosIndevidos, imDisplay.divergencias.inativosRHAtivosApp, imDisplay.divergencias.login, ] }] };
-        
-        const temDivergencia = (r) => {
-            let isDormente = false;
-            if (r.status_app === 'ativo' && r.ultimo_login) {
-                const ultimoLogin = new Date(r.ultimo_login);
-                const diffTime = Math.abs(new Date() - ultimoLogin);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                isDormente = diffDays > 90;
-            }
-            return ( (r.status_rh === 'inativo' && r.status_app === 'ativo') || !r.status_rh || (r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual) || (r.cpf_rh && r.cpf_app && r.cpf_rh !== r.cpf_app) || (r.email_rh && r.email_app && r.email_rh !== r.email_app) || isDormente );
-        };
-
-        const totalComDivergencia = imData.filter(temDivergencia).length;
-        const totalIdentidades = imData.length;
-        const indiceConformidade = totalIdentidades > 0 ? (((totalIdentidades - totalComDivergencia) / totalIdentidades) * 100).toFixed(1) : '100.0';
-        const riscosEmContasPrivilegiadas = imData.filter(r => r.perfil === 'admin' && temDivergencia(r)).length;
 
         return { imDisplay, pamDisplay, riscosConsolidadosChart, prejuizoPotencial, prejuizoMitigado, indiceConformidade, riscosEmContasPrivilegiadas };
     }, [plataformasData, plataformaSelecionada]);
@@ -258,7 +259,7 @@ function VisaoGeral() {
                                         <MDTypography variant="body2" color="text" sx={{mb: 3}}> Custo com riscos devido a contas &apos;RH Inativo / App Ativo&apos;. </MDTypography>
                                         <Card>
                                             <MDBox p={1}>
-                                                <MDTypography variant="h2" fontWeight="bold" color="warning"> {displayData.prejuizoPotencial} </MDTypography>
+                                                <MDTypography variant="h2" fontWeight="bold" color="error"> {displayData.prejuizoPotencial} </MDTypography>
                                             </MDBox>
                                         </Card>
                                     </MDBox>

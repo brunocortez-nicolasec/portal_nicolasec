@@ -10,6 +10,7 @@ import rolesRoutes from "./services/roles/index.js";
 import groupsRoutes from "./services/groups/index.js";
 import platformsRoutes from "./services/platforms/index.js";
 import packagesRoutes from "./services/packages/index.js";
+import importsRoutes from "./services/imports/index.js"; 
 import path from "path";
 import * as fs from "fs";
 
@@ -47,10 +48,23 @@ const jsonParser = bodyParser.json();
 
 app.use(express.json());
 
+// --- INÍCIO DA MODIFICAÇÃO: MIDDLEWARE DE LOG ---
+// Este "espião" será executado para cada requisição que chegar ao servidor
+app.use((req, res, next) => {
+  console.log("--- NOVA REQUISIÇÃO RECEBIDA ---");
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  console.log("CABEÇALHOS (Headers):");
+  console.log(JSON.stringify(req.headers, null, 2));
+  console.log("---------------------------------");
+  next(); // Passa a requisição para a próxima etapa (suas rotas)
+});
+// --- FIM DA MODIFICAÇÃO ---
+
 app.get("/", function (req, res) {
   const __dirname = fs.realpathSync(".");
   res.sendFile(path.join(__dirname, "/src/landing/index.html"));
 });
+
 
 // Suas rotas existentes
 app.use("/", authRoutes);
@@ -60,6 +74,7 @@ app.use("/roles", rolesRoutes);
 app.use("/groups", groupsRoutes);
 app.use("/platforms", platformsRoutes);
 app.use("/packages", packagesRoutes);
+app.use("/imports", importsRoutes); 
 app.use("/conjur", jsonParser, conjurRoutes);
 
 

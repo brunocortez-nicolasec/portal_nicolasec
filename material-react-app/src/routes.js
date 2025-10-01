@@ -1,11 +1,9 @@
-
 // Material Dashboard 2 React layouts
 import Dashboard from "layouts/dashboard";
 import Tables from "layouts/tables";
 import Billing from "layouts/billing";
 import Notifications from "layouts/notifications";
 import Profile from "layouts/profile";
-
 
 import UserProfile from "layouts/user-profile";
 
@@ -25,6 +23,8 @@ import DashboardTruIM from "layouts/observabilidade/truim";
 import DashboardTruPAM from "layouts/observabilidade/trupam";
 import DashboardTruAM from "layouts/observabilidade/truam";
 import VisaoGeral from "layouts/observabilidade/geral";
+// --- 1. ADICIONAR ESTE NOVO IMPORT ---
+import ImportManagement from "layouts/observabilidade/importManagement";
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -122,7 +122,6 @@ const routes = [
       key: "usuarios",
       route: "/administrar/usuarios",
       component: <GerenciarUsuarios />,
-      // --- ÍCONE ADICIONADO ---
       icon: <Icon fontSize="small">group</Icon>, 
     },
     {
@@ -130,7 +129,6 @@ const routes = [
       key: "grupos",
       route: "/administrar/grupos",
       component: <GerenciarGrupos />,
-      // --- ÍCONE ADICIONADO ---
       icon: <Icon fontSize="small">groups</Icon>,
     },
     {
@@ -138,7 +136,6 @@ const routes = [
       key: "funcoes",
       route: "/administrar/funcoes",
       component: <GerenciarFuncoes />,
-      // --- ÍCONE ADICIONADO ---
       icon: <Icon fontSize="small">security</Icon>,
     },
     {
@@ -160,21 +157,21 @@ const routes = [
       name: "TruIM",
       key: "truim",
       route: "/tas/truim",
-      component: <TruIM />, // <-- ALTERADO
+      component: <TruIM />,
       icon: <Icon fontSize="small">fact_check</Icon>,
     },
     {
       name: "TruPAM",
       key: "trupam",
       route: "/tas/trupam",
-      component: <TruPAM />, // <-- ALTERADO
+      component: <TruPAM />,
       icon: <Icon fontSize="small">shield</Icon>,
     },
     {
       name: "TruAM",
       key: "truam",
       route: "/tas/truam",
-      component: <TruAM />, // <-- ALTERADO
+      component: <TruAM />,
       icon: <Icon fontSize="small">hub</Icon>,
     },
   ],
@@ -182,37 +179,44 @@ const routes = [
 {
   type: "collapse",
   name: "Observabilidade",
-  key: "observabilidade", // Chave para o menu pai
+  key: "observabilidade",
   icon: <Icon fontSize="small">monitoring</Icon>,
   collapse: [
     {
-      name: "TruIM",
-      key: "truim",
-      route: "/observabilidade/truim", // Nova rota
-      component: <DashboardTruIM />,   // Novo componente que criaremos
-      icon: <Icon fontSize="small">fact_check</Icon>,
-    },
-    {
-      name: "TruPAM",
-      key: "trupam",
-      route: "/observabilidade/trupam", // Nova rota
-      component: <DashboardTruPAM />,  // Novo componente que criaremos
-      icon: <Icon fontSize="small">shield</Icon>,
-    },
-    {
-      name: "TruAM",
-      key: "truam",
-      route: "/observabilidade/truam", // Nova rota
-      component: <DashboardTruAM />,   // Novo componente que criaremos
-      icon: <Icon fontSize="small">hub</Icon>,
-    },
-    {
-      type: "item",
       name: "Visão Geral",
       key: "visao-geral-obs",
       route: "/observabilidade/geral",
       icon: <Icon fontSize="small">dashboard</Icon>,
       component: <VisaoGeral />,
+    },
+    // --- 2. ADICIONAR ESTE NOVO OBJETO ---
+    {
+      name: "Importações",
+      key: "gerenciar-importacoes",
+      route: "/observabilidade/import-management",
+      component: <ImportManagement />,
+      icon: <Icon fontSize="small">upload_file</Icon>,
+    },
+    {
+      name: "TruIM",
+      key: "truim-obs",
+      route: "/observabilidade/truim",
+      component: <DashboardTruIM />,
+      icon: <Icon fontSize="small">fact_check</Icon>,
+    },
+    {
+      name: "TruPAM",
+      key: "trupam-obs",
+      route: "/observabilidade/trupam",
+      component: <DashboardTruPAM />,
+      icon: <Icon fontSize="small">shield</Icon>,
+    },
+    {
+      name: "TruAM",
+      key: "truam-obs",
+      route: "/observabilidade/truam",
+      component: <DashboardTruAM />,
+      icon: <Icon fontSize="small">hub</Icon>,
     },
   ],
 },

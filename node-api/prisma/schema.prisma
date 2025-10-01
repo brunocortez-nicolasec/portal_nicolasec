@@ -8,6 +8,14 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// --- ENUM PARA STATUS DA IMPORTAÇÃO ---
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  SUCCESS
+  FAILED
+}
+
 model User {
   id            Int      @id @default(autoincrement())
   name          String
@@ -22,9 +30,11 @@ model User {
 
   groups        Group[]
 
-  // --- MUDANÇA: Adiciona a relação com Pacotes ---
-  packageId     Int?     // Armazena o ID do pacote (opcional)
+  packageId     Int?
   package       Package? @relation(fields: [packageId], references: [id])
+
+  // Relação com o histórico de importações
+  importLogs    ImportLog[]
 
   @@map("users")
 }
@@ -64,31 +74,46 @@ model Group {
   @@map("groups")
 }
 
-
-// --- NOVO MODELO: Tabela para as Plataformas (TruIM, etc.) ---
 model Platform {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique // Ex: "TruIM - Controle de Identidades"
-  key       String   @unique // Ex: "truim" (para usar na lógica do código)
-  route     String   @unique // Ex: "/tas/truim" (a rota no frontend)
-  icon      String?           // Ex: "fact_check" (nome do ícone)
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  key       String    @unique
+  route     String    @unique
+  icon      String?
 
-  packages  Package[] // Relação muitos-para-muitos com Pacotes
+  packages  Package[]
 
   @@map("platforms")
 }
 
-
-// --- NOVO MODELO: Tabela para os Pacotes de Serviços ---
 model Package {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique // Ex: "Pacote Básico", "Pacote Premium"
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
-  platforms   Platform[] // Relação muitos-para-muitos com Plataformas
-  users       User[]     // Relação um-para-muitos com Usuários
+  platforms   Platform[]
+  users       User[]
 
   @@map("packages")
+}
+
+// --- MODELO PARA O HISTÓRICO DE IMPORTAÇÕES DE CSV ---
+model ImportLog {
+  id            Int          @id @default(autoincrement())
+  fileName      String
+  targetSystem  String
+  status        ImportStatus @default(PENDING)
+  processedRows Int          @default(0)
+  totalRows     Int          @default(0)
+  errorDetails  String?
+  createdAt     DateTime     @default(now())
+  completedAt   DateTime?
+
+  // Relacionamento com o usuário que fez o upload
+  userId        Int
+  user          User         @relation(fields: [userId], references: [id])
+
+  @@map("import_logs")
 }
