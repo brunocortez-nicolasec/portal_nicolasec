@@ -1,3 +1,5 @@
+// CÓDIGO CORRIGIDO
+
 import { useEffect, useMemo } from "react";
 import { useLocation, NavLink } from "react-router-dom";
 import PropTypes from "prop-types";
@@ -15,17 +17,15 @@ import {
   setMiniSidenav,
   setTransparentSidenav,
   setWhiteSidenav,
-  useAuth,
 } from "context";
 
 function Sidenav({ color, brand, brandName, routes, ...rest }) {
   const [controller, dispatch] = useMaterialUIController();
-  const { miniSidenav, transparentSidenav, whiteSidenav, darkMode } = controller;
+  const { miniSidenav, transparentSidenav, whiteSidenav, darkMode, user } = controller;
   const location = useLocation();
   const collapseName = location.pathname.replace("/", "");
-  
-  const { user } = useAuth();
-  
+
+  // --- CORREÇÃO AQUI: Lendo os dados do caminho correto ---
   const { userRole, userPackage, userPlatformKeys } = useMemo(() => {
     const attributes = user?.data?.attributes;
     if (!attributes) {
@@ -37,6 +37,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     return { userRole, userPackage, userPlatformKeys };
   }, [user]);
 
+  // ... (o restante do seu código continua exatamente igual)
   let textColor = "white";
   if (transparentSidenav || (whiteSidenav && !darkMode)) {
     textColor = "dark";

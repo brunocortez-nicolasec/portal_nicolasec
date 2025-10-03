@@ -111,7 +111,7 @@ function DataTable({
                 ))}
               </select>
               <MDTypography variant="caption" color="secondary">
-                &nbsp;&nbsp;entradas por página
+                &nbsp;&nbsp;itens por página
               </MDTypography>
             </MDBox>
           )}
@@ -179,7 +179,7 @@ function DataTable({
         {showTotalEntries && (
           <MDBox mb={{ xs: 3, sm: 0 }}>
             <MDTypography variant="button" color="secondary" fontWeight="regular">
-              Mostrando de {entriesStart} a {entriesEnd} de {rows.length} entradas
+              Mostrando de {entriesStart} a {entriesEnd} de {rows.length} itens totais
             </MDTypography>
           </MDBox>
         )}

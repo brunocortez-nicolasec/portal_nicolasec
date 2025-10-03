@@ -8,7 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// --- ENUM PARA STATUS DA IMPORTAÇÃO ---
 enum ImportStatus {
   PENDING
   PROCESSING
@@ -33,7 +32,6 @@ model User {
   packageId     Int?
   package       Package? @relation(fields: [packageId], references: [id])
 
-  // Relação com o histórico de importações
   importLogs    ImportLog[]
 
   @@map("users")
@@ -99,7 +97,6 @@ model Package {
   @@map("packages")
 }
 
-// --- MODELO PARA O HISTÓRICO DE IMPORTAÇÕES DE CSV ---
 model ImportLog {
   id            Int          @id @default(autoincrement())
   fileName      String
@@ -111,9 +108,29 @@ model ImportLog {
   createdAt     DateTime     @default(now())
   completedAt   DateTime?
 
-  // Relacionamento com o usuário que fez o upload
   userId        Int
   user          User         @relation(fields: [userId], references: [id])
 
   @@map("import_logs")
+}
+
+// --- NOVO MODELO: ARMAZENA AS IDENTIDADES DOS ARQUIVOS CSV ---
+model Identity {
+  id           Int      @id @default(autoincrement())
+  sourceSystem String   // Sistema de origem do dado (ex: "TruIM", "SAP", "RH")
+  identityId   String   // ID único da identidade no sistema de origem (ex: email, matrícula)
+  name         String?
+  email        String?
+  status       String?  // Ex: "Ativo", "Inativo"
+  userType     String?  // Ex: "Funcionário", "Terceirizado"
+  
+  // Campo flexível para armazenar outras colunas do CSV
+  extraData    Json?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Garante que não teremos identidades duplicadas para o mesmo sistema
+  @@unique([sourceSystem, identityId])
+  @@map("identities")
 }

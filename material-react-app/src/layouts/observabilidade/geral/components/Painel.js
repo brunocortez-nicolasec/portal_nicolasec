@@ -1,8 +1,8 @@
 // material-react-app/src/layouts/observabilidade/geral/components/Painel.js
 
-import React, { useRef } from "react";
+import React from "react";
+import { useNavigate } from "react-router-dom"; // 1. IMPORTADO O useNavigate
 import PropTypes from "prop-types";
-import Papa from "papaparse";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -22,12 +22,7 @@ import PieChart from "examples/Charts/PieChart";
 function PillKpi({ label, count, color }) {
   return (
     <MDBox textAlign="center" lineHeight={1}>
-      <MDTypography
-        variant="button"
-        fontWeight="medium"
-        color={color}
-        sx={{ textTransform: "capitalize" }}
-      >
+      <MDTypography variant="button" fontWeight="medium" color={color} sx={{ textTransform: "capitalize" }}>
         {label}
       </MDTypography>
       <MDTypography variant="h4" fontWeight="bold" mt={1}>
@@ -45,12 +40,8 @@ function DetailList({ title, items }) {
       </MDTypography>
       {items.map((item) => (
         <MDBox key={item.label} display="flex" justifyContent="space-between" alignItems="center" pt={1.5}>
-          <MDTypography variant="button" fontWeight="regular" color="text">
-            {item.label}
-          </MDTypography>
-          <MDTypography variant="h6" fontWeight="bold" color={item.color || "dark"}>
-            {item.value}
-          </MDTypography>
+          <MDTypography variant="button" fontWeight="regular" color="text">{item.label}</MDTypography>
+          <MDTypography variant="h6" fontWeight="bold" color={item.color || "dark"}>{item.value}</MDTypography>
         </MDBox>
       ))}
     </Card>
@@ -70,12 +61,11 @@ function MiniMetricCard({ title, count, color = "dark" }) {
   );
 }
 
+// 2. A prop 'onCsvImport' foi removida
+function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform }) {
+  const navigate = useNavigate(); // 3. Hook para navegação
 
-function Painel({ imDisplay, onPieChartClick, onCsvImport, onPlatformChange, selectedPlatform }) {
-  const fileInputRef = useRef(null);
-  
   const systems = ["Geral", "SAP", "Salesforce", "ServiceNow", "IDM", "Cofre", "TruAm", "TruIM", "TruPAM", "VPN", "Acesso Internet"];
-
   const titleText = selectedPlatform === "Geral" ? "Painel Geral" : `Painel de ${selectedPlatform}`;
 
   const handleSystemSelect = (event, newValue) => {
@@ -83,65 +73,39 @@ function Painel({ imDisplay, onPieChartClick, onCsvImport, onPlatformChange, sel
       onPlatformChange(newValue);
     }
   };
-
-  const handleImportClick = () => {
-    fileInputRef.current.click();
+  
+  // 4. Nova função para redirecionar
+  const handleRedirectToImportPage = () => {
+    navigate("/observabilidade/import-management");
   };
-
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          onCsvImport(selectedPlatform, results.data);
-        },
-        error: (error) => {
-          console.error("Erro ao parsear o CSV:", error);
-          alert("Ocorreu um erro ao ler o arquivo CSV.");
-        },
-      });
-    }
-  };
+  
+  // A lógica de 'handleImportClick' e 'handleFileChange' foi REMOVIDA
 
   return (
     <Card sx={{ height: "100%" }}>
-      {/* --- INÍCIO DA MODIFICAÇÃO NO CABEÇALHO --- */}
       <MDBox pt={2} px={2} display="flex" alignItems="center" justifyContent="space-between">
-        {/* Caixa Esquerda (Espaçador) */}
         <MDBox sx={{ flex: 1, display: 'flex' }} />
-
-        {/* Título Centralizado */}
         <MDBox sx={{ flex: '0 1 auto', textAlign: 'center' }}>
-            <MDTypography variant="h6">{titleText}</MDTypography>
+          <MDTypography variant="h6">{titleText}</MDTypography>
         </MDBox>
-
-        {/* Caixa Direita (Botões) */}
         <MDBox sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-            <Autocomplete
-              disableClearable
-              options={systems}
-              value={selectedPlatform}
-              onChange={handleSystemSelect}
-              size="small"
-              sx={{ width: 180 }}
-              renderInput={(params) => <TextField {...params} label="Sistemas" />}
-            />
-            <MDButton variant="outlined" color="info" size="small" onClick={handleImportClick}>
-                <Icon sx={{ mr: 0.5 }}>upload</Icon>
-                Importar CSV
-            </MDButton>
-            <input
-                type="file"
-                accept=".csv"
-                ref={fileInputRef}
-                onChange={handleFileChange}
-                style={{ display: 'none' }}
-            />
+          <Autocomplete
+            disableClearable
+            options={systems}
+            value={selectedPlatform}
+            onChange={handleSystemSelect}
+            size="small"
+            sx={{ width: 180 }}
+            renderInput={(params) => <TextField {...params} label="Sistemas" />}
+          />
+          {/* 5. Botão agora chama a nova função de redirecionamento */}
+          <MDButton variant="outlined" color="info" size="small" onClick={handleRedirectToImportPage}>
+            <Icon sx={{ mr: 0.5 }}>upload</Icon>
+            Importar CSV
+          </MDButton>
+          {/* O <input> escondido foi REMOVIDO */}
         </MDBox>
       </MDBox>
-      {/* --- FIM DA MODIFICAÇÃO NO CABEÇALHO --- */}
       
       <MDBox p={2}>
         <Grid container spacing={2}>
@@ -191,10 +155,10 @@ function Painel({ imDisplay, onPieChartClick, onCsvImport, onPlatformChange, sel
   );
 }
 
+// 6. 'onCsvImport' foi REMOVIDO dos propTypes
 Painel.propTypes = {
   imDisplay: PropTypes.object.isRequired,
   onPieChartClick: PropTypes.func.isRequired,
-  onCsvImport: PropTypes.func.isRequired,
   onPlatformChange: PropTypes.func.isRequired,
   selectedPlatform: PropTypes.string.isRequired,
 };

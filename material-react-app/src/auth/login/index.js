@@ -1,5 +1,7 @@
-import { useContext, useState } from "react";
-import { Link } from "react-router-dom";
+// material-react-app/src/auth/login/index.js
+
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Card from "@mui/material/Card";
 import Switch from "@mui/material/Switch";
 import Grid from "@mui/material/Grid";
@@ -14,10 +16,15 @@ import MDButton from "components/MDButton";
 import BasicLayoutLanding from "layouts/authentication/components/BasicLayoutLanding";
 import bgImage from "assets/images/bg-sign-in-basic.jpeg";
 import AuthService from "services/auth-service";
-import { AuthContext } from "context";
+import axios from "axios"; // 1. Adicionado axios
+
+// 2. Imports do contexto corrigidos para usar 'setAuth'
+import { useMaterialUIController, setAuth } from "context";
 
 function Login() {
-  const authContext = useContext(AuthContext);
+  const [, dispatch] = useMaterialUIController();
+  const navigate = useNavigate();
+
   const [credentialsErros, setCredentialsError] = useState(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [inputs, setInputs] = useState({
@@ -38,32 +45,38 @@ function Login() {
     });
   };
 
-  // --- FUNÇÃO submitHandler CORRIGIDA ---
   const submitHandler = async (e) => {
     e.preventDefault();
     setCredentialsError(null);
 
     const mailFormat = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
-
     if (!inputs.email.trim().match(mailFormat) || inputs.password.trim().length < 6) {
       setErrors({ emailError: true, passwordError: true });
       return;
     }
 
-    // 1. Prepara os dados no formato JSON simples
     const credentials = {
       email: inputs.email,
       password: inputs.password,
     };
 
     try {
-      // 2. Envia os dados simples para o serviço de autenticação
-      const response = await AuthService.login(credentials);
+      // 3. Lógica de login corrigida
+      const loginResponse = await AuthService.login(credentials);
+      const token = loginResponse.token;
+
+      // Busca os dados do usuário imediatamente após obter o token
+      const userResponse = await axios.get("/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const user = userResponse.data;
       
-      // 3. O AuthContext agora espera um objeto { token: "..." }
-      authContext.login(response.token);
+      // Salva o token e os dados do usuário no contexto global
+      setAuth(dispatch, { token, user });
+
+      navigate("/dashboard");
+
     } catch (error) {
-      // 4. Trata a resposta de erro simples que o backend envia
       const message = error.response?.data?.message || "Ocorreu um erro. Tente novamente.";
       setCredentialsError(message);
     }

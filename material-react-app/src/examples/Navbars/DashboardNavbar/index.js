@@ -1,30 +1,18 @@
+// material-react-app/src/examples/Navbars/DashboardNavbar/index.js
 
-import { useState, useEffect, useContext } from "react";
-
-// react-router components
+import { useState, useEffect } from "react";
 import { useLocation, Link, useNavigate } from "react-router-dom";
-
-// prop-types is a library for typechecking of props.
 import PropTypes from "prop-types";
-
-// @material-ui core components
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
 import Icon from "@mui/material/Icon";
-
-// Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDInput from "components/MDInput";
-
-// Material Dashboard 2 React example components
 import Breadcrumbs from "examples/Breadcrumbs";
 import NotificationItem from "examples/Items/NotificationItem";
-
 import AuthService from "services/auth-service";
-
-// Custom styles for DashboardNavbar
 import {
   navbar,
   navbarContainer,
@@ -33,48 +21,42 @@ import {
   navbarMobileMenu,
 } from "examples/Navbars/DashboardNavbar/styles";
 
-// Material Dashboard 2 React context
+// 1. Imports do contexto corrigidos
 import {
   useMaterialUIController,
   setTransparentNavbar,
   setMiniSidenav,
   setOpenConfigurator,
+  logout, // Adicionada a nova função 'logout'
 } from "context";
+
 import MDButton from "components/MDButton";
-import { AuthContext } from "context";
+
+// A linha "import { AuthContext } from "context";" foi REMOVIDA.
 
 function DashboardNavbar({ absolute, light, isMini }) {
-  const authContext = useContext(AuthContext);
+  // A linha "const authContext = useContext(AuthContext);" foi REMOVIDA.
+
   const [navbarType, setNavbarType] = useState();
-  const [controller, dispatch] = useMaterialUIController();
+  const [controller, dispatch] = useMaterialUIController(); // 'dispatch' já está disponível aqui
   const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller;
   const [openMenu, setOpenMenu] = useState(false);
   const route = useLocation().pathname.split("/").slice(1);
   let navigate = useNavigate();
 
   useEffect(() => {
-    // Setting the navbar type
     if (fixedNavbar) {
       setNavbarType("sticky");
     } else {
       setNavbarType("static");
     }
 
-    // A function that sets the transparent state of the navbar.
     function handleTransparentNavbar() {
       setTransparentNavbar(dispatch, (fixedNavbar && window.scrollY === 0) || !fixedNavbar);
     }
 
-    /** 
-     The event listener that's calling the handleTransparentNavbar function when 
-     scrolling the window.
-    */
     window.addEventListener("scroll", handleTransparentNavbar);
-
-    // Call the handleTransparentNavbar function to set the state with the initial value.
     handleTransparentNavbar();
-
-    // Remove event listener on cleanup
     return () => window.removeEventListener("scroll", handleTransparentNavbar);
   }, [dispatch, fixedNavbar]);
 
@@ -83,7 +65,6 @@ function DashboardNavbar({ absolute, light, isMini }) {
   const handleOpenMenu = (event) => setOpenMenu(event.currentTarget);
   const handleCloseMenu = () => setOpenMenu(false);
 
-  // Render the notifications menu
   const renderMenu = () => (
     <Menu
       anchorEl={openMenu}
@@ -102,22 +83,21 @@ function DashboardNavbar({ absolute, light, isMini }) {
     </Menu>
   );
 
-  // Styles for the navbar icons
   const iconsStyle = ({ palette: { dark, white, text }, functions: { rgba } }) => ({
     color: () => {
       let colorValue = light || darkMode ? white.main : dark.main;
-
       if (transparentNavbar && !light) {
         colorValue = darkMode ? rgba(text.main, 0.6) : text.main;
       }
-
       return colorValue;
     },
   });
 
+  // 2. Função de logout corrigida
   const handleLogOut = async () => {
-    const response = await AuthService.logout();
-    authContext.logout();
+    await AuthService.logout(); // Mantivemos a chamada à sua API de logout
+    logout(dispatch); // Limpa o token do estado global e localStorage
+    navigate("/auth/login"); // Redireciona para a página de login
   };
 
   return (
@@ -158,7 +138,7 @@ function DashboardNavbar({ absolute, light, isMini }) {
                 <MDButton
                   variant="gradient"
                   color="info"
-                  fullWidth
+                  size="small" // Ajustado para "small" para melhor alinhamento
                   type="button"
                   onClick={handleLogOut}
                 >
@@ -173,14 +153,12 @@ function DashboardNavbar({ absolute, light, isMini }) {
   );
 }
 
-// Setting default values for the props of DashboardNavbar
 DashboardNavbar.defaultProps = {
   absolute: false,
   light: false,
   isMini: false,
 };
 
-// Typechecking props for the DashboardNavbar
 DashboardNavbar.propTypes = {
   absolute: PropTypes.bool,
   light: PropTypes.bool,

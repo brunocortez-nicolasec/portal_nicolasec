@@ -1,8 +1,11 @@
-import React, { useMemo, useState } from "react";
+// material-react-app\src\layouts\observabilidade\geral\index.js
+
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
-import { Box, Divider } from "@mui/material";
+import { Box } from "@mui/material";
 import Modal from "@mui/material/Modal";
 
 // Componentes do Template
@@ -13,13 +16,15 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import DataTable from "examples/Tables/DataTable";
 import VerticalBarChart from "examples/Charts/BarCharts/VerticalBarChart";
-import { useDashboard } from "context/DashboardContext";
 
-// Componentes refatorados importados
+// Hook do Contexto Principal
+import { useMaterialUIController } from "context";
+
+// Componentes locais
 import LiveFeed from "./components/LiveFeed";
 import Painel from "./components/Painel";
 
-// --- COMPONENTES CUSTOMIZADOS ---
+// --- COMPONENTES CUSTOMIZADOS (mantidos) ---
 function KpiStack({ title, items, defaultColor = "dark" }) {
     return ( <Card sx={{height: "100%"}}> <MDBox pt={2} px={2} textAlign="center"> <MDTypography variant="button" fontWeight="bold" textTransform="uppercase" color="secondary">{title}</MDTypography> </MDBox> <MDBox p={2} pt={0}> {items.map(item => ( <MDBox key={item.label} mt={2.5} lineHeight={1} textAlign="center"> <MDTypography variant="caption" color="text" fontWeight="light" textTransform="uppercase">{item.label}</MDTypography> <MDTypography variant="h3" fontWeight="bold" color={item.color || defaultColor}>{item.value}</MDTypography> </MDBox> ))} </MDBox> </Card> );
 }
@@ -39,13 +44,57 @@ const ModalContent = React.forwardRef(({ title, data, onClose }, ref) => (
 ));
 
 function VisaoGeral() {
-    const { 
-        plataformasData, 
-        plataformaSelecionada, 
-        setPlataformaSelecionada, 
-        updatePlataformaData 
-    } = useDashboard();
+    const [controller] = useMaterialUIController();
+    const { token } = controller;
+
+    const [plataformaSelecionada, setPlataformaSelecionada] = useState("Geral");
+    const [metrics, setMetrics] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
     
+    // --- NOVO ESTADO E LÓGICA PARA O LIVE FEED ---
+    const [liveFeedData, setLiveFeedData] = useState([]);
+    
+    useEffect(() => {
+        const fetchDashboardData = async () => {
+            if (!token) return;
+            setIsLoading(true);
+
+            // Prepara a chamada de métricas
+            const metricsPromise = axios.get(`/metrics/${plataformaSelecionada}`, {
+                headers: { "Authorization": `Bearer ${token}` },
+            });
+
+            // <<< ALTERAÇÃO AQUI: Lógica de busca do Live Feed corrigida
+            // Monta os parâmetros para a chamada do live-feed dinamicamente
+            const liveFeedParams = {};
+            if (plataformaSelecionada.toLowerCase() !== 'geral') {
+                liveFeedParams.system = plataformaSelecionada;
+            }
+
+            // A chamada para a API agora acontece sempre
+            const liveFeedPromise = axios.get('/live-feed', {
+                headers: { "Authorization": `Bearer ${token}` },
+                params: liveFeedParams
+            });
+            // FIM DA ALTERAÇÃO
+
+            try {
+                // Executa as duas chamadas em paralelo
+                const [metricsResponse, liveFeedResponse] = await Promise.all([metricsPromise, liveFeedPromise]);
+                setMetrics(metricsResponse.data);
+                setLiveFeedData(liveFeedResponse.data);
+            } catch (error) {
+                console.error("Erro ao buscar dados do dashboard:", error);
+                setMetrics(null);
+                setLiveFeedData([]);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchDashboardData();
+    }, [plataformaSelecionada, token]);
+
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
 
@@ -53,150 +102,126 @@ function VisaoGeral() {
         setPlataformaSelecionada(plataforma);
     };
 
-    const handleCsvImport = (plataforma, dados) => {
-        const targetPlatform = plataforma === "Geral" ? "TruIM" : plataforma;
-        updatePlataformaData(targetPlatform, dados);
-        alert(`Dados para a plataforma ${targetPlatform} foram importados com sucesso!`);
-    };
-
     const handleOpenModal = () => setIsModalOpen(true);
     const handleCloseModal = () => setIsModalOpen(false);
 
     const displayData = useMemo(() => {
-        let imData = [];
-        if (plataformaSelecionada === "Geral") {
-            imData = Object.values(plataformasData).flat();
-        } else {
-            imData = plataformasData[plataformaSelecionada] || [];
-        }
-        
-        const pamData = plataformasData["TruPAM"] || [];
-
-        // --- LÓGICA DO ÍNDICE DE CONFORMIDADE CORRIGIDA ---
-        const temDivergencia = (r) => {
-            let isDormente = false;
-            if (r.status_app === 'ativo' && r.ultimo_login) {
-                const ultimoLogin = new Date(r.ultimo_login);
-                const diffTime = Math.abs(new Date() - ultimoLogin);
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                isDormente = diffDays > 90;
-            }
-            return ( (r.status_rh === 'inativo' && r.status_app === 'ativo') || !r.status_rh || (r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual) || (r.cpf_rh && r.cpf_app && r.cpf_rh !== r.cpf_app) || (r.email_rh && r.email_app && r.email_rh !== r.email_app) || isDormente );
+        const defaultData = {
+            imDisplay: {
+                pills: { total: 0, ativos: 0, inativos: 0, desconhecido: 0 },
+                tiposChart: { labels: [], datasets: { data: [] } },
+                tiposList: [],
+                divergencias: { inativosRHAtivosApp: 0, login: 0, cpf: 0, email: 0, acessoPrevistoNaoConcedido: 0, ativosNaoEncontradosRH: 0, ativosNaoEncontradosTruIM: 0 },
+                kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0 },
+            },
+            pamDisplay: { riscos: { acessosIndevidos: 0 } },
+            riscosConsolidadosChart: { labels: ["Acessos Indevidos (PAM)", "RH Inativo/App Ativo (IM)", "Divergência de Login (IM)"], datasets: [{ label: "Total de Eventos de Risco", color: "error", data: [0, 0, 0] }] },
+            prejuizoPotencial: "R$ 0,00",
+            prejuizoMitigado: "R$ 0,00",
+            indiceConformidade: isLoading ? "..." : "100.0",
+            riscosEmContasPrivilegiadas: 0,
         };
 
-        const totalComDivergencia = imData.filter(temDivergencia).length;
-        const totalIdentidades = imData.length;
-        const indiceConformidade = totalIdentidades > 0 ? (((totalIdentidades - totalComDivergencia) / totalIdentidades) * 100).toFixed(1) : '100.0';
-        const riscosEmContasPrivilegiadas = imData.filter(r => r.perfil === 'admin' && temDivergencia(r)).length;
-        // --- FIM DA CORREÇÃO ---
-
-        const custoPorDivergencia = 25000;
-        const inativosRHAtivosAppCount = imData.filter(r => r.status_rh === 'inativo' && r.status_app === 'ativo').length;
-        const prejuizoCalculado = inativosRHAtivosAppCount * custoPorDivergencia;
-        const valorMitigado = (prejuizoCalculado * 0.95);
-        const prejuizoPotencial = prejuizoCalculado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        const prejuizoMitigado = valorMitigado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        if (!metrics) {
+            return defaultData;
+        }
 
         const imDisplay = {
-            pills: { 
-                total: imData.length, 
-                ativos: imData.filter(r => r.status_app === 'ativo').length, 
-                inativos: imData.filter(r => r.status_app === 'inativo').length, 
-                // --- LÓGICA DO "DESCONHECIDO" CORRIGIDA ---
-                desconhecido: imData.filter(r => !r.tipo_usuario).length, 
+            pills: metrics.pills,
+            tiposChart: {
+                labels: metrics.tiposDeUsuario.map(t => t.tipo),
+                datasets: {
+                    label: "Tipos de Usuário",
+                    backgroundColors: ["info", "primary", "warning", "secondary", "error", "light"],
+                    data: metrics.tiposDeUsuario.map(t => t.total),
+                },
             },
-            tipos: imData.reduce((acc, r) => {
-                const key = r.tipo_usuario || "Desconhecido";
-                acc[key] = (acc[key] || 0) + 1;
-                return acc;
-            }, {}),
-            divergencias: { 
-                inativosRHAtivosApp: inativosRHAtivosAppCount, 
-                ativosNaoEncontradosRH: imData.filter(r => !r.status_rh && r.status_app === 'ativo').length,
-                ativosNaoEncontradosTruIM: imData.filter(r => !r.status_idm && r.status_app === 'ativo').length,
-                login: imData.filter(r => r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual).length, 
-                acessoPrevistoNaoConcedido: imData.filter(r => r.acesso_previsto === 'true' && r.status_app !== 'ativo').length, 
-                cpf: imData.filter(r => r.cpf_rh && r.cpf_app && r.cpf_rh !== r.cpf_app).length, 
-                email: imData.filter(r => r.email_rh && r.email_app && r.email_rh !== r.email_app).length, 
-            },
-            kpisAdicionais: { 
-                contasDormentes: imData.filter(r => { if (r.status_app !== 'ativo' || !r.ultimo_login) return false; const ultimoLogin = new Date(r.ultimo_login); const diffTime = Math.abs(new Date() - ultimoLogin); const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); return diffDays > 90; }).length, 
-                acessoPrivilegiado: imData.filter(r => r.perfil === 'admin' && r.status_app === 'ativo').length, 
-            },
-            tiposChart: (() => {
-                const tipos = imData.reduce((acc, r) => {
-                    const key = r.tipo_usuario || "Desconhecido";
-                    acc[key] = (acc[key] || 0) + 1;
-                    return acc;
-                }, {});
-                return { labels: Object.keys(tipos), datasets: { label: "Tipos", backgroundColors: ["info", "primary", "warning", "secondary", "error", "light"], data: Object.values(tipos) }, };
-            })(),
+            tiposList: metrics.tiposDeUsuario.map(t => ({ label: t.tipo, value: t.total })),
+            kpisAdicionais: metrics.kpisAdicionais || defaultData.imDisplay.kpisAdicionais,
+            divergencias: { ...defaultData.imDisplay.divergencias, ...metrics.divergencias },
+        };
+
+        const riscosConsolidadosChart = {
+            labels: ["Acessos Indevidos (PAM)", "RH Inativo/App Ativo (IM)", "Divergência de Login (IM)"],
+            datasets: [{
+                label: "Total de Eventos de Risco",
+                color: "error",
+                data: [
+                    0, 
+                    metrics.divergencias?.inativosRHAtivosApp || 0,
+                    0,
+                ]
+            }]
         };
         
-        const tiposList = Object.entries(imDisplay.tipos).map(([key, val]) => ({ label: key, value: val, }));
-        tiposList.push({ label: "Ativo Não Encontrado", value: imDisplay.divergencias.ativosNaoEncontradosRH, color: "error", });
-        const inativosNaoEncontradosRH = imData.filter(r => !r.status_rh && r.status_app === 'inativo').length;
-        tiposList.push({ label: "Inativo Não Encontrado", value: inativosNaoEncontradosRH, color: "warning", });
-        imDisplay.tiposList = tiposList;
-
-        const pamDisplay = { riscos: { acessosIndevidos: pamData.filter(r => r.acesso_indevido === 'sim').length, } };
-        const riscosConsolidadosChart = { labels: ["Acessos Indevidos (PAM)", "RH Inativo/App Ativo (IM)", "Divergência de Login (IM)"], datasets: [{ label: "Total de Eventos de Risco", color: "error", data: [ pamDisplay.riscos.acessosIndevidos, imDisplay.divergencias.inativosRHAtivosApp, imDisplay.divergencias.login, ] }] };
-
-        return { imDisplay, pamDisplay, riscosConsolidadosChart, prejuizoPotencial, prejuizoMitigado, indiceConformidade, riscosEmContasPrivilegiadas };
-    }, [plataformasData, plataformaSelecionada]);
-
-    const handlePieChartClick = (event, elements) => {
-        if (!elements || elements.length === 0 || !displayData) return;
-        const currentData = plataformaSelecionada === "Geral" ? Object.values(plataformasData).flat() : (plataformasData[plataformaSelecionada] || []);
-        if (!currentData.length) return;
-
+        return { 
+            imDisplay,
+            pamDisplay: defaultData.pamDisplay,
+            riscosConsolidadosChart,
+            prejuizoPotencial: metrics.riscos?.prejuizoPotencial || "R$ 0,00",
+            prejuizoMitigado: metrics.riscos?.valorMitigado || "R$ 0,00",
+            indiceConformidade: metrics.riscos?.indiceConformidade || "100.0",
+            riscosEmContasPrivilegiadas: metrics.riscos?.riscosEmContasPrivilegiadas || 0,
+        };
+    }, [metrics, isLoading]);
+    
+    const handlePieChartClick = async (event, elements) => {
+        if (!elements || elements.length === 0 || !token) return;
         const { index } = elements[0];
         const clickedLabel = displayData.imDisplay.tiposChart.labels[index];
-        if (clickedLabel) {
-            const filteredData = currentData.filter(user => (user.tipo_usuario || "Desconhecido") === clickedLabel);
-            setModalContent({
-                title: `Detalhes: Tipo de Usuário "${clickedLabel}"`,
-                data: {
-                    columns: [ { Header: "ID do Usuário", accessor: "id_usuario" }, { Header: "Nome", accessor: "nome_colaborador" }, { Header: "E-mail App", accessor: "email_app" }, { Header: "Status App", accessor: "status_app" }, ],
-                    rows: filteredData,
-                }
-            });
-            handleOpenModal();
+        if (!clickedLabel) return;
+        try {
+          const params = { userType: clickedLabel === "Não categorizado" ? "" : clickedLabel };
+          if (plataformaSelecionada !== "Geral") {
+            params.sourceSystem = plataformaSelecionada;
+          }
+          const response = await axios.get('/identities', { headers: { "Authorization": `Bearer ${token}` }, params });
+          setModalContent({
+            title: `Detalhes: Tipo de Usuário "${clickedLabel}"`,
+            data: {
+              columns: [
+                { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Status", accessor: "status" },
+              ],
+              rows: response.data,
+            },
+          });
+          handleOpenModal();
+        } catch (error) {
+          console.error("Erro ao buscar detalhes das identidades:", error);
         }
     };
-    
-    const handleBarChartClick = (event, elements) => {
-        if (!elements || elements.length === 0 || !displayData) return;
-        
-        const pamData = plataformasData["TruPAM"] || [];
-        const imData = Object.values(plataformasData).filter(key => key !== 'TruPAM' && key !== 'TruAM').flat();
 
-        const { index } = elements[0];
-        const clickedLabel = displayData.riscosConsolidadosChart.labels[index];
-        let filteredData = [];
-        let columns = [];
-
-        switch (index) {
-            case 0:
-                filteredData = pamData.filter(r => r.acesso_indevido === 'sim');
-                columns = [ { Header: "Usuário Privilegiado", accessor: "usuario_privilegiado" }, { Header: "Sistema", accessor: "sistema" }, { Header: "Data do Evento", accessor: "data_evento" }, ];
-                break;
-            case 1:
-                filteredData = imData.filter(r => r.status_rh === 'inativo' && r.status_app === 'ativo');
-                columns = [ { Header: "ID do Usuário", accessor: "id_usuario" }, { Header: "Nome", accessor: "nome_colaborador" }, { Header: "Status RH", accessor: "status_rh" }, { Header: "Status App", accessor: "status_app" }, ];
-                break;
-            case 2:
-                filteredData = imData.filter(r => r.login_esperado && r.login_atual && r.login_esperado !== r.login_atual);
-                columns = [ { Header: "ID do Usuário", accessor: "id_usuario" }, { Header: "Nome", accessor: "nome_colaborador" }, { Header: "Login Esperado", accessor: "login_esperado" }, { Header: "Login Atual", accessor: "login_atual" }, ];
-                break;
-            default:
-                return;
-        }
-        setModalContent({ title: `Detalhes: ${clickedLabel}`, data: { columns, rows: filteredData } });
+    const handleBarChartClick = async (event, elements) => {
+      if (!elements || elements.length === 0 || !token) return;
+      const { index } = elements[0];
+      const clickedLabel = displayData.riscosConsolidadosChart.labels[index];
+      let divergenceType = "";
+      let modalTitle = `Detalhes: ${clickedLabel}`;
+      let columns = [];
+      switch (index) {
+        case 1: // RH Inativo/App Ativo (IM)
+          divergenceType = 'rh-inativo-app-ativo';
+          columns = [
+            { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Status App", accessor: "status" },
+          ];
+          break;
+        default:
+          return;
+      }
+      try {
+        const response = await axios.get(`/divergences/${divergenceType}`, {
+          headers: { "Authorization": `Bearer ${token}` },
+          params: { system: plataformaSelecionada === "Geral" ? 'TruIM' : plataformaSelecionada },
+        });
+        setModalContent({
+          title: modalTitle,
+          data: { columns, rows: response.data },
+        });
         handleOpenModal();
+      } catch (error) {
+        console.error(`Erro ao buscar detalhes da divergência ${divergenceType}:`, error);
+      }
     };
-
-    const allDataForLiveFeed = useMemo(() => Object.values(plataformasData).flat(), [plataformasData]);
 
     return (
         <DashboardLayout>
@@ -212,7 +237,6 @@ function VisaoGeral() {
                                 imDisplay={displayData.imDisplay}
                                 onPieChartClick={handlePieChartClick}
                                 onPlatformChange={handlePlatformChange}
-                                onCsvImport={handleCsvImport}
                                 selectedPlatform={plataformaSelecionada}
                             />
                         )}
@@ -226,7 +250,7 @@ function VisaoGeral() {
                                         <Card sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                                             <MDBox p={1} textAlign="center">
                                                 <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>Índice de Conformidade</MDTypography>
-                                                <MDTypography variant="h2" fontWeight="bold" color="success"> {displayData.indiceConformidade}%</MDTypography>
+                                                <MDTypography variant="h2" fontWeight="bold" color={displayData.indiceConformidade < 100 ? "warning" : "success"}> {displayData.indiceConformidade}%</MDTypography>
                                                 <MDTypography variant="body2" color="text" sx={{mb: 3}}>das identidades estão íntegras.</MDTypography>
                                             </MDBox>
                                         </Card>
@@ -298,11 +322,7 @@ function VisaoGeral() {
 
                 <Grid container spacing={3}>
                     <Grid item xs={12}>
-                        <LiveFeed 
-                            truIMData={allDataForLiveFeed}
-                            truPAMData={plataformasData["TruPAM"] || []}
-                            truAMData={plataformasData["TruAM"] || []}
-                        />
+                        <LiveFeed data={liveFeedData} />
                     </Grid>
                 </Grid>
             </MDBox>

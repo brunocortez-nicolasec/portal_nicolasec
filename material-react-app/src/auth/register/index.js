@@ -1,29 +1,26 @@
-import { useContext, useState } from "react";
-// react-router-dom components
-import { Link } from "react-router-dom";
+// material-react-app/src/auth/register/index.js
 
-// @mui material components
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import Card from "@mui/material/Card";
 import Checkbox from "@mui/material/Checkbox";
-
-// Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
-
-// Authentication layout components
 import CoverLayout from "layouts/authentication/components/CoverLayout";
-
-// Images
 import bgImage from "assets/images/bg-sign-up-cover.jpeg";
-
 import AuthService from "services/auth-service";
-import { AuthContext } from "context";
 import { InputLabel } from "@mui/material";
+import axios from "axios"; // 1. Adicionado axios
+
+// 2. Imports do contexto corrigidos
+import { useMaterialUIController, setAuth } from "context";
 
 function Register() {
-  const authContext = useContext(AuthContext);
+  // 3. Usando o novo hook e o useNavigate
+  const [, dispatch] = useMaterialUIController();
+  const navigate = useNavigate();
 
   const [inputs, setInputs] = useState({
     name: "",
@@ -42,78 +39,59 @@ function Register() {
   });
 
   const changeHandler = (e) => {
+    // Ajuste para o Checkbox
+    const value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setInputs({
       ...inputs,
-      [e.target.name]: e.target.value,
+      [e.target.name]: value,
     });
   };
 
   const submitHandler = async (e) => {
     e.preventDefault();
 
-    const mailFormat = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
+    // Resetando erros
+    setErrors({ nameError: false, emailError: false, passwordError: false, agreeError: false, error: false, errorText: "" });
 
+    const mailFormat = /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/;
     if (inputs.name.trim().length === 0) {
       setErrors({ ...errors, nameError: true });
       return;
     }
-
     if (inputs.email.trim().length === 0 || !inputs.email.trim().match(mailFormat)) {
       setErrors({ ...errors, emailError: true });
       return;
     }
-
     if (inputs.password.trim().length < 8) {
       setErrors({ ...errors, passwordError: true });
       return;
     }
-
-    if (inputs.agree === false) {
+    if (!inputs.agree) {
       setErrors({ ...errors, agreeError: true });
       return;
     }
 
-    // here will be the post action to add a user to the db
+    // A lógica de formatação de 'myData' foi removida pois o backend foi ajustado
     const newUser = { name: inputs.name, email: inputs.email, password: inputs.password };
 
-    const myData = {
-      data: {
-        type: "users",
-        attributes: { ...newUser, password_confirmation: newUser.password },
-        relationships: {
-          roles: {
-            data: [
-              {
-                type: "roles",
-                id: "1",
-              },
-            ],
-          },
-        },
-      },
-    };
-
     try {
-      const response = await AuthService.register(myData);
-      authContext.login(response.access_token, response.refresh_token);
-
-      setInputs({
-        name: "",
-        email: "",
-        password: "",
-        agree: false,
+      // 4. Lógica de registro e login corrigida
+      // A API de registro agora deve retornar o token e o usuário
+      const response = await AuthService.register(newUser);
+      
+      const token = response.token; // Assumindo que a API retorna um token
+      const userResponse = await axios.get("/me", {
+        headers: { Authorization: `Bearer ${token}` },
       });
+      const user = userResponse.data;
 
-      setErrors({
-        nameError: false,
-        emailError: false,
-        passwordError: false,
-        agreeError: false,
-        error: false,
-        errorText: "",
-      });
+      // Salva o token e os dados do usuário no contexto global
+      setAuth(dispatch, { token, user });
+
+      navigate("/dashboard"); // Redireciona para o dashboard
     } catch (err) {
-      setErrors({ ...errors, error: true, errorText: err.message });
+      const message = err.response?.data?.message || "Ocorreu um erro ao tentar registrar.";
+      setErrors({ ...errors, error: true, errorText: message });
       console.error(err);
     }
   };
@@ -151,16 +129,10 @@ function Register() {
                 value={inputs.name}
                 onChange={changeHandler}
                 error={errors.nameError}
-                inputProps={{
-                  autoComplete: "name",
-                  form: {
-                    autoComplete: "off",
-                  },
-                }}
               />
               {errors.nameError && (
                 <MDTypography variant="caption" color="error" fontWeight="light">
-                  The name can not be empty
+                  O nome não pode estar vazio
                 </MDTypography>
               )}
             </MDBox>
@@ -174,16 +146,10 @@ function Register() {
                 name="email"
                 onChange={changeHandler}
                 error={errors.emailError}
-                inputProps={{
-                  autoComplete: "email",
-                  form: {
-                    autoComplete: "off",
-                  },
-                }}
               />
               {errors.emailError && (
                 <MDTypography variant="caption" color="error" fontWeight="light">
-                  The email must be valid
+                  O email deve ser válido
                 </MDTypography>
               )}
             </MDBox>
@@ -200,12 +166,12 @@ function Register() {
               />
               {errors.passwordError && (
                 <MDTypography variant="caption" color="error" fontWeight="light">
-                  The password must be of at least 8 characters
+                  A senha deve ter pelo menos 8 caracteres
                 </MDTypography>
               )}
             </MDBox>
             <MDBox display="flex" alignItems="center" ml={-1}>
-              <Checkbox name="agree" id="agree" onChange={changeHandler} />
+              <Checkbox name="agree" checked={inputs.agree} onChange={changeHandler} />
               <InputLabel
                 variant="standard"
                 fontWeight="regular"
@@ -216,8 +182,8 @@ function Register() {
                 &nbsp;&nbsp;Eu concordo com os&nbsp;
               </InputLabel>
               <MDTypography
-                component={Link}
-                to="/auth/login"
+                component="a" // Alterado para 'a' para ser um link clicável
+                href="#" // Adicione o link para seus termos aqui
                 variant="button"
                 fontWeight="bold"
                 color="info"
