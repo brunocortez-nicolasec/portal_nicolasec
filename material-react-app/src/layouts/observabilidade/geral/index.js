@@ -1,6 +1,4 @@
-// material-react-app\src\layouts\observabilidade\geral\index.js
-
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -15,7 +13,6 @@ import MDButton from "components/MDButton";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import DataTable from "examples/Tables/DataTable";
-import VerticalBarChart from "examples/Charts/BarCharts/VerticalBarChart";
 
 // Hook do Contexto Principal
 import { useMaterialUIController } from "context";
@@ -23,6 +20,9 @@ import { useMaterialUIController } from "context";
 // Componentes locais
 import LiveFeed from "./components/LiveFeed";
 import Painel from "./components/Painel";
+import RisksChartCard from "./components/RisksChartCard";
+import useDashboardData from "./hooks/useDashboardData";
+import FinancialCards from "./components/FinancialCards";
 
 // --- COMPONENTES CUSTOMIZADOS (mantidos) ---
 function KpiStack({ title, items, defaultColor = "dark" }) {
@@ -51,7 +51,6 @@ function VisaoGeral() {
     const [metrics, setMetrics] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
     
-    // --- NOVO ESTADO E LÓGICA PARA O LIVE FEED ---
     const [liveFeedData, setLiveFeedData] = useState([]);
     
     useEffect(() => {
@@ -59,27 +58,21 @@ function VisaoGeral() {
             if (!token) return;
             setIsLoading(true);
 
-            // Prepara a chamada de métricas
             const metricsPromise = axios.get(`/metrics/${plataformaSelecionada}`, {
                 headers: { "Authorization": `Bearer ${token}` },
             });
 
-            // <<< ALTERAÇÃO AQUI: Lógica de busca do Live Feed corrigida
-            // Monta os parâmetros para a chamada do live-feed dinamicamente
             const liveFeedParams = {};
             if (plataformaSelecionada.toLowerCase() !== 'geral') {
                 liveFeedParams.system = plataformaSelecionada;
             }
-
-            // A chamada para a API agora acontece sempre
+            
             const liveFeedPromise = axios.get('/live-feed', {
                 headers: { "Authorization": `Bearer ${token}` },
                 params: liveFeedParams
             });
-            // FIM DA ALTERAÇÃO
 
             try {
-                // Executa as duas chamadas em paralelo
                 const [metricsResponse, liveFeedResponse] = await Promise.all([metricsPromise, liveFeedPromise]);
                 setMetrics(metricsResponse.data);
                 setLiveFeedData(liveFeedResponse.data);
@@ -98,91 +91,85 @@ function VisaoGeral() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
 
+    const displayData = useDashboardData(metrics, isLoading);
+
     const handlePlatformChange = (plataforma) => {
         setPlataformaSelecionada(plataforma);
     };
 
     const handleOpenModal = () => setIsModalOpen(true);
     const handleCloseModal = () => setIsModalOpen(false);
-
-    const displayData = useMemo(() => {
-        const defaultData = {
-            imDisplay: {
-                pills: { total: 0, ativos: 0, inativos: 0, desconhecido: 0 },
-                tiposChart: { labels: [], datasets: { data: [] } },
-                tiposList: [],
-                divergencias: { inativosRHAtivosApp: 0, login: 0, cpf: 0, email: 0, acessoPrevistoNaoConcedido: 0, ativosNaoEncontradosRH: 0, ativosNaoEncontradosTruIM: 0 },
-                kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0 },
-            },
-            pamDisplay: { riscos: { acessosIndevidos: 0 } },
-            riscosConsolidadosChart: { labels: ["Acessos Indevidos (PAM)", "RH Inativo/App Ativo (IM)", "Divergência de Login (IM)"], datasets: [{ label: "Total de Eventos de Risco", color: "error", data: [0, 0, 0] }] },
-            prejuizoPotencial: "R$ 0,00",
-            prejuizoMitigado: "R$ 0,00",
-            indiceConformidade: isLoading ? "..." : "100.0",
-            riscosEmContasPrivilegiadas: 0,
-        };
-
-        if (!metrics) {
-            return defaultData;
+    
+    const handleFinancialCardClick = (cardType) => {
+        const breakdownData = metrics?.riscos?.prejuizoBreakdown;
+        if (!breakdownData) {
+            console.log("Dados de detalhamento do prejuízo não disponíveis.");
+            return;
         }
 
-        const imDisplay = {
-            pills: metrics.pills,
-            tiposChart: {
-                labels: metrics.tiposDeUsuario.map(t => t.tipo),
-                datasets: {
-                    label: "Tipos de Usuário",
-                    backgroundColors: ["info", "primary", "warning", "secondary", "error", "light"],
-                    data: metrics.tiposDeUsuario.map(t => t.total),
-                },
-            },
-            tiposList: metrics.tiposDeUsuario.map(t => ({ label: t.tipo, value: t.total })),
-            kpisAdicionais: metrics.kpisAdicionais || defaultData.imDisplay.kpisAdicionais,
-            divergencias: { ...defaultData.imDisplay.divergencias, ...metrics.divergencias },
-        };
+        const title = cardType === 'prejuizo' 
+            ? "Detalhes do Cálculo de Prejuízo Potencial"
+            : "Detalhes do Cálculo de Valor Mitigado";
 
-        const riscosConsolidadosChart = {
-            labels: ["Acessos Indevidos (PAM)", "RH Inativo/App Ativo (IM)", "Divergência de Login (IM)"],
-            datasets: [{
-                label: "Total de Eventos de Risco",
-                color: "error",
-                data: [
-                    0, 
-                    metrics.divergencias?.inativosRHAtivosApp || 0,
-                    0,
-                ]
-            }]
-        };
-        
-        return { 
-            imDisplay,
-            pamDisplay: defaultData.pamDisplay,
-            riscosConsolidadosChart,
-            prejuizoPotencial: metrics.riscos?.prejuizoPotencial || "R$ 0,00",
-            prejuizoMitigado: metrics.riscos?.valorMitigado || "R$ 0,00",
-            indiceConformidade: metrics.riscos?.indiceConformidade || "100.0",
-            riscosEmContasPrivilegiadas: metrics.riscos?.riscosEmContasPrivilegiadas || 0,
-        };
-    }, [metrics, isLoading]);
-    
+        const columns = [
+            { Header: "Tipo de Risco", accessor: "label" },
+            { Header: "Quantidade", accessor: "count" },
+            { Header: "Custo Unitário", accessor: "costPerUnit" },
+            { Header: "Subtotal", accessor: "subTotal" },
+        ];
+
+        const multiplier = cardType === 'mitigado' ? 0.95 : 1;
+
+        const rows = breakdownData
+            .filter(item => item.count > 0)
+            .map(item => ({
+                label: item.label,
+                count: item.count,
+                costPerUnit: `R$ ${item.costPerUnit.toLocaleString('pt-BR')}`,
+                subTotal: `R$ ${(item.subTotal * multiplier).toLocaleString('pt-BR')}`,
+            }));
+
+        setModalContent({
+            title: title,
+            data: { columns, rows },
+        });
+
+        handleOpenModal();
+    };
+
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const handlePieChartClick = async (event, elements) => {
         if (!elements || elements.length === 0 || !token) return;
         const { index } = elements[0];
         const clickedLabel = displayData.imDisplay.tiposChart.labels[index];
         if (!clickedLabel) return;
+        
         try {
-          const params = { userType: clickedLabel === "Não categorizado" ? "" : clickedLabel };
+          // Lógica corrigida: sempre envia o `clickedLabel` como `userType`.
+          // O backend será responsável por interpretar "Não categorizado" corretamente.
+          const params = {
+            userType: clickedLabel,
+          };
+
           if (plataformaSelecionada !== "Geral") {
             params.sourceSystem = plataformaSelecionada;
           }
-          const response = await axios.get('/identities', { headers: { "Authorization": `Bearer ${token}` }, params });
+
+          const response = await axios.get('/identities', { 
+            headers: { "Authorization": `Bearer ${token}` }, 
+            params 
+          });
+
           setModalContent({
             title: `Detalhes: Tipo de Usuário "${clickedLabel}"`,
-            data: {
-              columns: [
-                { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Status", accessor: "status" },
-              ],
-              rows: response.data,
+            data: { 
+              columns: [ 
+                { Header: "ID", accessor: "identityId" }, 
+                { Header: "Nome", accessor: "name" }, 
+                { Header: "Email", accessor: "email" }, 
+                { Header: "Status", accessor: "status" }, 
+              ], 
+              rows: response.data, 
             },
           });
           handleOpenModal();
@@ -190,37 +177,29 @@ function VisaoGeral() {
           console.error("Erro ao buscar detalhes das identidades:", error);
         }
     };
+    // ======================== FIM DA ALTERAÇÃO =======================
 
     const handleBarChartClick = async (event, elements) => {
-      if (!elements || elements.length === 0 || !token) return;
-      const { index } = elements[0];
-      const clickedLabel = displayData.riscosConsolidadosChart.labels[index];
-      let divergenceType = "";
-      let modalTitle = `Detalhes: ${clickedLabel}`;
-      let columns = [];
-      switch (index) {
-        case 1: // RH Inativo/App Ativo (IM)
-          divergenceType = 'rh-inativo-app-ativo';
-          columns = [
-            { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Status App", accessor: "status" },
-          ];
-          break;
-        default:
-          return;
-      }
-      try {
-        const response = await axios.get(`/divergences/${divergenceType}`, {
-          headers: { "Authorization": `Bearer ${token}` },
-          params: { system: plataformaSelecionada === "Geral" ? 'TruIM' : plataformaSelecionada },
-        });
-        setModalContent({
-          title: modalTitle,
-          data: { columns, rows: response.data },
-        });
-        handleOpenModal();
-      } catch (error) {
-        console.error(`Erro ao buscar detalhes da divergência ${divergenceType}:`, error);
-      }
+        if (!elements || elements.length === 0 || !token) return;
+        const { index } = elements[0];
+        const clickedLabel = displayData.riscosConsolidadosChart.labels[index];
+        let endpoint = "";
+        let requestParams = {};
+        let columns = [];
+        const modalTitle = `Detalhes: ${clickedLabel}`;
+        switch (index) {
+          case 0: endpoint = '/pam/risks/acessos-indevidos'; columns = [ { Header: "Usuário", accessor: "user" }, { Header: "Origem", accessor: "source" }, { Header: "Destino", accessor: "destination" }, { Header: "Data/Hora", accessor: "timestamp" }, { Header: "Detalhes", accessor: "details" }, ]; break;
+          case 1: endpoint = '/divergences/rh-inativo-app-ativo'; if (plataformaSelecionada !== "Geral") { requestParams.system = plataformaSelecionada; } columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Status App", accessor: "app_status" }, { Header: "Status RH", accessor: "rh_status" } ]; break;
+          case 2: endpoint = '/divergences/divergencia-login'; if (plataformaSelecionada !== "Geral") { requestParams.system = plataformaSelecionada; } columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Login App", accessor: "app_login" }, { Header: "Login Padrão RH", accessor: "rh_login" }, ]; break;
+          default: console.log(`Clique na barra '${clickedLabel}' (index ${index}) ainda não implementado.`); return;
+        }
+        try {
+          const response = await axios.get(endpoint, { headers: { "Authorization": `Bearer ${token}` }, params: requestParams, });
+          setModalContent({ title: modalTitle, data: { columns, rows: response.data }, });
+          handleOpenModal();
+        } catch (error) {
+          console.error(`Erro ao buscar detalhes do endpoint ${endpoint}:`, error);
+        }
     };
 
     return (
@@ -271,52 +250,43 @@ function VisaoGeral() {
                         </Card>
                     </Grid>
 
-                    <Grid item xs={12} lg={3}>
-                        <Grid container spacing={3} direction="column">
-                            <Grid item>
-                                <Card>
-                                    <MDBox p={2} textAlign="center">
-                                        <MDBox display="grid" justifyContent="center" alignItems="center" bgColor="error" color="white" width="4rem" height="4rem" shadow="md" borderRadius="lg" variant="gradient" sx={{ mt: -3, mb: 2, mx: 'auto' }}>
-                                            <Icon fontSize="large">money_off</Icon>
-                                        </MDBox>
-                                        <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>Prejuízo Potencial (Mensal)</MDTypography>
-                                        <MDTypography variant="body2" color="text" sx={{mb: 3}}> Custo com riscos devido a contas &apos;RH Inativo / App Ativo&apos;. </MDTypography>
-                                        <Card>
-                                            <MDBox p={1}>
-                                                <MDTypography variant="h2" fontWeight="bold" color="error"> {displayData.prejuizoPotencial} </MDTypography>
-                                            </MDBox>
-                                        </Card>
-                                    </MDBox>
-                                </Card>
-                            </Grid>
-                            <Grid item>
-                                <Card>
-                                    <MDBox p={2} textAlign="center">
-                                        <MDBox display="grid" justifyContent="center" alignItems="center" bgColor="success" color="white" width="4rem" height="4rem" shadow="md" borderRadius="lg" variant="gradient" sx={{ mt: -3, mb: 2, mx: 'auto' }}>
-                                            <Icon fontSize="large">savings</Icon>
-                                        </MDBox>
-                                        <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>Valor Mitigado com TruIM</MDTypography>
-                                        <MDTypography variant="body2" color="text" sx={{mb: 3}}> Redução de 95% do prejuízo potencial com governança. </MDTypography>
-                                        <Card>
-                                            <MDBox p={1}>
-                                                <MDTypography variant="h2" fontWeight="bold" color="success"> {displayData.prejuizoMitigado} </MDTypography>
-                                            </MDBox>
-                                        </Card>
-                                    </MDBox>
-                                </Card>
-                            </Grid>
-                        </Grid>
-                    </Grid>
+                    <FinancialCards 
+                        prejuizoPotencial={displayData.prejuizoPotencial}
+                        valorMitigado={displayData.prejuizoMitigado}
+                        plataformaSelecionada={plataformaSelecionada}
+                        onClick={handleFinancialCardClick}
+                    />
+
                 </Grid>
                 
                 <Grid container spacing={3} sx={{ mb: 3 }} alignItems="stretch">
-                    <Grid item xs={12} sm={6} md={2}><KpiStack title="Crítico" defaultColor="error" items={[{label: "Acessos Indevidos (PAM)", value: displayData.pamDisplay.riscos.acessosIndevidos ?? 'N/A'}, {label: "Divergência de Login (IM)", value: displayData.imDisplay.divergencias.login ?? 'N/A'}, {label: "Divergência de CPF (IM)", value: displayData.imDisplay.divergencias.cpf ?? 'N/A'}]} /></Grid>
-                    <Grid item xs={12} sm={6} md={2}><KpiStack title="Divergências" defaultColor="warning" items={[{label: "RH Inativo / App Ativo (IM)", value: displayData.imDisplay.divergencias.inativosRHAtivosApp ?? 'N/A'}, {label: "Acessos Previstos Não Concedidos", value: displayData.imDisplay.divergencias.acessoPrevistoNaoConcedido ?? 'N/A'}, {label: "Divergência de E-mail (IM)", value: displayData.imDisplay.divergencias.email ?? 'N/A'}]} /></Grid>
-                    <Grid item xs={12} sm={6} md={2}><KpiStack title="Chamados" defaultColor="info" items={[{label: "Fechados", value: 49}, {label: "Cancelados", value: 59}, {label: "Em espera", value: 2}, {label: "Em progresso", value: 2}]}/></Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <KpiStack 
+                            title="Crítico" 
+                            defaultColor="error" 
+                            items={[ { label: "Acessos Indevidos", value: displayData.pamDisplay.riscos.acessosIndevidos ?? 0 }, { label: "Divergência de Login", value: displayData.imDisplay.divergencias.login ?? 0 }, { label: "Divergência de CPF", value: displayData.imDisplay.divergencias.cpf ?? 0 } ]} 
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <KpiStack 
+                            title="Divergências" 
+                            defaultColor="warning" 
+                            items={[ { label: "Acessos Previstos Não Concedidos", value: displayData.imDisplay.divergencias.acessoPrevistoNaoConcedido ?? 0 }, { label: "Divergência de Nome", value: displayData.imDisplay.divergencias.nome ?? 0 }, { label: "Divergência de E-mail", value: displayData.imDisplay.divergencias.email ?? '-' } ]} 
+                        />
+                    </Grid>
+                    <Grid item xs={12} sm={6} md={2}>
+                        <KpiStack 
+                            title="Chamados" 
+                            defaultColor="info" 
+                            items={[ {label: "Fechados", value: 49}, {label: "Cancelados", value: 59}, {label: "Em espera", value: 2}, {label: "Em progresso", value: 2} ]}
+                        />
+                    </Grid>
+                    
                     <Grid item xs={12} sm={6} md={6}>
-                        <Card sx={{ height: "100%" }}>
-                            <VerticalBarChart icon={{ color: "error", component: "warning" }} title="Visão Geral de Riscos" description="Principais pontos de atenção consolidados" chart={displayData.riscosConsolidadosChart} onClick={handleBarChartClick} />
-                        </Card>
+                        <RisksChartCard 
+                            chart={displayData.riscosConsolidadosChart}
+                            onClick={handleBarChartClick}
+                        />
                     </Grid>
                 </Grid>
 

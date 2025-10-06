@@ -9,7 +9,8 @@ const router = express.Router();
 
 /**
  * Busca os detalhes de um tipo específico de divergência.
- * Ex: GET /divergences/rh-inativo-app-ativo?system=TruIM
+ * Ex: GET /divergences/rh-inativo-app-ativo?system=TruIM (Específico)
+ * Ex: GET /divergences/rh-inativo-app-ativo (Geral)
  */
 const getDivergenceDetails = async (req, res) => {
   const { type } = req.params;
@@ -19,20 +20,25 @@ const getDivergenceDetails = async (req, res) => {
     let divergenceData = [];
 
     switch (type) {
-      case 'rh-inativo-app-ativo':
-        if (!system) {
-          return res.status(400).json({ message: "O parâmetro 'system' é obrigatório para este tipo de divergência." });
+      case 'rh-inativo-app-ativo': {
+        const appIdentitiesWhere = {
+          status: 'Ativo',
+        };
+
+        if (system) {
+          // Caso Específico: Um sistema foi solicitado
+          appIdentitiesWhere.sourceSystem = { equals: system, mode: 'insensitive' };
+        } else {
+          // ======================= INÍCIO DA ALTERAÇÃO =======================
+          // Caso "Geral": Busca todos os sistemas que NÃO são 'RH' (sintaxe corrigida)
+          appIdentitiesWhere.sourceSystem = { not: 'RH' };
+          // ======================== FIM DA ALTERAÇÃO =======================
         }
 
-        // 1. Busca identidades ATIVAS no sistema de aplicação (ex: TruIM)
         const appIdentities = await prisma.identity.findMany({
-          where: {
-            sourceSystem: { equals: system, mode: 'insensitive' },
-            status: 'Ativo',
-          }
+          where: appIdentitiesWhere
         });
 
-        // 2. Busca identidades INATIVAS no sistema de RH
         const rhIdentities = await prisma.identity.findMany({
           where: {
             sourceSystem: { equals: 'RH', mode: 'insensitive' },
@@ -40,15 +46,12 @@ const getDivergenceDetails = async (req, res) => {
           }
         });
 
-        // 3. Cria um conjunto com os IDs dos inativos do RH para uma busca rápida
         const inactiveRhIds = new Set(rhIdentities.map(i => i.identityId));
 
-        // 4. Filtra as identidades do App, mantendo apenas aquelas que existem no conjunto de inativos do RH
         divergenceData = appIdentities.filter(appIdentity => inactiveRhIds.has(appIdentity.identityId));
         
         break;
-
-      // (Futuramente, outros 'case' para outros tipos de divergência podem ser adicionados aqui)
+      }
       
       default:
         return res.status(400).json({ message: "Tipo de divergência desconhecido." });

@@ -40,7 +40,7 @@ const StatusCell = ({ status }) => {
     let text = status ? String(status).toUpperCase() : "-";
     if (text === "ATIVO") color = "success";
     if (text === "INATIVO") color = "error";
-    if (text === "NÃO ENCONTRADO") color = "light";
+    if (text === "NÃO ENCONTRADO") color = "secondary";
     return <MDTypography variant="caption" color={color} fontWeight="medium">{text}</MDTypography>;
 };
 
