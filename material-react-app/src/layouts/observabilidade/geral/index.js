@@ -137,7 +137,6 @@ function VisaoGeral() {
         handleOpenModal();
     };
 
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const handlePieChartClick = async (event, elements) => {
         if (!elements || elements.length === 0 || !token) return;
         const { index } = elements[0];
@@ -145,8 +144,6 @@ function VisaoGeral() {
         if (!clickedLabel) return;
         
         try {
-          // Lógica corrigida: sempre envia o `clickedLabel` como `userType`.
-          // O backend será responsável por interpretar "Não categorizado" corretamente.
           const params = {
             userType: clickedLabel,
           };
@@ -167,6 +164,7 @@ function VisaoGeral() {
                 { Header: "ID", accessor: "identityId" }, 
                 { Header: "Nome", accessor: "name" }, 
                 { Header: "Email", accessor: "email" }, 
+                { Header: "Perfil", accessor: "profile.name" },
                 { Header: "Status", accessor: "status" }, 
               ], 
               rows: response.data, 
@@ -177,28 +175,67 @@ function VisaoGeral() {
           console.error("Erro ao buscar detalhes das identidades:", error);
         }
     };
-    // ======================== FIM DA ALTERAÇÃO =======================
 
     const handleBarChartClick = async (event, elements) => {
         if (!elements || elements.length === 0 || !token) return;
         const { index } = elements[0];
         const clickedLabel = displayData.riscosConsolidadosChart.labels[index];
-        let endpoint = "";
-        let requestParams = {};
+        if (!clickedLabel) return;
+    
         let columns = [];
         const modalTitle = `Detalhes: ${clickedLabel}`;
-        switch (index) {
-          case 0: endpoint = '/pam/risks/acessos-indevidos'; columns = [ { Header: "Usuário", accessor: "user" }, { Header: "Origem", accessor: "source" }, { Header: "Destino", accessor: "destination" }, { Header: "Data/Hora", accessor: "timestamp" }, { Header: "Detalhes", accessor: "details" }, ]; break;
-          case 1: endpoint = '/divergences/rh-inativo-app-ativo'; if (plataformaSelecionada !== "Geral") { requestParams.system = plataformaSelecionada; } columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Status App", accessor: "app_status" }, { Header: "Status RH", accessor: "rh_status" } ]; break;
-          case 2: endpoint = '/divergences/divergencia-login'; if (plataformaSelecionada !== "Geral") { requestParams.system = plataformaSelecionada; } columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Login App", accessor: "app_login" }, { Header: "Login Padrão RH", accessor: "rh_login" }, ]; break;
-          default: console.log(`Clique na barra '${clickedLabel}' (index ${index}) ainda não implementado.`); return;
-        }
+        let rowsToShow = [];
+    
         try {
-          const response = await axios.get(endpoint, { headers: { "Authorization": `Bearer ${token}` }, params: requestParams, });
-          setModalContent({ title: modalTitle, data: { columns, rows: response.data }, });
-          handleOpenModal();
+            switch (index) {
+                case 0: // Contas Admin com Risco
+                    rowsToShow = liveFeedData.filter(user => user.perfil === 'Admin' && user.divergence);
+                    columns = [
+                        { Header: "Sistema", accessor: "sourceSystem" },
+                        { Header: "ID", accessor: "identityId" },
+                        { Header: "Nome", accessor: "name" },
+                        { Header: "Status App", accessor: "app_status" },
+                        { Header: "Status RH", accessor: "rh_status" },
+                    ];
+                    break;
+                
+                case 1: // Acessos Ativos Indevidos (RH Inativo / App Ativo)
+                    const endpoint = '/divergences/rh-inativo-app-ativo';
+                    const requestParams = {};
+                    if (plataformaSelecionada !== "Geral") {
+                        requestParams.system = plataformaSelecionada;
+                    }
+                    columns = [
+                        { Header: "Sistema", accessor: "sourceSystem" },
+                        { Header: "ID", accessor: "identityId" },
+                        { Header: "Nome", accessor: "name" },
+                        { Header: "Email", accessor: "email" },
+                    ];
+                    const response = await axios.get(endpoint, { headers: { "Authorization": `Bearer ${token}` }, params: requestParams });
+                    rowsToShow = response.data;
+                    break;
+
+                case 2: // Contas Órfãs (Não encontradas no RH)
+                    rowsToShow = liveFeedData.filter(user => user.rh_status === 'Não encontrado');
+                    columns = [
+                        { Header: "Sistema", accessor: "sourceSystem" },
+                        { Header: "ID", accessor: "identityId" },
+                        { Header: "Nome", accessor: "name" },
+                        { Header: "Email", accessor: "email" },
+                        { Header: "Perfil", accessor: "perfil" },
+                    ];
+                    break;
+                
+                default:
+                    console.log(`Clique na barra '${clickedLabel}' (index ${index}) ainda não implementado.`);
+                    return;
+            }
+    
+            setModalContent({ title: modalTitle, data: { columns, rows: rowsToShow } });
+            handleOpenModal();
+    
         } catch (error) {
-          console.error(`Erro ao buscar detalhes do endpoint ${endpoint}:`, error);
+            console.error(`Erro ao buscar detalhes para '${clickedLabel}':`, error);
         }
     };
 
@@ -261,11 +298,17 @@ function VisaoGeral() {
                 
                 <Grid container spacing={3} sx={{ mb: 3 }} alignItems="stretch">
                     <Grid item xs={12} sm={6} md={2}>
+                        {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
                         <KpiStack 
                             title="Crítico" 
                             defaultColor="error" 
-                            items={[ { label: "Acessos Indevidos", value: displayData.pamDisplay.riscos.acessosIndevidos ?? 0 }, { label: "Divergência de Login", value: displayData.imDisplay.divergencias.login ?? 0 }, { label: "Divergência de CPF", value: displayData.imDisplay.divergencias.cpf ?? 0 } ]} 
+                            items={[ 
+                                { label: "Acessos Ativos Indevidos", value: displayData.imDisplay.divergencias.inativosRHAtivosApp ?? 0 },
+                                { label: "Divergência de CPF", value: displayData.imDisplay.divergencias.cpf ?? 0 },
+                                { label: "Admins Dormentes", value: displayData.imDisplay.kpisAdicionais.adminsDormentes ?? 0 }
+                            ]} 
                         />
+                        {/* ======================== FIM DA ALTERAÇÃO ======================= */}
                     </Grid>
                     <Grid item xs={12} sm={6} md={2}>
                         <KpiStack 

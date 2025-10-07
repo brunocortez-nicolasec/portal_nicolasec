@@ -88,7 +88,7 @@ function Register() {
       // Salva o token e os dados do usuário no contexto global
       setAuth(dispatch, { token, user });
 
-      navigate("/dashboard"); // Redireciona para o dashboard
+      navigate("/mind-the-gap"); // Redireciona para o dashboard
     } catch (err) {
       const message = err.response?.data?.message || "Ocorreu um erro ao tentar registrar.";
       setErrors({ ...errors, error: true, errorText: message });

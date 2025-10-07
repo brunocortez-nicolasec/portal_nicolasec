@@ -1,3 +1,5 @@
+// node-api/src/services/livefeed/index.js
+
 import express from "express";
 import passport from "passport";
 import { PrismaClient } from '@prisma/client';
@@ -5,76 +7,74 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = express.Router();
 
-/**
- * Busca e consolida dados de identidades do RH e de um ou todos os sistemas de aplicação
- * para popular o Live Feed.
- * Ex: GET /live-feed (para Geral)
- * Ex: GET /live-feed?system=TruIM (para um sistema específico)
- */
+// Função auxiliar para checar todas as divergências entre duas identidades
+const checkDivergences = (appUser, rhUser) => {
+  if (!rhUser) return true; // Se não existe no RH, é uma divergência
+
+  const cleanText = (text) => text?.trim().toLowerCase();
+  const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
+
+  if (appUser.status === 'Ativo' && rhUser.status === 'Inativo') return true;
+  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  // Removida a verificação do campo 'login', que não existe mais no modelo padronizado
+  // if (appUser.login && rhUser.login && cleanText(appUser.login) !== cleanText(rhUser.login)) return true;
+  // ======================== FIM DA ALTERAÇÃO =======================
+  if (appUser.cpf && rhUser.cpf && cleanCpf(appUser.cpf) !== cleanCpf(rhUser.cpf)) return true;
+  if (appUser.name && rhUser.name && cleanText(appUser.name) !== cleanText(appUser.name)) return true;
+  if (appUser.email && rhUser.email && cleanText(appUser.email) !== cleanText(rhUser.email)) return true;
+
+  return false;
+};
+
 const getLiveFeedData = async (req, res) => {
   const { system } = req.query;
 
   try {
-    let appIdentitiesWhereClause = {};
-
-    // --- AQUI ESTÁ A CORREÇÃO ---
+    const whereClause = { sourceSystem: { not: 'RH' } };
     if (system && system.toLowerCase() !== 'geral') {
-      appIdentitiesWhereClause = { sourceSystem: { equals: system, mode: 'insensitive' } };
-    } else {
-      // Usamos 'notIn' com 'mode: insensitive' que é a forma suportada pelo Prisma
-      appIdentitiesWhereClause = {
-        sourceSystem: {
-          notIn: ['RH'],
-          mode: 'insensitive'
-        }
-      };
+      whereClause.sourceSystem = { equals: system, mode: 'insensitive' };
     }
-    // --- FIM DA CORREÇÃO ---
     
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const [rhIdentities, appIdentities] = await Promise.all([
       prisma.identity.findMany({
         where: { sourceSystem: { equals: 'RH', mode: 'insensitive' } },
       }),
+      // A consulta agora inclui o 'profile' relacionado
       prisma.identity.findMany({
-        where: appIdentitiesWhereClause,
+        where: whereClause,
+        include: {
+          profile: {
+            select: { name: true }
+          }
+        }
       }),
     ]);
+    // ======================== FIM DA ALTERAÇÃO =======================
 
-    const consolidatedMap = new Map();
+    // Cria um mapa do RH para buscas eficientes
+    const rhMap = new Map(rhIdentities.map(i => [i.identityId, i]));
 
-    rhIdentities.forEach(rhUser => {
-      consolidatedMap.set(rhUser.identityId, {
-        identityId: rhUser.identityId,
-        name: rhUser.name,
-        email: rhUser.email,
-        userType: rhUser.userType,
-        perfil: rhUser.extraData?.perfil,
-        rh_status: rhUser.status || 'N/A',
-        app_status: 'Não encontrado',
-        sourceSystem: 'RH',
-        divergence: false,
-      });
-    });
-
-    appIdentities.forEach(appUser => {
-      const existingUser = consolidatedMap.get(appUser.identityId) || {};
-      const hasDivergence = (existingUser.rh_status === 'Inativo' && appUser.status === 'Ativo');
-
-      consolidatedMap.set(appUser.identityId, {
-        ...existingUser,
+    // Lógica App-cêntrica: constrói o feed a partir das identidades dos sistemas de aplicação
+    const finalData = appIdentities.map(appUser => {
+      const rhUser = rhMap.get(appUser.identityId);
+      
+      return {
         identityId: appUser.identityId,
-        name: appUser.name || existingUser.name,
-        email: appUser.email || existingUser.email,
-        userType: appUser.userType || existingUser.userType,
-        perfil: appUser.extraData?.perfil || existingUser.perfil,
+        name: appUser.name,
+        email: appUser.email,
+        userType: appUser.userType,
+        // ======================= INÍCIO DA ALTERAÇÃO =======================
+        // O perfil agora é lido da relação, não mais do 'extraData'
+        perfil: appUser.profile?.name || 'N/A',
+        // ======================== FIM DA ALTERAÇÃO =======================
+        rh_status: rhUser?.status || 'Não encontrado',
         app_status: appUser.status || 'N/A',
         sourceSystem: appUser.sourceSystem,
-        divergence: hasDivergence || existingUser.divergence,
-      });
+        divergence: checkDivergences(appUser, rhUser),
+      };
     });
     
-    const finalData = Array.from(consolidatedMap.values());
-
     return res.status(200).json(finalData);
 
   } catch (error) {
@@ -83,7 +83,6 @@ const getLiveFeedData = async (req, res) => {
   }
 };
 
-// --- Definição da Rota ---
 router.get(
   "/",
   passport.authenticate("jwt", { session: false }),

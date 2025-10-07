@@ -117,12 +117,10 @@ function LiveFeed({ data }) {
     const [selectedUser, setSelectedUser] = useState(null);
     const [anchorEl, setAnchorEl] = useState(null);
     
-    // <<< ALTERAÇÃO 1: Adicionado 'sistema' aos estados de filtro
     const initialFilters = { nome: "", email: "", perfil: "", sistema: null, divergencia: null, criticas: null };
     const [filters, setFilters] = useState(initialFilters);
     const [tempFilters, setTempFilters] = useState(initialFilters);
 
-    // <<< ALTERAÇÃO 2: Lista de sistemas para o novo filtro
     const systemOptions = ["SAP", "Salesforce", "ServiceNow", "IDM", "Cofre", "TruAm", "TruIM", "TruPAM", "VPN", "Acesso Internet"];
 
     const open = Boolean(anchorEl);
@@ -130,7 +128,6 @@ function LiveFeed({ data }) {
     const handleFilterMenuOpen = (event) => { setTempFilters(filters); setAnchorEl(event.currentTarget); };
     const handleFilterMenuClose = () => setAnchorEl(null);
     const handleApplyFilters = () => { setFilters(tempFilters); handleFilterMenuClose(); };
-    // <<< ALTERAÇÃO 3: Atualizado handleClearFilters para limpar o novo filtro
     const handleClearFilters = () => { setFilters(initialFilters); setTempFilters(initialFilters); handleFilterMenuClose(); };
     const handleTempFilterChange = (e) => { const { name, value } = e.target; setTempFilters(prev => ({ ...prev, [name]: value })); };
     const handleTempAutocompleteChange = (name, value) => { setTempFilters(prev => ({ ...prev, [name]: value })); };
@@ -139,7 +136,6 @@ function LiveFeed({ data }) {
 
     const handleGeneratePdf = () => {
         const doc = new jsPDF();
-        // <<< ALTERAÇÃO 4: Adicionada coluna 'SISTEMA' ao PDF
         const tableColumns = [...tableData.columns.map(c => c.Header)];
         const tableRows = [];
 
@@ -147,7 +143,7 @@ function LiveFeed({ data }) {
             const rowData = [
                 user.name || '-',
                 user.email || '-',
-                user.sourceSystem || '-', // Dado da nova coluna
+                user.sourceSystem || '-',
                 user.rh_status || '-',
                 user.app_status || '-',
                 user.perfil || '-',
@@ -158,7 +154,7 @@ function LiveFeed({ data }) {
 
         doc.text("Relatório - Live Feed", 14, 15);
         autoTable(doc, {
-            head: [tableColumns.filter(header => header !== "CRÍTICAS" && header !== "NOME")], // PDF-autotable tem problema com componentes React no Header
+            head: [tableColumns.filter(header => header !== "CRÍTICAS" && header !== "NOME")],
             body: tableRows,
             startY: 20,
         });
@@ -179,7 +175,6 @@ function LiveFeed({ data }) {
                 const matchNome = !filters.nome || (u.name && u.name.toLowerCase().includes(filters.nome.toLowerCase()));
                 const matchEmail = !filters.email || (u.email && u.email.toLowerCase().includes(filters.email.toLowerCase()));
                 const matchPerfil = !filters.perfil || (u.perfil && u.perfil.toLowerCase().includes(filters.perfil.toLowerCase()));
-                // <<< ALTERAÇÃO 5: Adicionada lógica de filtro por sistema
                 const matchSistema = !filters.sistema || (u.sourceSystem && u.sourceSystem === filters.sistema);
                 const matchDivergencia = filters.divergencia === null || (filters.divergencia === 'Sim' && u.divergence) || (filters.divergencia === 'Não' && !u.divergence);
                 const matchCriticas = filters.criticas === null || (filters.criticas === 'Sim' && u.divergence) || (filters.criticas === 'Não' && !u.divergence);
@@ -191,7 +186,6 @@ function LiveFeed({ data }) {
           ...u,
           nome: <MDBox onClick={() => handleOpenModal(u)} sx={{ cursor: "pointer" }}><AuthorCell nome={u.name} tipo={u.userType} /></MDBox>,
           email: <MDTypography variant="caption">{u.email}</MDTypography>,
-          // <<< ALTERAÇÃO 6: Adicionado campo 'sourceSystem' para a nova coluna
           sourceSystem: <MDTypography variant="caption">{u.sourceSystem}</MDTypography>,
           rh_status: <StatusCell status={u.rh_status} />,
           app_status: <StatusCell status={u.app_status} />,
@@ -202,17 +196,19 @@ function LiveFeed({ data }) {
 
 
         return {
-            // <<< ALTERAÇÃO 7: Adicionada a nova coluna 'SISTEMA'
+            // ======================= INÍCIO DA ALTERAÇÃO =======================
+            // Corrigidos os accessors e removidas as funções 'Cell' redundantes
             columns: [ 
-                { Header: "NOME", accessor: "name", width: "20%", Cell: ({ row }) => row.original.nome },
+                { Header: "NOME", accessor: "nome", width: "20%" },
                 { Header: "EMAIL", accessor: "email", width: "20%" },
                 { Header: "SISTEMA", accessor: "sourceSystem", align: "center" },
                 { Header: "STATUS RH", accessor: "rh_status", align: "center"},
                 { Header: "STATUS APP", accessor: "app_status", align: "center"},
                 { Header: "PERFIL", accessor: "perfil", align: "center" },
-                { Header: "DIVERGÊNCIA", accessor: "diverg", align: "center", Cell: ({ row }) => row.original.diverg },
-                { Header: "CRÍTICAS", accessor: "criticas", align: "center", Cell: ({ row }) => row.original.criticas },
+                { Header: "DIVERGÊNCIA", accessor: "diverg", align: "center" },
+                { Header: "CRÍTICAS", accessor: "criticas", align: "center" },
             ],
+            // ======================== FIM DA ALTERAÇÃO =======================
             rows,
             rawData: filteredData,
         };
@@ -252,7 +248,6 @@ function LiveFeed({ data }) {
                         <MDBox mt={2}><MDInput label="Email" name="email" value={tempFilters.email} onChange={handleTempFilterChange} fullWidth /></MDBox>
                         <MDBox mt={2}><MDInput label="Perfil" name="perfil" value={tempFilters.perfil} onChange={handleTempFilterChange} fullWidth /></MDBox>
                         
-                        {/* <<< ALTERAÇÃO 8: Adicionado o novo Autocomplete para filtro de sistema */}
                         <MDBox mt={2}>
                             <Autocomplete 
                                 options={systemOptions}

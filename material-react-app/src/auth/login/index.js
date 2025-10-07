@@ -74,7 +74,7 @@ function Login() {
       // Salva o token e os dados do usuário no contexto global
       setAuth(dispatch, { token, user });
 
-      navigate("/dashboard");
+      navigate("/mind-the-gap");
 
     } catch (error) {
       const message = error.response?.data?.message || "Ocorreu um erro. Tente novamente.";

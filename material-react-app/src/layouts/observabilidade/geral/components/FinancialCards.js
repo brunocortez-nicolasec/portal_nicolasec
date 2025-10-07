@@ -25,13 +25,15 @@ function FinancialCards({ prejuizoPotencial, valorMitigado, plataformaSelecionad
               <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>Prejuízo Potencial (Mensal)</MDTypography>
               <MDTypography variant="body2" color="text" sx={{mb: 3}}>Custo total com riscos e divergências identificadas.</MDTypography>
               <Card>
+                {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
                 <MDBox 
                   p={1} 
                   onClick={() => onClick('prejuizo')} 
-                  sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'grey.200' } }}
+                  sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
                 >
                   <MDTypography variant="h2" fontWeight="bold" color="error"> {prejuizoPotencial} </MDTypography>
                 </MDBox>
+                {/* ======================== FIM DA ALTERAÇÃO ======================= */}
               </Card>
             </MDBox>
           </Card>
@@ -45,15 +47,15 @@ function FinancialCards({ prejuizoPotencial, valorMitigado, plataformaSelecionad
               <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>{valorMitigadoTitle}</MDTypography>
               <MDTypography variant="body2" color="text" sx={{mb: 3}}> Redução de 95% do prejuízo potencial com governança. </MDTypography>
               <Card>
-                {/* ======================= INÍCIO DA CORREÇÃO ======================= */}
+                {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
                 <MDBox 
                   p={1}
                   onClick={() => onClick('mitigado')} 
-                  sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'grey.200' } }}
+                  sx={{ cursor: 'pointer', '&:hover': { backgroundColor: 'action.hover' } }}
                 >
                   <MDTypography variant="h2" fontWeight="bold" color="success"> {valorMitigado} </MDTypography>
                 </MDBox>
-                {/* ======================== FIM DA CORREÇÃO ======================= */}
+                {/* ======================== FIM DA ALTERAÇÃO ======================= */}
               </Card>
             </MDBox>
           </Card>

@@ -1,6 +1,6 @@
 // material-react-app/src/App.js
 
-import { useState, useEffect, useMemo } from "react"; // Removido 'useContext'
+import { useState, useEffect, useMemo } from "react";
 import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
@@ -14,7 +14,6 @@ import rtlPlugin from "stylis-plugin-rtl";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import routes from "routes";
-// 1. Imports do contexto corrigidos
 import { useMaterialUIController, setMiniSidenav, setOpenConfigurator, logout } from "context"; 
 import { DashboardProvider } from "context/DashboardContext";
 import brandWhite from "assets/images/logo-ct.png";
@@ -27,10 +26,8 @@ import Login from "auth/login";
 import Register from "auth/register";
 import UserProfile from "layouts/user-profile";
 import UserManagement from "layouts/user-management";
-// A linha 'import { AuthContext } from "context";' foi REMOVIDA
 
 export default function App() {
-  // 2. Usando o novo hook unificado
   const [controller, dispatch] = useMaterialUIController();
   const {
     miniSidenav,
@@ -41,7 +38,7 @@ export default function App() {
     transparentSidenav,
     whiteSidenav,
     darkMode,
-    token, // Agora temos acesso direto ao token aqui!
+    token,
   } = controller;
 
   const [onMouseEnter, setOnMouseEnter] = useState(false);
@@ -79,9 +76,8 @@ export default function App() {
 
   const navigate = useNavigate();
   
-  // 3. Interceptor do Axios corrigido
   setupAxiosInterceptors(() => {
-    logout(dispatch); // Usa a nova função de logout
+    logout(dispatch);
     navigate("/auth/login");
   });
 
@@ -105,7 +101,6 @@ export default function App() {
             exact
             path={route.route}
             element={
-              // 4. ProtectedRoute agora verifica o 'token'
               <ProtectedRoute isAuthenticated={!!token}> 
                 {route.component}
               </ProtectedRoute>
@@ -163,7 +158,9 @@ export default function App() {
             key="user-management"
           />
           {getRoutes(routes)}
-          <Route path="*" element={<Navigate to="/dashboard" />} />
+          {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+          <Route path="*" element={<Navigate to="/mind-the-gap" />} />
+          {/* ======================== FIM DA ALTERAÇÃO ======================= */}
         </Routes>
       </DashboardProvider>
     </ThemeProvider>

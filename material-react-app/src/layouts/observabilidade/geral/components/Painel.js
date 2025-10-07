@@ -1,7 +1,7 @@
 // material-react-app/src/layouts/observabilidade/geral/components/Painel.js
 
 import React from "react";
-import { useNavigate } from "react-router-dom"; // 1. IMPORTADO O useNavigate
+import { useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 
 // @mui material components
@@ -61,12 +61,16 @@ function MiniMetricCard({ title, count, color = "dark" }) {
   );
 }
 
-// 2. A prop 'onCsvImport' foi removida
 function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform }) {
-  const navigate = useNavigate(); // 3. Hook para navegação
+  const navigate = useNavigate();
 
   const systems = ["Geral", "SAP", "Salesforce", "ServiceNow", "IDM", "Cofre", "TruAm", "TruIM", "TruPAM", "VPN", "Acesso Internet"];
   const titleText = selectedPlatform === "Geral" ? "Painel Geral" : `Painel de ${selectedPlatform}`;
+  
+  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  // Cria um rótulo dinâmico para o card
+  const appLabel = selectedPlatform === "Geral" ? "App" : selectedPlatform;
+  // ======================== FIM DA ALTERAÇÃO =======================
 
   const handleSystemSelect = (event, newValue) => {
     if (newValue) {
@@ -74,13 +78,10 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
     }
   };
   
-  // 4. Nova função para redirecionar
   const handleRedirectToImportPage = () => {
     navigate("/observabilidade/import-management");
   };
   
-  // A lógica de 'handleImportClick' e 'handleFileChange' foi REMOVIDA
-
   return (
     <Card sx={{ height: "100%" }}>
       <MDBox pt={2} px={2} display="flex" alignItems="center" justifyContent="space-between">
@@ -98,12 +99,10 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
             sx={{ width: 180 }}
             renderInput={(params) => <TextField {...params} label="Sistemas" />}
           />
-          {/* 5. Botão agora chama a nova função de redirecionamento */}
           <MDButton variant="outlined" color="info" size="small" onClick={handleRedirectToImportPage}>
             <Icon sx={{ mr: 0.5 }}>upload</Icon>
             Importar CSV
           </MDButton>
-          {/* O <input> escondido foi REMOVIDO */}
         </MDBox>
       </MDBox>
       
@@ -134,8 +133,10 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
               <Grid item xs={12}>
                 <Card sx={{ height: "100%", p: 1 }}>
                   <Grid container spacing={1} sx={{height: '100%'}}>
-                    <Grid item xs={6}><MiniMetricCard title="Ativos não encontrados no TruIM" count={imDisplay.divergencias.ativosNaoEncontradosTruIM} color="error"/></Grid>
+                    {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+                    <Grid item xs={6}><MiniMetricCard title={`Ativos não encontrados no ${appLabel}`} count={imDisplay.divergencias.acessoPrevistoNaoConcedido} color="error"/></Grid>
                     <Grid item xs={6}><MiniMetricCard title="Ativos não encontrados no RH" count={imDisplay.divergencias.ativosNaoEncontradosRH} color="warning"/></Grid>
+                    {/* ======================== FIM DA ALTERAÇÃO ======================= */}
                   </Grid>
                 </Card>
               </Grid>
@@ -155,7 +156,6 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
   );
 }
 
-// 6. 'onCsvImport' foi REMOVIDO dos propTypes
 Painel.propTypes = {
   imDisplay: PropTypes.object.isRequired,
   onPieChartClick: PropTypes.func.isRequired,

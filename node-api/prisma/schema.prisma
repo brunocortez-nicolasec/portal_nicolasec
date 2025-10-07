@@ -16,24 +16,19 @@ enum ImportStatus {
 }
 
 model User {
-  id            Int      @id @default(autoincrement())
+  id            Int         @id @default(autoincrement())
   name          String
-  email         String   @unique
+  email         String      @unique
   password      String
   profile_image String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   roleId        Int
-  role          Role     @relation(fields: [roleId], references: [id])
-
+  role          Role        @relation(fields: [roleId], references: [id])
   groups        Group[]
-
   packageId     Int?
-  package       Package? @relation(fields: [packageId], references: [id])
-
+  package       Package?    @relation(fields: [packageId], references: [id])
   importLogs    ImportLog[]
-
   @@map("users")
 }
 
@@ -73,14 +68,12 @@ model Group {
 }
 
 model Platform {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  key       String    @unique
-  route     String    @unique
-  icon      String?
-
-  packages  Package[]
-
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  key      String    @unique
+  route    String    @unique
+  icon     String?
+  packages Package[]
   @@map("platforms")
 }
 
@@ -90,10 +83,8 @@ model Package {
   description String?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
-
   platforms   Platform[]
   users       User[]
-
   @@map("packages")
 }
 
@@ -107,14 +98,24 @@ model ImportLog {
   errorDetails  String?
   createdAt     DateTime     @default(now())
   completedAt   DateTime?
-
   userId        Int
   user          User         @relation(fields: [userId], references: [id])
-
   @@map("import_logs")
 }
 
-// --- NOVO MODELO: ARMAZENA AS IDENTIDADES DOS ARQUIVOS CSV ---
+// ======================= INÍCIO DA ALTERAÇÃO =======================
+// --- NOVO MODELO: ARMAZENA OS PERFIS/ROLES DAS IDENTIDADES ---
+model Profile {
+  id         Int        @id @default(autoincrement())
+  name       String     @unique
+  identities Identity[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  @@map("profiles")
+}
+
+// --- MODELO ATUALIZADO: ARMAZENA AS IDENTIDADES DOS ARQUIVOS CSV ---
 model Identity {
   id           Int      @id @default(autoincrement())
   sourceSystem String   // Sistema de origem do dado (ex: "TruIM", "SAP", "RH")
@@ -123,14 +124,17 @@ model Identity {
   email        String?
   status       String?  // Ex: "Ativo", "Inativo"
   userType     String?  // Ex: "Funcionário", "Terceirizado"
-  
-  // Campo flexível para armazenar outras colunas do CSV
-  extraData    Json?
-
+  cpf          String?  // Campo adicionado para alinhar com o CSV
+  extraData    Json?    // Campo flexível para armazenar outras colunas do CSV
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+
+  // Relação com o novo modelo Profile
+  profileId Int?
+  profile   Profile? @relation(fields: [profileId], references: [id])
 
   // Garante que não teremos identidades duplicadas para o mesmo sistema
   @@unique([sourceSystem, identityId])
   @@map("identities")
 }
+// ======================== FIM DA ALTERAÇÃO =======================

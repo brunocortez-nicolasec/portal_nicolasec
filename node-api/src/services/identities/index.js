@@ -27,8 +27,6 @@ const getIdentities = async (req, res) => {
     whereClause.sourceSystem = { not: 'RH' };
   }
 
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
-
   // 2. Lógica para o filtro de tipo de usuário
   if (userType) {
     if (userType === 'Não categorizado') {
@@ -43,20 +41,28 @@ const getIdentities = async (req, res) => {
     }
   }
 
-  // ======================== FIM DA ALTERAÇÃO =======================
-
   // 3. Lógica para o filtro de status (inalterada)
   if (status) {
     whereClause.status = status;
   }
 
   try {
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const identities = await prisma.identity.findMany({
       where: whereClause,
+      // Inclui o nome do perfil relacionado na resposta
+      include: {
+        profile: {
+          select: {
+            name: true,
+          },
+        },
+      },
       orderBy: {
         createdAt: 'desc',
       },
     });
+    // ======================== FIM DA ALTERAÇÃO =======================
     return res.status(200).json(identities);
   } catch (error) {
     console.error("Erro ao buscar identidades:", error);
