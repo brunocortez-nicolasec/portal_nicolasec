@@ -32,15 +32,12 @@ import DataTable from "examples/Tables/DataTable";
 import Footer from "examples/Footer";
 import { useMaterialUIController } from "context";
 
-// ======================= INÍCIO DA ALTERAÇÃO =======================
-// Dicionário para tradução e colorização dos status
 const statusMap = {
   SUCCESS: { text: "SUCESSO", color: "success" },
   FAILED: { text: "FALHA", color: "error" },
   PENDING: { text: "PENDENTE", color: "warning" },
   PROCESSING: { text: "PROCESSANDO", color: "info" },
 };
-// ======================== FIM DA ALTERAÇÃO =======================
 
 function ImportManagement() {
   const [controller] = useMaterialUIController();
@@ -193,7 +190,6 @@ function ImportManagement() {
         { Header: "Ações", accessor: "acoes", align: "center" },
     ],
     rows: history.map(log => ({
-        // ======================= INÍCIO DA ALTERAÇÃO =======================
         status: (
           <MDBadge 
             badgeContent={statusMap[log.status]?.text || log.status} 
@@ -202,7 +198,6 @@ function ImportManagement() {
             container 
           />
         ),
-        // ======================== FIM DA ALTERAÇÃO =======================
         sistema: <MDTypography variant="caption">{log.targetSystem}</MDTypography>,
         arquivo: <MDTypography variant="caption" fontWeight="medium">{log.fileName}</MDTypography>,
         data: <MDTypography variant="caption">{new Date(log.createdAt).toLocaleString('pt-BR')}</MDTypography>,
@@ -362,7 +357,16 @@ function ImportManagement() {
                   <DetailItem icon="play_arrow" label="Início">{startTime.toLocaleString('pt-BR')}</DetailItem>
                   <DetailItem icon="check_circle" label="Término">{endTime ? endTime.toLocaleString('pt-BR') : "N/A"}</DetailItem>
                   <DetailItem icon="timer" label="Duração">{duration}</DetailItem>
-                  <DetailItem icon="task_alt" label="Status"><MDBadge badgeContent={selectedLogDetails.status} color={selectedLogDetails.status === "SUCCESS" ? "success" : selectedLogDetails.status === "FAILED" ? "error" : "warning"} size="md" container /></DetailItem>
+                  {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+                  <DetailItem icon="task_alt" label="Status">
+                    <MDBadge 
+                      badgeContent={statusMap[selectedLogDetails.status]?.text || selectedLogDetails.status} 
+                      color={statusMap[selectedLogDetails.status]?.color || "secondary"} 
+                      size="md" 
+                      container 
+                    />
+                  </DetailItem>
+                  {/* ======================== FIM DA ALTERAÇÃO ======================= */}
                 </Grid>
                 {selectedLogDetails.status === "FAILED" && selectedLogDetails.errorDetails && (
                   <MDBox mt={3}>

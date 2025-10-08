@@ -25,6 +25,34 @@ const getSystemMetrics = async (req, res) => {
       }),
     ]);
 
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
+    // Cláusula de guarda: se um sistema específico não tem dados, retorna tudo zerado.
+    if (!isGeneral && systemIdentities.length === 0) {
+      const zeroMetrics = {
+        pills: { total: 0, ativos: 0, inativos: 0, desconhecido: 0 },
+        tiposDeUsuario: [],
+        kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0, adminsDormentes: 0 },
+        divergencias: {
+          inativosRHAtivosApp: 0,
+          cpf: 0,
+          nome: 0,
+          email: 0,
+          acessoPrevistoNaoConcedido: 0,
+          ativosNaoEncontradosRH: 0,
+        },
+        pamRiscos: { acessosIndevidos: 0 },
+        riscos: {
+          prejuizoPotencial: 'R$ 0',
+          valorMitigado: 'R$ 0',
+          indiceConformidade: 100.0,
+          prejuizoBreakdown: [],
+          riscosEmContasPrivilegiadas: 0,
+        },
+      };
+      return res.status(200).json(zeroMetrics);
+    }
+    // ======================== FIM DA ALTERAÇÃO =======================
+
     // 2. Calcula as métricas simples
     const total = systemIdentities.length;
     const active = systemIdentities.filter(i => i.status === 'Ativo').length;
@@ -42,7 +70,6 @@ const getSystemMetrics = async (req, res) => {
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const dormantIdentities = systemIdentities.filter(i => {
       const loginDateStr = i.extraData?.last_login;
       if (i.status !== 'Ativo' || !loginDateStr) return false;
@@ -51,10 +78,7 @@ const getSystemMetrics = async (req, res) => {
     });
 
     const contasDormentes = dormantIdentities.length;
-    // Nova métrica para contar apenas admins dormentes
     const adminsDormentes = dormantIdentities.filter(i => i.profile?.name === 'Admin').length;
-    // ======================== FIM DA ALTERAÇÃO =======================
-
 
     // 3. Calcula as métricas de Divergência e Risco
     const rhMap = new Map(rhIdentities.map(i => [i.identityId, i]));
@@ -163,10 +187,7 @@ const getSystemMetrics = async (req, res) => {
     const metrics = {
       pills: { total, ativos: active, inativos: inactive, desconhecido: unknown },
       tiposDeUsuario: Object.entries(byUserType).map(([tipo, total]) => ({ tipo, total })).sort((a, b) => b.total - a.total),
-      // ======================= INÍCIO DA ALTERAÇÃO =======================
-      // Adicionado 'adminsDormentes' ao objeto de kpisAdicionais
       kpisAdicionais: { contasDormentes, acessoPrivilegiado, adminsDormentes },
-      // ======================== FIM DA ALTERAÇÃO =======================
       divergencias: {
         inativosRHAtivosApp: inativosRHAtivosAppCount,
         cpf: divergenciaCpfCount,
