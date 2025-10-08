@@ -1,320 +1,260 @@
 // src/layouts/observabilidade/truim/index.js
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import axios from "axios";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
-import Papa from "papaparse";
-import Modal from "@mui/material/Modal";
-import Chip from "@mui/material/Chip";
-
-// --- MODIFICAÇÃO: Importar nosso hook de contexto ---
-import { useDashboard } from "context/DashboardContext";
 
 // Componentes do Template
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
-import MDButton from "components/MDButton";
-import MDInput from "components/MDInput";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import DataTable from "examples/Tables/DataTable";
 import ComplexStatisticsCard from "examples/Cards/StatisticsCards/ComplexStatisticsCard";
-import DefaultInfoCard from "examples/Cards/InfoCards/DefaultInfoCard";
-import DefaultLineChart from "examples/Charts/LineCharts/DefaultLineChart";
 import ReportsBarChart from "examples/Charts/BarCharts/ReportsBarChart";
 import PieChart from "examples/Charts/PieChart";
-import TimelineList from "examples/Timeline/TimelineList";
-import TimelineItem from "examples/Timeline/TimelineItem";
+// ======================= INÍCIO DA ALTERAÇÃO =======================
+import DefaultDoughnutChart from "examples/Charts/DoughnutCharts/DefaultDoughnutChart";
+// ======================== FIM DA ALTERAÇÃO =======================
 
-function InitialState({ onImportClick }) {
-  return (
-    <MDBox textAlign="center" py={10}>
-      <MDTypography variant="h3" color="text" mb={2}>
-        Dashboard de Observabilidade TruIM
-      </MDTypography>
-      <MDTypography variant="body1" color="text" mb={4}>
-        Para começar, importe um arquivo de dados no formato CSV.
-      </MDTypography>
-      <MDButton variant="gradient" color="info" onClick={onImportClick}>
-        <Icon sx={{ fontWeight: "bold" }}>upload_file</Icon>
-        &nbsp;Importar CSV
-      </MDButton>
-    </MDBox>
-  );
-}
+
+// Hook do Contexto Principal
+import { useMaterialUIController } from "context";
+
+// Componentes para a Tabela de Detalhes
+import MDBadge from "components/MDBadge";
+
+const StatusCell = ({ status }) => {
+  let color = "secondary";
+  let text = status ? String(status).toUpperCase() : "-";
+  if (text === "ATIVO") color = "success";
+  if (text === "INATIVO") color = "error";
+  if (text === "NÃO ENCONTRADO") color = "secondary";
+  return <MDTypography variant="caption" color={color} fontWeight="medium">{text}</MDTypography>;
+};
+
 
 function DashboardTruIM() {
-  // --- MODIFICAÇÃO: Usar o estado do contexto global ---
-  const { truIMData, updateTruIMData } = useDashboard();
-  
-  // Estado local para controlar o que é exibido na tela
-  const [displayData, setDisplayData] = useState(null);
-  
-  // Estados locais para controle da UI
-  const [csvFileName, setCsvFileName] = useState(null);
-  const fileInputRef = useRef(null);
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [activeChartFilter, setActiveChartFilter] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
+  const [controller] = useMaterialUIController();
+  const { token } = controller;
+  const plataforma = "TruIM";
 
-  const handleOpenModal = () => setIsModalOpen(true);
-  const handleCloseModal = () => setIsModalOpen(false);
-  const handleImportClick = () => fileInputRef.current.click();
-  const clearChartFilter = () => setActiveChartFilter(null);
+  const [metrics, setMetrics] = useState(null);
+  const [liveFeedData, setLiveFeedData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const transformAndSetData = (rawData) => {
-    if (!rawData || rawData.length === 0) {
-      setDisplayData(null);
-      return;
-    }
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      if (!token) return;
+      setIsLoading(true);
 
-    let filteredData = rawData;
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      end.setHours(23, 59, 59, 999);
-      filteredData = rawData.filter(row => {
-        const rowDate = row.data_provisionamento ? new Date(row.data_provisionamento) : null;
-        return rowDate && rowDate >= start && rowDate <= end;
+      const metricsPromise = axios.get(`/metrics/${plataforma}`, {
+        headers: { "Authorization": `Bearer ${token}` },
       });
-    }
+      
+      const liveFeedPromise = axios.get('/live-feed', {
+        headers: { "Authorization": `Bearer ${token}` },
+        params: { system: plataforma }
+      });
 
-    if (activeChartFilter) {
-      filteredData = filteredData.filter(row => row[activeChartFilter.type] === activeChartFilter.value);
-    }
-    
-    // Lógica de transformação
-    const hoje = new Date().setHours(0, 0, 0, 0);
-    const novosUsuariosHoje = filteredData.filter(row => new Date(row.data_provisionamento).setHours(0, 0, 0, 0) === hoje).length;
-    const solicitacoesPendentes = filteredData.filter(row => row.status_solicitacao === 'pendente').length;
-    const identidadesOrfas = filteredData.filter(row => row.tipo_identidade === 'orfa').length;
-    
-    const cicloDeVida = {
-      labels: ["Abr", "Mai", "Jun", "Jul", "Ago", "Set"],
-      datasets: [ { label: "Usuários Provisionados", data: [0,0,0,0,0,0], color: "success" }, { label: "Usuários Desprovisionados", data: [0,0,0,0,0,0], color: "error" } ],
+      try {
+        const [metricsResponse, liveFeedResponse] = await Promise.all([metricsPromise, liveFeedPromise]);
+        setMetrics(metricsResponse.data);
+        setLiveFeedData(liveFeedResponse.data);
+      } catch (error) {
+        console.error(`Erro ao buscar dados do dashboard para ${plataforma}:`, error);
+        setMetrics(null);
+        setLiveFeedData([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
-    filteredData.forEach(row => {
-      if (row.data_provisionamento) {
-        const mes = new Date(row.data_provisionamento).getMonth();
-        if (mes >= 3 && mes <= 8) cicloDeVida.datasets[0].data[mes - 3]++;
-      }
-      if (row.data_desprovisionamento) {
-        const mes = new Date(row.data_desprovisionamento).getMonth();
-        if (mes >= 3 && mes <= 8) cicloDeVida.datasets[1].data[mes - 3]++;
-      }
-    });
 
-    const solicitacoes = filteredData.reduce((acc, row) => {
-      acc[row.status_solicitacao] = (acc[row.status_solicitacao] || 0) + 1;
+    fetchDashboardData();
+  }, [token]);
+
+  const displayData = useMemo(() => {
+    if (isLoading || !metrics || !liveFeedData) {
+      return null;
+    }
+
+    const totalIdentidades = metrics.pills?.total || 0;
+    const contasPrivilegiadas = metrics.kpisAdicionais?.acessoPrivilegiado || 0;
+    const contasDormentes = metrics.kpisAdicionais?.contasDormentes || 0;
+    const divergenciasCriticas = liveFeedData.filter(user => user.isCritical).length;
+
+    const profileCounts = liveFeedData.reduce((acc, user) => {
+      const perfil = user.perfil || 'N/A';
+      acc[perfil] = (acc[perfil] || 0) + 1;
       return acc;
     }, {});
-    const solicitacoesAcesso = {
-      labels: ["Aprovadas Automaticamente", "Aprovadas Manualmente", "Negadas", "Pendentes"],
-      datasets: { label: "Solicitações", backgroundColors: ["success", "info", "error", "warning"], data: [solicitacoes.aprovada_auto || 0, solicitacoes.aprovada_manual || 0, solicitacoes.negada || 0, solicitacoes.pendente || 0] },
+
+    const perfisDeAcessoChart = {
+      labels: Object.keys(profileCounts),
+      datasets: {
+        label: "Perfis",
+        backgroundColors: ["info", "primary", "warning", "secondary", "error", "light"],
+        data: Object.values(profileCounts),
+      },
     };
 
-    const campanhasUnicas = [...new Map(filteredData.map(item => [item['campanha_revisao_nome'], item])).values()];
-    const getStatusComponent = (status) => {
-        const colorMap = { "Em dia": "success", "Concluída": "text", "Em Risco": "warning", "Atrasada": "error" };
-        return <MDTypography variant="caption" color={colorMap[status] || "dark"} fontWeight="medium">{status}</MDTypography>
-    }
-    const revisoesAcesso = {
+    const tiposDeUsuarioChart = {
+      labels: metrics.tiposDeUsuario.map(t => t.tipo),
+      datasets: { label: "Quantidade", data: metrics.tiposDeUsuario.map(t => t.total) },
+    };
+
+    const criticalDivergencesTable = {
       columns: [
-        { Header: "campanha de revisão", accessor: "campaign", width: "40%" }, { Header: "progresso", accessor: "progress" }, { Header: "prazo", accessor: "deadline", align: "center" }, { Header: "status", accessor: "status", align: "center" },
+        { Header: "Nome", accessor: "name" },
+        { Header: "Email", accessor: "email" },
+        { Header: "Perfil", accessor: "perfil" },
+        { Header: "Status App", accessor: "app_status" },
+        { Header: "Status RH", accessor: "rh_status" },
       ],
-      rows: campanhasUnicas.filter(c => c.campanha_revisao_nome).map(c => ({ campaign: c.campanha_revisao_nome, progress: c.campanha_revisao_progresso, deadline: c.campanha_revisao_prazo, status: getStatusComponent(c.campanha_revisao_status) })),
+      rows: liveFeedData
+        .filter(user => user.isCritical)
+        .map(user => ({
+          name: <MDTypography variant="caption" fontWeight="medium">{user.name}</MDTypography>,
+          email: <MDTypography variant="caption">{user.email}</MDTypography>,
+          perfil: <MDBadge badgeContent={user.perfil} color={user.perfil === 'Admin' ? 'error' : 'secondary'} size="xs" container />,
+          app_status: <StatusCell status={user.app_status} />,
+          rh_status: <StatusCell status={user.rh_status} />,
+        })),
     };
 
-    const violacoes = filteredData.reduce((acc, row) => {
-        if(row.aplicacao_violacao) acc[row.aplicacao_violacao] = (acc[row.aplicacao_violacao] || 0) + 1;
-        return acc;
-    }, {});
-    const violacoesPorApp = {
-      labels: Object.keys(violacoes),
-      datasets: { label: "Violações", data: Object.values(violacoes) },
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
+    // Calcula dados para o Gráfico de Detalhamento de Divergências
+    const divergenceBreakdown = metrics.divergencias;
+    const divergenceLabels = {
+        inativosRHAtivosApp: "Acesso Indevido",
+        ativosNaoEncontradosRH: "Conta Órfã",
+        cpf: "CPF",
+        nome: "Nome",
+        email: "E-mail",
+        userType: "Tipo de Usuário"
     };
-
-    const atividadesRecentes = filteredData
-      .filter(row => row.evento_descricao)
-      .sort((a, b) => new Date(b.evento_timestamp) - new Date(a.evento_timestamp))
-      .slice(0, 4)
-      .map(row => ({
-        color: row.evento_severidade === "error" ? "error" : row.evento_severidade === "warning" ? "warning" : "info",
-        icon: row.evento_severidade === "error" ? "key" : row.evento_severidade === "warning" ? "lock_open" : "public",
-        title: row.evento_descricao,
-        dateTime: new Date(row.evento_timestamp).toLocaleString('pt-BR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }),
-      }));
-    
-    const newData = {
-      kpis: { totalIdentidades: filteredData.length, novosUsuariosHoje, solicitacoesPendentes, identidadesOrfas },
-      cicloDeVida, solicitacoesAcesso, revisoesAcesso, violacoesPorApp, atividadesRecentes,
-      impactoFinanceiro: {
-        perdaHora: "R$ 1.68 Milhão", perdaDia: "R$ 40.2 Milhões", perdaMes: "R$ 1.2 Bilhão", mitigacao: "90%", perdaEvitadaAnual: "R$ 1.296 Bilhão",
-      }
-    };
-    setDisplayData(newData);
-  };
-  
-  // Efeito principal que reage a mudanças nos dados brutos (do contexto) ou nos filtros locais
-  useEffect(() => {
-    if (truIMData) {
-      transformAndSetData(truIMData);
-    } else {
-      setDisplayData(null);
-    }
-  }, [truIMData, startDate, endDate, activeChartFilter]);
-
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      setCsvFileName(file.name);
-      setStartDate("");
-      setEndDate("");
-      setActiveChartFilter(null);
-      Papa.parse(file, {
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-          // Ação principal: salva os dados brutos no contexto global
-          updateTruIMData(results.data);
+    const divergenceChartData = {
+        labels: Object.keys(divergenceBreakdown)
+            .filter(key => key !== 'acessoPrevistoNaoConcedido' && divergenceBreakdown[key] > 0)
+            .map(key => divergenceLabels[key] || key),
+        datasets: {
+            label: "Quantidade",
+            data: Object.keys(divergenceBreakdown)
+                .filter(key => key !== 'acessoPrevistoNaoConcedido' && divergenceBreakdown[key] > 0)
+                .map(key => divergenceBreakdown[key])
         },
-        error: (error) => console.error("Erro ao processar o CSV:", error),
-      });
-    }
-  };
-  
-  const handlePieChartClick = (event, elements) => {
-    if (!elements || elements.length === 0 || !displayData) return;
-    const { index } = elements[0];
-    const clickedLabel = displayData.solicitacoesAcesso.labels[index];
-    const filterMap = {
-      "Aprovadas Automaticamente": "aprovada_auto", "Aprovadas Manualmente": "aprovada_manual", "Negadas": "negada", "Pendentes": "pendente",
     };
-    const filterValue = filterMap[clickedLabel];
-    if (filterValue) {
-      const detailedData = truIMData.filter(row => row.status_solicitacao === filterValue);
-      setModalContent({
-        title: `Detalhes: Solicitações ${clickedLabel}`,
-        data: {
-          columns: [ { Header: "ID do Usuário", accessor: "id_usuario" }, { Header: "Data", accessor: "data" }, { Header: "Aplicação", accessor: "aplicacao" } ],
-          rows: detailedData.map(row => ({ id_usuario: row.id_usuario, data: new Date(row.data_provisionamento).toLocaleDateString("pt-BR"), aplicacao: row.aplicacao_violacao || "N/A" }))
-        }
-      });
-      handleOpenModal();
-    }
-  };
+
+    // Calcula dados para o Gráfico de Análise de Contas Dormentes
+    const totalAtivos = metrics.pills?.ativos || 0;
+    const totalDormentes = metrics.kpisAdicionais?.contasDormentes || 0;
+    const ativosRecentes = totalAtivos - totalDormentes;
+    const dormancyChartData = {
+        labels: ["Dormentes", "Ativas Recentes"],
+        datasets: {
+            label: "Contas",
+            backgroundColors: ["warning", "success"],
+            data: [totalDormentes, ativosRecentes > 0 ? ativosRecentes : 0],
+        },
+    };
+    // ======================== FIM DA ALTERAÇÃO =======================
+
+    return {
+      totalIdentidades,
+      contasPrivilegiadas,
+      contasDormentes,
+      divergenciasCriticas,
+      perfisDeAcessoChart,
+      tiposDeUsuarioChart,
+      criticalDivergencesTable,
+      divergenceChartData, // Adicionado ao retorno
+      dormancyChartData,   // Adicionado ao retorno
+    };
+  }, [isLoading, metrics, liveFeedData]);
 
   return (
     <DashboardLayout>
       <DashboardNavbar />
-      
-      <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
-        <Card sx={{ width: "80%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
-          <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
-            <MDTypography variant="h6">{modalContent.title}</MDTypography>
-            <MDButton iconOnly onClick={handleCloseModal}><Icon>close</Icon></MDButton>
-          </MDBox>
-          <MDBox p={2}>
-            <DataTable table={modalContent.data} isSorted={false} entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }} showTotalEntries />
-          </MDBox>
-        </Card>
-      </Modal>
-
       <MDBox py={3}>
-        <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileChange} style={{ display: "none" }} />
-        {!displayData ? (
-          <InitialState onImportClick={handleImportClick} />
+        {isLoading || !displayData ? (
+          <MDBox mt={5} display="flex" justifyContent="center">
+            <MDTypography>Carregando dados do dashboard {plataforma}...</MDTypography>
+          </MDBox>
         ) : (
           <>
-            <MDBox display="flex" justifyContent="space-between" alignItems="center" flexWrap="wrap" mb={2}>
-              <MDBox display="flex" alignItems="center" mt={2} flexWrap="wrap">
-                <MDTypography variant="body2" color="text" fontWeight="bold" mr={1}>Período:</MDTypography>
-                <MDInput type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} sx={{mr: 1, mb: {xs: 1, md: 0}}} />
-                <MDTypography variant="body2" color="text" mx={1}>até</MDTypography>
-                <MDInput type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} sx={{mr: 2, mb: {xs: 1, md: 0}}}/>
-                {activeChartFilter && (
-                    <Chip 
-                        label={`Filtro: ${activeChartFilter.label}`} 
-                        onDelete={clearChartFilter} 
-                        color="info" 
-                        sx={{ height: "auto", "& .MuiChip-label": { lineHeight: "1.5", p: 1 } }}
-                    />
-                )}
-              </MDBox>
-
-              <MDBox display="flex" alignItems="center" mt={2}>
-                {csvFileName && <MDTypography variant="button" color="text" mr={2}><strong>{csvFileName}</strong></MDTypography>}
-                <MDButton variant="gradient" color="info" onClick={handleImportClick}>
-                  <Icon sx={{ fontWeight: "bold" }}>upload_file</Icon>
-                  &nbsp;Importar Outro
-                </MDButton>
-              </MDBox>
+            {/* Linha 1: KPIs Principais */}
+            <MDBox mb={5}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="people" title="Total de Identidades" count={displayData.totalIdentidades} /></Grid>
+                <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="admin_panel_settings" title="Contas Privilegiadas" count={displayData.contasPrivilegiadas} /></Grid>
+                <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="hourglass_disabled" title="Contas Dormentes" count={displayData.contasDormentes} /></Grid>
+                <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="warning" title="Divergências Críticas" count={displayData.divergenciasCriticas} /></Grid>
+              </Grid>
             </MDBox>
             
-            {displayData.kpis.totalIdentidades === 0 ? (
-              <MDBox textAlign="center" py={5}>
-                <MDTypography variant="h5" color="text">Nenhum dado encontrado para os filtros selecionados.</MDTypography>
-              </MDBox>
-            ) : (
-              <>
-                <MDBox mb={3}>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard icon="people" title="Total de Identidades" count={displayData.kpis.totalIdentidades} percentage={{ color: "success", amount: "", label: "no período selecionado" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="info" icon="person_add" title="Novos Usuários (Hoje)" count={displayData.kpis.novosUsuariosHoje} percentage={{ color: "success", amount: "", label: "provisionados hoje" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="pending_actions" title="Solicitações Pendentes" count={displayData.kpis.solicitacoesPendentes} percentage={{ color: "warning", amount: "", label: "no período" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="secondary" icon="no_accounts" title="Contas Órfãs" count={displayData.kpis.identidadesOrfas} percentage={{ color: "secondary", amount: "", label: "encontradas no período" }} /></Grid>
-                  </Grid>
-                </MDBox>
-            
-                <MDBox mb={4.5}>
-                  <MDTypography variant="h5" mb={3}>Análise de Ciclo de Vida e Acessos</MDTypography>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><DefaultLineChart icon={{ component: "leaderboard" }} title="Ciclo de Vida de Usuários" description="Fluxo de entradas e saídas de colaboradores." chart={displayData.cicloDeVida} /></Grid>
-                    <Grid item xs={12} lg={5}>
-                      <PieChart 
-                        icon={{ component: "rule" }} 
-                        title="Status das Solicitações de Acesso" 
-                        description={<><strong>{displayData.solicitacoesAcesso.datasets.data.reduce((a, b) => a + b, 0)}</strong> solicitações no total</>} 
-                        chart={displayData.solicitacoesAcesso}
-                        onClick={handlePieChartClick}
-                      />
-                    </Grid>
-                  </Grid>
-                </MDBox>
-                
-                <MDBox mb={4.5}>
-                  <MDTypography variant="h5" mb={2}>Governança e Conformidade</MDTypography>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12}><Card><MDBox pt={3} px={2}><MDTypography variant="h6">Campanhas de Revisão de Acesso</MDTypography></MDBox><MDBox p={2}><DataTable table={displayData.revisoesAcesso} isSorted={false} entriesPerPage={false} showTotalEntries={false} noEndBorder /></MDBox></Card></Grid>
-                    <Grid item xs={12} md={4}><DefaultInfoCard icon="policy" title="Conformidade de Políticas" description="Verificação automática de segregação de função (SoD)." value="98.5% em conformidade" /></Grid>
-                    <Grid item xs={12} md={4}><DefaultInfoCard icon="gpp_bad" title="Violações de SoD" description="Conflitos de segregação de função detectados." value="12 violações ativas" /></Grid>
-                    <Grid item xs={12} md={4}><DefaultInfoCard icon="timer" title="Tempo Médio de Acesso" description="Tempo médio para aprovar e provisionar um novo acesso." value="2.5 horas" /></Grid>
-                  </Grid>
-                </MDBox>
+            {/* Linha 2: Gráficos de Análise */}
+            <MDBox mb={5}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} lg={5}>
+                  <PieChart 
+                    icon={{ component: "badge" }} 
+                    title="Perfis de Acesso" 
+                    description="Distribuição de perfis de usuário no sistema."
+                    chart={displayData.perfisDeAcessoChart}
+                  />
+                </Grid>
+                <Grid item xs={12} lg={7}>
+                  <ReportsBarChart
+                    color="info"
+                    title="Tipos de Usuário"
+                    description="Distribuição de tipos de vínculo dos usuários."
+                    chart={displayData.tiposDeUsuarioChart}
+                  />
+                </Grid>
+              </Grid>
+            </MDBox>
 
-                <MDBox mb={4.5}>
-                  <MDTypography variant="h5" mb={3}>Atividades e Alertas de Risco</MDTypography>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} lg={7}><ReportsBarChart color="info" title="Aplicações com Violações de SoD" description="Total de violações de política de segregação de função por aplicação." chart={displayData.violacoesPorApp} /></Grid>
-                    <Grid item xs={12} lg={5}><TimelineList title="Atividades Recentes de Risco">{displayData.atividadesRecentes.map(item => (<TimelineItem key={item.title} color={item.color} icon={item.icon} title={item.title} dateTime={item.dateTime} />))}</TimelineList></Grid>
-                  </Grid>
-                </MDBox>
-                
-                <MDBox mb={3}>
-                  <MDTypography variant="h5" mb={3}>Análise de Impacto Financeiro (ROI)</MDTypography>
-                  <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="warning" icon="timer" title="Perda Potencial (1 Hora)" count={displayData.impactoFinanceiro.perdaHora} percentage={{ color: "error", amount: "criticidade", label: "altíssima" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="error" icon="calendar_today" title="Perda Potencial (1 Dia)" count={displayData.impactoFinanceiro.perdaDia} percentage={{ color: "error", amount: "paralisação", label: "de operações" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="dark" icon="event" title="Perda Potencial (30 dias)" count={displayData.impactoFinanceiro.perdaMes} percentage={{ color: "error", amount: "impacto", label: "estratégico" }} /></Grid>
-                    <Grid item xs={12} sm={6} lg={3}><ComplexStatisticsCard color="success" icon="shield" title="Mitigação com TruIM" count={displayData.impactoFinanceiro.mitigacao} percentage={{ color: "success", amount: "alta disponibilidade", label: "da plataforma" }} /></Grid>
-                  </Grid>
-                  <Grid container justifyContent="center" sx={{ mt: 3 }}><Grid item xs={12} md={8} lg={7}><DefaultInfoCard icon="payments" title="Valor Anual Evitado com TruIM" description="Nossa plataforma garante a continuidade do seu negócio, evitando perdas anuais bilionárias com falhas de acesso e identidade." value={<MDTypography variant="h2" fontWeight="medium" textGradient color="success">{displayData.impactoFinanceiro.perdaEvitadaAnual}</MDTypography>} /></Grid></Grid>
-                </MDBox>
-              </>
-            )}
+            {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+            {/* Linha 3: Análises Adicionais */}
+            <MDBox mb={5}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} lg={7}>
+                  <ReportsBarChart
+                    color="warning"
+                    title="Detalhamento de Divergências"
+                    description="Distribuição dos tipos de inconsistências encontradas."
+                    chart={displayData.divergenceChartData}
+                  />
+                </Grid>
+                <Grid item xs={12} lg={5}>
+                  <DefaultDoughnutChart
+                    icon={{ color: "warning", component: "hourglass_disabled" }}
+                    title="Análise de Contas Dormentes"
+                    description="Proporção de contas ativas sem login recente."
+                    chart={displayData.dormancyChartData}
+                  />
+                </Grid>
+              </Grid>
+            </MDBox>
+            {/* ======================== FIM DA ALTERAÇÃO ======================= */}
+            
+            {/* Linha 4: Tabela de Ação */}
+            <MDBox>
+              <Grid container spacing={3}>
+                <Grid item xs={12}>
+                  <Card>
+                    <MDBox pt={3} px={2}>
+                      <MDTypography variant="h6" fontWeight="medium">Detalhes das Divergências Críticas</MDTypography>
+                    </MDBox>
+                    <MDBox p={2}>
+                      <DataTable table={displayData.criticalDivergencesTable} isSorted={false} entriesPerPage={{ defaultValue: 5, entries: [5, 10, 25] }} showTotalEntries canSearch />
+                    </MDBox>
+                  </Card>
+                </Grid>
+              </Grid>
+            </MDBox>
           </>
         )}
       </MDBox>
