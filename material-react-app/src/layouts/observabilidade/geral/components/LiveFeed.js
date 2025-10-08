@@ -44,19 +44,6 @@ const StatusCell = ({ status }) => {
     return <MDTypography variant="caption" color={color} fontWeight="medium">{text}</MDTypography>;
 };
 
-const DivergencePill = ({ value }) => {
-    const finalValue = value ?? 0;
-    const style = finalValue > 0 
-        ? { backgroundColor: colors.error.light, color: colors.error.main }
-        : { backgroundColor: colors.secondary.light, color: colors.secondary.main };
-    
-    return (
-        <MDBox sx={{ width: "28px", height: "28px", borderRadius: "50%", display: "grid", placeContent: "center", fontWeight: "bold", ...style }}>
-            <MDTypography variant="caption" fontWeight="bold" sx={{ color: 'inherit' }}>{finalValue}</MDTypography>
-        </MDBox>
-    );
-};
-
 const InfoDetail = ({ label, value }) => (
     <Grid container spacing={1} sx={{ mb: 1.5 }}>
         <Grid item xs={4}><MDTypography variant="caption" color="text" sx={{ fontWeight: 'regular' }}>{label}:</MDTypography></Grid>
@@ -97,10 +84,16 @@ const DivergenceModal = React.forwardRef(({ user, onClose }, ref) => {
                     <MDBox>
                         <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Inconsistências Encontradas</MDTypography>
                         <MDBox mt={1}>
-                            {user.divergence ? (
-                                <MDTypography variant="body2" display="block" mt={0.5}>• Acesso Indevido (APP): Usuário inativo no RH com acesso ativo.</MDTypography>
+                            {user.divergenceDetails && user.divergenceDetails.length > 0 ? (
+                                user.divergenceDetails.map((detail) => (
+                                    <MDTypography key={detail.code} variant="body2" color="text" display="block" mt={0.5}>
+                                        • {detail.text}
+                                    </MDTypography>
+                                ))
                             ) : (
-                                <MDTypography variant="body2" display="block" mt={0.5}>• Nenhuma inconsistência de acesso encontrada.</MDTypography>
+                                <MDTypography variant="body2" color="text" display="block" mt={0.5}>
+                                    • Nenhuma inconsistência encontrada.
+                                </MDTypography>
                             )}
                         </MDBox>
                     </MDBox>
@@ -177,7 +170,7 @@ function LiveFeed({ data }) {
                 const matchPerfil = !filters.perfil || (u.perfil && u.perfil.toLowerCase().includes(filters.perfil.toLowerCase()));
                 const matchSistema = !filters.sistema || (u.sourceSystem && u.sourceSystem === filters.sistema);
                 const matchDivergencia = filters.divergencia === null || (filters.divergencia === 'Sim' && u.divergence) || (filters.divergencia === 'Não' && !u.divergence);
-                const matchCriticas = filters.criticas === null || (filters.criticas === 'Sim' && u.divergence) || (filters.criticas === 'Não' && !u.divergence);
+                const matchCriticas = filters.criticas === null || (filters.criticas === 'Sim' && u.isCritical) || (filters.criticas === 'Não' && !u.isCritical);
                 return matchNome && matchEmail && matchPerfil && matchSistema && matchDivergencia && matchCriticas;
             });
         }
@@ -191,13 +184,20 @@ function LiveFeed({ data }) {
           app_status: <StatusCell status={u.app_status} />,
           perfil: <MDTypography variant="caption">{u.perfil}</MDTypography>,
           diverg: <MDBadge badgeContent={u.divergence ? "Sim" : "Não"} color={u.divergence ? "error" : "success"} size="xs" container />,
-          criticas: <DivergencePill value={u.divergence ? 1 : 0} />,
+          // ======================= INÍCIO DA ALTERAÇÃO =======================
+          criticas: (
+            <MDBadge 
+              badgeContent={u.isCritical ? "Sim" : "Não"} 
+              color={u.isCritical ? "error" : (u.divergence ? "warning" : "success")} 
+              size="xs" 
+              container 
+            />
+          ),
+          // ======================== FIM DA ALTERAÇÃO =======================
         }));
 
 
         return {
-            // ======================= INÍCIO DA ALTERAÇÃO =======================
-            // Corrigidos os accessors e removidas as funções 'Cell' redundantes
             columns: [ 
                 { Header: "NOME", accessor: "nome", width: "20%" },
                 { Header: "EMAIL", accessor: "email", width: "20%" },
@@ -208,7 +208,6 @@ function LiveFeed({ data }) {
                 { Header: "DIVERGÊNCIA", accessor: "diverg", align: "center" },
                 { Header: "CRÍTICAS", accessor: "criticas", align: "center" },
             ],
-            // ======================== FIM DA ALTERAÇÃO =======================
             rows,
             rawData: filteredData,
         };

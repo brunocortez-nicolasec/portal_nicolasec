@@ -1,3 +1,5 @@
+// material-react-app\src\layouts\observabilidade\importManagement\index.js
+
 import { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -29,6 +31,16 @@ import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import DataTable from "examples/Tables/DataTable";
 import Footer from "examples/Footer";
 import { useMaterialUIController } from "context";
+
+// ======================= INÍCIO DA ALTERAÇÃO =======================
+// Dicionário para tradução e colorização dos status
+const statusMap = {
+  SUCCESS: { text: "SUCESSO", color: "success" },
+  FAILED: { text: "FALHA", color: "error" },
+  PENDING: { text: "PENDENTE", color: "warning" },
+  PROCESSING: { text: "PROCESSANDO", color: "info" },
+};
+// ======================== FIM DA ALTERAÇÃO =======================
 
 function ImportManagement() {
   const [controller] = useMaterialUIController();
@@ -157,7 +169,6 @@ function ImportManagement() {
   const handleOpenTemplateModal = () => setTemplateModalOpen(true);
   const handleCloseTemplateModal = () => setTemplateModalOpen(false);
 
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   const handleDownloadTemplate = () => {
     const header = "id_user,nome_completo,email,status,cpf,userType,last_login,perfil\n";
     const blob = new Blob([header], { type: 'text/csv;charset=utf-8;' });
@@ -170,7 +181,6 @@ function ImportManagement() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
-  // ======================== FIM DA ALTERAÇÃO =======================
 
   const { columns, rows } = {
     columns: [
@@ -183,7 +193,16 @@ function ImportManagement() {
         { Header: "Ações", accessor: "acoes", align: "center" },
     ],
     rows: history.map(log => ({
-        status: <MDBadge badgeContent={log.status} color={log.status === "SUCCESS" ? "success" : log.status === "FAILED" ? "error" : "warning"} size="sm" container />,
+        // ======================= INÍCIO DA ALTERAÇÃO =======================
+        status: (
+          <MDBadge 
+            badgeContent={statusMap[log.status]?.text || log.status} 
+            color={statusMap[log.status]?.color || "secondary"} 
+            size="sm" 
+            container 
+          />
+        ),
+        // ======================== FIM DA ALTERAÇÃO =======================
         sistema: <MDTypography variant="caption">{log.targetSystem}</MDTypography>,
         arquivo: <MDTypography variant="caption" fontWeight="medium">{log.fileName}</MDTypography>,
         data: <MDTypography variant="caption">{new Date(log.createdAt).toLocaleString('pt-BR')}</MDTypography>,
@@ -299,7 +318,6 @@ function ImportManagement() {
           <DialogContentText sx={{ mb: 2 }}>
             Para garantir a importação, o cabeçalho do seu arquivo CSV deve conter as seguintes colunas, na ordem exata:
           </DialogContentText>
-          {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
           <Box component="ul" sx={{ pl: 2, listStyle: 'disc' }}>
             <ColumnDetail name="id_user" description="Identificador único do usuário no sistema de origem." example="1023A" />
             <ColumnDetail name="nome_completo" description="Nome completo do colaborador." example="Ana Carolina de Souza" />
@@ -310,7 +328,6 @@ function ImportManagement() {
             <ColumnDetail name="last_login" description="Data do último acesso no formato AAAA-MM-DD." example="2025-09-15" />
             <ColumnDetail name="perfil" description="Define o perfil de acesso do usuário (ex: Admin, Usuário)." example="Admin" />
           </Box>
-          {/* ======================== FIM DA ALTERAÇÃO ======================= */}
         </DialogContent>
         <DialogActions sx={{ p: '16px 24px' }}>
           <MDButton onClick={handleDownloadTemplate} color="success" variant="contained" startIcon={<Icon>download</Icon>}>

@@ -7,25 +7,6 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Função auxiliar para checar todas as divergências entre duas identidades
-const checkDivergences = (appUser, rhUser) => {
-  if (!rhUser) return true; // Se não existe no RH, é uma divergência
-
-  const cleanText = (text) => text?.trim().toLowerCase();
-  const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
-
-  if (appUser.status === 'Ativo' && rhUser.status === 'Inativo') return true;
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
-  // Removida a verificação do campo 'login', que não existe mais no modelo padronizado
-  // if (appUser.login && rhUser.login && cleanText(appUser.login) !== cleanText(rhUser.login)) return true;
-  // ======================== FIM DA ALTERAÇÃO =======================
-  if (appUser.cpf && rhUser.cpf && cleanCpf(appUser.cpf) !== cleanCpf(rhUser.cpf)) return true;
-  if (appUser.name && rhUser.name && cleanText(appUser.name) !== cleanText(appUser.name)) return true;
-  if (appUser.email && rhUser.email && cleanText(appUser.email) !== cleanText(rhUser.email)) return true;
-
-  return false;
-};
-
 const getLiveFeedData = async (req, res) => {
   const { system } = req.query;
 
@@ -35,12 +16,10 @@ const getLiveFeedData = async (req, res) => {
       whereClause.sourceSystem = { equals: system, mode: 'insensitive' };
     }
     
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const [rhIdentities, appIdentities] = await Promise.all([
       prisma.identity.findMany({
         where: { sourceSystem: { equals: 'RH', mode: 'insensitive' } },
       }),
-      // A consulta agora inclui o 'profile' relacionado
       prisma.identity.findMany({
         where: whereClause,
         include: {
@@ -50,28 +29,84 @@ const getLiveFeedData = async (req, res) => {
         }
       }),
     ]);
-    // ======================== FIM DA ALTERAÇÃO =======================
 
-    // Cria um mapa do RH para buscas eficientes
     const rhMap = new Map(rhIdentities.map(i => [i.identityId, i]));
+    
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const cleanText = (text) => text?.trim().toLowerCase();
+    const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
 
-    // Lógica App-cêntrica: constrói o feed a partir das identidades dos sistemas de aplicação
     const finalData = appIdentities.map(appUser => {
       const rhUser = rhMap.get(appUser.identityId);
+
+      // ======================= INÍCIO DA ALTERAÇÃO =======================
+      const divergenceDetails = [];
+
+      const isOrphan = !rhUser;
+      if (isOrphan) {
+        divergenceDetails.push({ code: 'ORPHAN', text: 'Conta Órfã: Usuário não foi encontrado no sistema de RH.' });
+      }
+
+      const isZombie = rhUser && appUser.status === 'Ativo' && rhUser.status === 'Inativo';
+      if (isZombie) {
+        divergenceDetails.push({ code: 'ZOMBIE', text: 'Acesso Ativo Indevido: Conta está ativa no sistema, mas inativa no RH.' });
+      }
+
+      const hasCpfDivergence = rhUser && appUser.cpf && rhUser.cpf && cleanCpf(appUser.cpf) !== cleanCpf(rhUser.cpf);
+      if (hasCpfDivergence) {
+        divergenceDetails.push({ code: 'CPF_MISMATCH', text: 'Divergência de CPF.' });
+      }
+
+      const hasNameDivergence = rhUser && appUser.name && rhUser.name && cleanText(appUser.name) !== cleanText(rhUser.name);
+      if (hasNameDivergence) {
+        divergenceDetails.push({ code: 'NAME_MISMATCH', text: 'Divergência de Nome.' });
+      }
+      
+      const hasEmailDivergence = rhUser && appUser.email && rhUser.email && cleanText(appUser.email) !== cleanText(rhUser.email);
+      if (hasEmailDivergence) {
+        divergenceDetails.push({ code: 'EMAIL_MISMATCH', text: 'Divergência de E-mail.' });
+      }
+
+      const hasUserTypeDivergence = rhUser && appUser.userType && rhUser.userType && cleanText(appUser.userType) !== cleanText(rhUser.userType);
+      if (hasUserTypeDivergence) {
+        divergenceDetails.push({ code: 'USERTYPE_MISMATCH', text: 'Divergência de Tipo de Usuário.' });
+      }
+
+      const hasAnyDivergence = divergenceDetails.length > 0;
+
+      let isCritical = false;
+      const isAdmin = appUser.profile?.name === 'Admin';
+      
+      const loginDateStr = appUser.extraData?.last_login;
+      const loginDate = loginDateStr ? new Date(loginDateStr) : null;
+      const isDormant = loginDate && !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
+      
+      const isAdminDormente = isAdmin && isDormant;
+      if (isAdminDormente) {
+        // Adiciona a dormência como um detalhe de inconsistência para admins
+        divergenceDetails.push({ code: 'DORMANT_ADMIN', text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).' });
+      }
+      
+      const isAdminComDivergencia = isAdmin && hasAnyDivergence;
+
+      if (isZombie || hasCpfDivergence || isAdminDormente || isAdminComDivergencia) {
+        isCritical = true;
+      }
+      // ======================== FIM DA ALTERAÇÃO =======================
       
       return {
         identityId: appUser.identityId,
         name: appUser.name,
         email: appUser.email,
         userType: appUser.userType,
-        // ======================= INÍCIO DA ALTERAÇÃO =======================
-        // O perfil agora é lido da relação, não mais do 'extraData'
         perfil: appUser.profile?.name || 'N/A',
-        // ======================== FIM DA ALTERAÇÃO =======================
         rh_status: rhUser?.status || 'Não encontrado',
         app_status: appUser.status || 'N/A',
         sourceSystem: appUser.sourceSystem,
-        divergence: checkDivergences(appUser, rhUser),
+        divergence: hasAnyDivergence,
+        isCritical: isCritical,
+        divergenceDetails: divergenceDetails, // Novo campo com a lista de detalhes
       };
     });
     
