@@ -127,12 +127,16 @@ function LiveFeed({ data }) {
     const handleOpenModal = (user) => { setSelectedUser(user); setIsModalOpen(true); };
     const handleCloseModal = () => { setIsModalOpen(false); setSelectedUser(null); };
 
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const handleGeneratePdf = () => {
         const doc = new jsPDF();
-        const tableColumns = [...tableData.columns.map(c => c.Header)];
+        // Pega todos os cabeçalhos da tabela
+        const tableColumns = tableData.columns.map(c => c.Header);
         const tableRows = [];
 
+        // Itera sobre os dados brutos para garantir que os valores sejam texto simples
         tableData.rawData.forEach(user => {
+            // Constrói a linha com os dados correspondentes a TODAS as colunas
             const rowData = [
                 user.name || '-',
                 user.email || '-',
@@ -141,18 +145,20 @@ function LiveFeed({ data }) {
                 user.app_status || '-',
                 user.perfil || '-',
                 user.divergence ? 'Sim' : 'Não',
+                user.isCritical ? 'Sim' : 'Não', // Adiciona o dado de Críticas
             ];
             tableRows.push(rowData);
         });
 
         doc.text("Relatório - Live Feed", 14, 15);
         autoTable(doc, {
-            head: [tableColumns.filter(header => header !== "CRÍTICAS" && header !== "NOME")],
+            head: [tableColumns], // Usa todos os cabeçalhos, sem filtrar
             body: tableRows,
             startY: 20,
         });
         doc.save(`relatorio_live_feed_${new Date().toISOString().slice(0,10)}.pdf`);
     };
+    // ======================== FIM DA ALTERAÇÃO =======================
 
     const tableData = useMemo(() => {
         let filteredData = data || [];
@@ -184,7 +190,6 @@ function LiveFeed({ data }) {
           app_status: <StatusCell status={u.app_status} />,
           perfil: <MDTypography variant="caption">{u.perfil}</MDTypography>,
           diverg: <MDBadge badgeContent={u.divergence ? "Sim" : "Não"} color={u.divergence ? "error" : "success"} size="xs" container />,
-          // ======================= INÍCIO DA ALTERAÇÃO =======================
           criticas: (
             <MDBadge 
               badgeContent={u.isCritical ? "Sim" : "Não"} 
@@ -193,7 +198,6 @@ function LiveFeed({ data }) {
               container 
             />
           ),
-          // ======================== FIM DA ALTERAÇÃO =======================
         }));
 
 
