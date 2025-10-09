@@ -13,7 +13,8 @@ const apiRoutes = [
   '/metrics',
   '/identities',
   '/divergences',
-  '/live-feed', // <-- ROTA ADICIONADA AQUI
+  '/live-feed',
+  '/systems',
 ];
 
 // Configuração do proxy com a função onProxyReq

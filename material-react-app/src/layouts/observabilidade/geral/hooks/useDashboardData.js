@@ -51,8 +51,6 @@ function useDashboardData(metrics, isLoading) {
         divergencias: { ...defaultData.imDisplay.divergencias, ...metrics.divergencias },
     };
 
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
-    // Lógica principal do gráfico de riscos atualizada
     const riscosConsolidadosChart = {
         labels: ["Contas Admin com Risco", "Acessos Ativos Indevidos", "Contas Órfãs"],
         datasets: [{
@@ -65,7 +63,6 @@ function useDashboardData(metrics, isLoading) {
             ]
         }]
     };
-    // ======================== FIM DA ALTERAÇÃO =======================
     
     return { 
         imDisplay,

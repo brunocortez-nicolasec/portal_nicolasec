@@ -29,6 +29,8 @@ model User {
   packageId     Int?
   package       Package?    @relation(fields: [packageId], references: [id])
   importLogs    ImportLog[]
+  systems       System[] // Relação com os novos sistemas criados pelo usuário
+
   @@map("users")
 }
 
@@ -37,6 +39,7 @@ model PasswordReset {
   email     String
   token     String   @unique
   createdAt DateTime @default(now())
+
   @@map("password_resets")
 }
 
@@ -46,6 +49,7 @@ model Credential {
   path      String   @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
   @@map("credentials")
 }
 
@@ -55,6 +59,7 @@ model Role {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   users     User[]
+
   @@map("roles")
 }
 
@@ -64,16 +69,18 @@ model Group {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   users     User[]
+
   @@map("groups")
 }
 
 model Platform {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  key      String    @unique
-  route    String    @unique
-  icon     String?
-  packages Package[]
+  id        Int       @id @default(autoincrement())
+  name      String    @unique
+  key       String    @unique
+  route     String    @unique
+  icon      String?
+  packages  Package[]
+
   @@map("platforms")
 }
 
@@ -85,8 +92,23 @@ model Package {
   updatedAt   DateTime   @updatedAt
   platforms   Platform[]
   users       User[]
+
   @@map("packages")
 }
+
+// ======================= INÍCIO DA NOVA ADIÇÃO =======================
+model System {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("systems")
+}
+// ======================== FIM DA NOVA ADIÇÃO =======================
 
 model ImportLog {
   id            Int          @id @default(autoincrement())
@@ -100,11 +122,10 @@ model ImportLog {
   completedAt   DateTime?
   userId        Int
   user          User         @relation(fields: [userId], references: [id])
+
   @@map("import_logs")
 }
 
-// ======================= INÍCIO DA ALTERAÇÃO =======================
-// --- NOVO MODELO: ARMAZENA OS PERFIS/ROLES DAS IDENTIDADES ---
 model Profile {
   id         Int        @id @default(autoincrement())
   name       String     @unique
@@ -115,7 +136,6 @@ model Profile {
   @@map("profiles")
 }
 
-// --- MODELO ATUALIZADO: ARMAZENA AS IDENTIDADES DOS ARQUIVOS CSV ---
 model Identity {
   id           Int      @id @default(autoincrement())
   sourceSystem String   // Sistema de origem do dado (ex: "TruIM", "SAP", "RH")
@@ -128,13 +148,9 @@ model Identity {
   extraData    Json?    // Campo flexível para armazenar outras colunas do CSV
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  profileId    Int?
+  profile      Profile? @relation(fields: [profileId], references: [id])
 
-  // Relação com o novo modelo Profile
-  profileId Int?
-  profile   Profile? @relation(fields: [profileId], references: [id])
-
-  // Garante que não teremos identidades duplicadas para o mesmo sistema
   @@unique([sourceSystem, identityId])
   @@map("identities")
 }
-// ======================== FIM DA ALTERAÇÃO =======================

@@ -40,7 +40,6 @@ const getLiveFeedData = async (req, res) => {
     const finalData = appIdentities.map(appUser => {
       const rhUser = rhMap.get(appUser.identityId);
 
-      // ======================= INÍCIO DA ALTERAÇÃO =======================
       const divergenceDetails = [];
 
       const isOrphan = !rhUser;
@@ -84,7 +83,6 @@ const getLiveFeedData = async (req, res) => {
       
       const isAdminDormente = isAdmin && isDormant;
       if (isAdminDormente) {
-        // Adiciona a dormência como um detalhe de inconsistência para admins
         divergenceDetails.push({ code: 'DORMANT_ADMIN', text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).' });
       }
       
@@ -93,8 +91,8 @@ const getLiveFeedData = async (req, res) => {
       if (isZombie || hasCpfDivergence || isAdminDormente || isAdminComDivergencia) {
         isCritical = true;
       }
-      // ======================== FIM DA ALTERAÇÃO =======================
       
+      // ======================= INÍCIO DA ALTERAÇÃO =======================
       return {
         identityId: appUser.identityId,
         name: appUser.name,
@@ -106,8 +104,13 @@ const getLiveFeedData = async (req, res) => {
         sourceSystem: appUser.sourceSystem,
         divergence: hasAnyDivergence,
         isCritical: isCritical,
-        divergenceDetails: divergenceDetails, // Novo campo com a lista de detalhes
+        divergenceDetails: divergenceDetails,
+        // Campos adicionados para o modal de detalhes
+        id_user: appUser.identityId, // O frontend espera por 'id_user'
+        cpf: appUser.cpf,
+        last_login: appUser.extraData?.last_login,
       };
+      // ======================== FIM DA ALTERAÇÃO =======================
     });
     
     return res.status(200).json(finalData);

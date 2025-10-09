@@ -1,6 +1,10 @@
 // material-react-app/src/layouts/observabilidade/geral/components/Painel.js
 
-import React from "react";
+// --- 1. ADICIONAR IMPORTS NECESSÁRIOS ---
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { useMaterialUIController } from "context";
+
 import { useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 
@@ -17,7 +21,7 @@ import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import PieChart from "examples/Charts/PieChart";
 
-// --- Sub-componentes (não alterados) ---
+// --- Sub-componentes ---
 
 function PillKpi({ label, count, color }) {
   return (
@@ -64,13 +68,37 @@ function MiniMetricCard({ title, count, color = "dark" }) {
 function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform }) {
   const navigate = useNavigate();
 
-  const systems = ["Geral", "SAP", "Salesforce", "ServiceNow", "IDM", "Cofre", "TruAm", "TruIM", "TruPAM", "VPN", "Acesso Internet"];
+  // --- 2. ACESSAR TOKEN, REMOVER LISTA FIXA E ADICIONAR ESTADO DINÂMICO ---
+  const [controller] = useMaterialUIController();
+  const { token } = controller;
+  const [systemOptions, setSystemOptions] = useState(["Geral"]); // Inicia com "Geral"
+
+  // --- 3. ADICIONAR FUNÇÃO E useEffect PARA BUSCAR SISTEMAS DA API ---
+  useEffect(() => {
+    const fetchSystems = async () => {
+      if (!token) return;
+      try {
+        const response = await axios.get('/systems', {
+          headers: { "Authorization": `Bearer ${token}` },
+        });
+        const systemNames = response.data.map(system => system.name);
+        // Adiciona "Geral" no início da lista vinda da API
+        setSystemOptions(["Geral", ...systemNames]);
+      } catch (error) {
+        console.error("Erro ao buscar a lista de sistemas:", error);
+        // Mantém pelo menos a opção "Geral" em caso de erro
+        setSystemOptions(["Geral"]);
+      }
+    };
+
+    fetchSystems();
+  }, [token]);
+
+
   const titleText = selectedPlatform === "Geral" ? "Painel Geral" : `Painel de ${selectedPlatform}`;
   
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   // Cria um rótulo dinâmico para o card
   const appLabel = selectedPlatform === "Geral" ? "App" : selectedPlatform;
-  // ======================== FIM DA ALTERAÇÃO =======================
 
   const handleSystemSelect = (event, newValue) => {
     if (newValue) {
@@ -90,9 +118,10 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
           <MDTypography variant="h6">{titleText}</MDTypography>
         </MDBox>
         <MDBox sx={{ flex: 1, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
+          {/* --- 4. ATUALIZAR O AUTOCOMPLETE PARA USAR AS OPÇÕES DINÂMICAS --- */}
           <Autocomplete
             disableClearable
-            options={systems}
+            options={systemOptions}
             value={selectedPlatform}
             onChange={handleSystemSelect}
             size="small"
@@ -133,10 +162,8 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
               <Grid item xs={12}>
                 <Card sx={{ height: "100%", p: 1 }}>
                   <Grid container spacing={1} sx={{height: '100%'}}>
-                    {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
                     <Grid item xs={6}><MiniMetricCard title={`Ativos não encontrados no ${appLabel}`} count={imDisplay.divergencias.acessoPrevistoNaoConcedido} color="error"/></Grid>
                     <Grid item xs={6}><MiniMetricCard title="Ativos não encontrados no RH" count={imDisplay.divergencias.ativosNaoEncontradosRH} color="warning"/></Grid>
-                    {/* ======================== FIM DA ALTERAÇÃO ======================= */}
                   </Grid>
                 </Card>
               </Grid>

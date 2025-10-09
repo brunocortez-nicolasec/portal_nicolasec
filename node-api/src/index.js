@@ -1,3 +1,4 @@
+// node-api\src\index.js
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
@@ -14,8 +15,8 @@ import importsRoutes from "./services/imports/index.js";
 import metricsRoutes from "./services/metrics/index.js";
 import identitiesRoutes from "./services/identities/index.js";
 import divergencesRoutes from "./services/divergences/index.js";
-// --- 1. ADICIONADO O IMPORT DAS NOVAS ROTAS DO LIVE FEED ---
 import livefeedRoutes from "./services/livefeed/index.js";
+import systemsRoutes from "./services/systems/index.js";
 import path from "path";
 import * as fs from "fs";
 
@@ -72,6 +73,7 @@ app.use("/metrics", metricsRoutes);
 app.use("/identities", identitiesRoutes);
 app.use("/divergences", divergencesRoutes);
 app.use("/live-feed", livefeedRoutes);
+app.use("/systems", systemsRoutes);
 app.use("/conjur", jsonParser, conjurRoutes);
 
 

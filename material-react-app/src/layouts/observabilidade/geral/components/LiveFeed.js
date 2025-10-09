@@ -1,8 +1,10 @@
 // material-react-app\src\layouts\observabilidade\geral\components\LiveFeed.js
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react"; // Adicionado useEffect
 import PropTypes from "prop-types";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import axios from "axios"; // Adicionado axios
+import { useMaterialUIController } from "context"; // Adicionado context
 
 // Componentes do Template
 import Card from "@mui/material/Card";
@@ -46,8 +48,8 @@ const StatusCell = ({ status }) => {
 
 const InfoDetail = ({ label, value }) => (
     <Grid container spacing={1} sx={{ mb: 1.5 }}>
-        <Grid item xs={4}><MDTypography variant="caption" color="text" sx={{ fontWeight: 'regular' }}>{label}:</MDTypography></Grid>
-        <Grid item xs={8}><MDTypography variant="button" fontWeight="medium" sx={{ textAlign: 'right' }}>{value || "-"}</MDTypography></Grid>
+        <Grid item xs={5}><MDTypography variant="caption" color="text" sx={{ fontWeight: 'regular' }}>{label}:</MDTypography></Grid>
+        <Grid item xs={7}><MDTypography variant="button" fontWeight="medium">{value || "-"}</MDTypography></Grid>
     </Grid>
 );
 
@@ -55,31 +57,36 @@ const DivergenceModal = React.forwardRef(({ user, onClose }, ref) => {
     if (!user) return null;
     return (
         <Box ref={ref} tabIndex={-1}>
-            <Card sx={{ width: "80vw", maxWidth: "600px", maxHeight: "90vh", overflowY: "auto" }}>
+            <Card sx={{ width: "80vw", maxWidth: "700px", maxHeight: "90vh", overflowY: "auto" }}>
                 <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
                     <MDTypography variant="h6">Detalhes da Identidade</MDTypography>
                     <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
                 </MDBox>
                 <Divider sx={{ margin: 0 }} />
                 <MDBox p={3}>
-                    <Grid container spacing={2}>
+                    <Grid container spacing={4}>
                         <Grid item xs={12} md={6}>
-                            <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Informações</MDTypography>
+                            <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Identificação</MDTypography>
                             <MDBox mt={2}>
                                 <InfoDetail label="Nome" value={user.name} />
                                 <InfoDetail label="Email" value={user.email} />
-                                <InfoDetail label="Tipo" value={user.userType} />
-                                <InfoDetail label="Perfil App" value={user.perfil} />
+                                <InfoDetail label="CPF" value={user.cpf} />
+                                <InfoDetail label="ID de Origem" value={user.id_user} />
                             </MDBox>
                         </Grid>
+
                         <Grid item xs={12} md={6}>
-                             <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Status</MDTypography>
+                             <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Status e Acesso</MDTypography>
                              <MDBox mt={2}>
+                                <InfoDetail label="Tipo" value={user.userType} />
                                 <InfoDetail label="Status RH" value={user.rh_status} />
                                 <InfoDetail label="Status App" value={user.app_status} />
+                                <InfoDetail label="Perfil App" value={user.perfil} />
+                                <InfoDetail label="Último Login" value={user.last_login ? new Date(user.last_login).toLocaleDateString('pt-BR') : '-'} />
                              </MDBox>
                         </Grid>
                     </Grid>
+
                     <Divider sx={{ mt: 3, mb: 2 }} />
                     <MDBox>
                         <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Inconsistências Encontradas</MDTypography>
@@ -103,8 +110,30 @@ const DivergenceModal = React.forwardRef(({ user, onClose }, ref) => {
     );
 });
 
-// --- Componente Principal do LiveFeed ---
+
 function LiveFeed({ data }) {
+    // --- 1. ADICIONAR ESTADOS E LÓGICA PARA BUSCAR SISTEMAS DINAMICAMENTE ---
+    const [controller] = useMaterialUIController();
+    const { token } = controller;
+    const [systemOptions, setSystemOptions] = useState([]);
+
+    useEffect(() => {
+        const fetchSystems = async () => {
+            if (!token) return;
+            try {
+                const response = await axios.get('/systems', {
+                    headers: { "Authorization": `Bearer ${token}` },
+                });
+                const systemNames = response.data.map(system => system.name);
+                setSystemOptions(systemNames);
+            } catch (error) {
+                console.error("Erro ao buscar a lista de sistemas para os filtros:", error);
+            }
+        };
+        fetchSystems();
+    }, [token]);
+    // --- FIM DA ADIÇÃO ---
+
     const [searchTerm, setSearchTerm] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
@@ -114,8 +143,8 @@ function LiveFeed({ data }) {
     const [filters, setFilters] = useState(initialFilters);
     const [tempFilters, setTempFilters] = useState(initialFilters);
 
-    const systemOptions = ["SAP", "Salesforce", "ServiceNow", "IDM", "Cofre", "TruAm", "TruIM", "TruPAM", "VPN", "Acesso Internet"];
-
+    // A linha abaixo com a lista fixa foi removida.
+    
     const open = Boolean(anchorEl);
     
     const handleFilterMenuOpen = (event) => { setTempFilters(filters); setAnchorEl(event.currentTarget); };
@@ -127,16 +156,12 @@ function LiveFeed({ data }) {
     const handleOpenModal = (user) => { setSelectedUser(user); setIsModalOpen(true); };
     const handleCloseModal = () => { setIsModalOpen(false); setSelectedUser(null); };
 
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const handleGeneratePdf = () => {
         const doc = new jsPDF();
-        // Pega todos os cabeçalhos da tabela
         const tableColumns = tableData.columns.map(c => c.Header);
         const tableRows = [];
 
-        // Itera sobre os dados brutos para garantir que os valores sejam texto simples
         tableData.rawData.forEach(user => {
-            // Constrói a linha com os dados correspondentes a TODAS as colunas
             const rowData = [
                 user.name || '-',
                 user.email || '-',
@@ -145,20 +170,19 @@ function LiveFeed({ data }) {
                 user.app_status || '-',
                 user.perfil || '-',
                 user.divergence ? 'Sim' : 'Não',
-                user.isCritical ? 'Sim' : 'Não', // Adiciona o dado de Críticas
+                user.isCritical ? 'Sim' : 'Não',
             ];
             tableRows.push(rowData);
         });
 
         doc.text("Relatório - Live Feed", 14, 15);
         autoTable(doc, {
-            head: [tableColumns], // Usa todos os cabeçalhos, sem filtrar
+            head: [tableColumns],
             body: tableRows,
             startY: 20,
         });
         doc.save(`relatorio_live_feed_${new Date().toISOString().slice(0,10)}.pdf`);
     };
-    // ======================== FIM DA ALTERAÇÃO =======================
 
     const tableData = useMemo(() => {
         let filteredData = data || [];
@@ -199,7 +223,6 @@ function LiveFeed({ data }) {
             />
           ),
         }));
-
 
         return {
             columns: [ 
@@ -252,6 +275,7 @@ function LiveFeed({ data }) {
                         <MDBox mt={2}><MDInput label="Perfil" name="perfil" value={tempFilters.perfil} onChange={handleTempFilterChange} fullWidth /></MDBox>
                         
                         <MDBox mt={2}>
+                            {/* --- 2. ATUALIZAR O AUTOCOMPLETE DOS FILTROS --- */}
                             <Autocomplete 
                                 options={systemOptions}
                                 value={tempFilters.sistema}

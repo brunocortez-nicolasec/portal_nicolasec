@@ -78,7 +78,7 @@ function BasicLayout({ image, children }) {
                     width="80%"
                   >
                     <Typography variant="h3" style={{ color: "white" }}>
-                      Faça o Login no Portal NicolaSec!
+                      Faça o Login no Mind The Gap!
                     </Typography>
                     <Typography variant="body2" style={{ color: "white" }} margin="0.5rem 0">
                       Se conecte para ver todos os serviços e plataformas de segurança da informação disponibilizados por NicolaSec

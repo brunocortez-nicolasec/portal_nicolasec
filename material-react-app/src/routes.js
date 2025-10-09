@@ -1,3 +1,5 @@
+// material-react-app\src\routes.js
+
 // Material Dashboard 2 React layouts
 import UserProfile from "layouts/user-profile";
 
@@ -17,21 +19,22 @@ import DashboardTruPAM from "layouts/observabilidade/trupam";
 import DashboardTruAM from "layouts/observabilidade/truam";
 import VisaoGeral from "layouts/observabilidade/geral";
 import ImportManagement from "layouts/observabilidade/importManagement";
+// --- 1. ATUALIZAR O CAMINHO DO IMPORT ---
+import GerenciarSistemas from "layouts/observabilidade/sistemas";
+
 
 // @mui icons
 import Icon from "@mui/material/Icon";
 
 const routes = [
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   {
     type: "collapse",
-    name: "Mind the Gap",
+    name: "Painel",
     key: "mind-the-gap",
     icon: <Icon fontSize="small">dashboard</Icon>,
-    route: "/mind-the-gap", // Rota atualizada
+    route: "/mind-the-gap",
     component: <VisaoGeral />,
   },
-  // ======================== FIM DA ALTERAÇÃO =======================
   {
     type: "examples",
     name: "Perfil de Usuário",
@@ -78,12 +81,20 @@ const routes = [
     key: "observabilidade",
     icon: <Icon fontSize="small">monitoring</Icon>,
     collapse: [
+      // --- 2. ADICIONAR A NOVA ROTA AQUI ---
       {
         name: "Importações",
         key: "gerenciar-importacoes",
         route: "/observabilidade/import-management",
         component: <ImportManagement />,
         icon: <Icon fontSize="small">upload_file</Icon>,
+      },
+      {
+        name: "Sistemas",
+        key: "sistemas",
+        route: "/observabilidade/sistemas", // Rota atualizada
+        component: <GerenciarSistemas />,
+        icon: <Icon fontSize="small">storage</Icon>,
       },
       {
         name: "TruIM",
@@ -115,6 +126,7 @@ const routes = [
     icon: <Icon fontSize="small">admin_panel_settings</Icon>,
     role: "Admin",
     collapse: [
+    // --- 3. ROTA REMOVIDA DE "ADMINISTRAR" ---
     {
       name: "Usuários",
       key: "usuarios",
