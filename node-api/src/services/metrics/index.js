@@ -1,4 +1,4 @@
-// node-api\src\services\metrics\index.js
+// node-api/src/services/metrics/index.js
 
 import express from "express";
 import passport from "passport";
@@ -12,7 +12,8 @@ const getSystemMetrics = async (req, res) => {
   const isGeneral = system.toLowerCase() === 'geral';
 
   try {
-    const [systemIdentities, rhIdentities] = await Promise.all([
+    // --- ALTERAÇÃO 1: Busca as exceções criadas pelo usuário junto com os outros dados ---
+    const [systemIdentities, rhIdentities, userExceptions] = await Promise.all([
       prisma.identity.findMany({
         where: isGeneral 
           ? { sourceSystem: { not: 'RH' } } 
@@ -23,75 +24,62 @@ const getSystemMetrics = async (req, res) => {
         where: { sourceSystem: { equals: 'RH', mode: 'insensitive' } },
         include: { profile: { select: { name: true } } },
       }),
+      // Nova busca pelas exceções
+      prisma.divergenceException.findMany({
+        where: { userId: req.user.id },
+      }),
     ]);
 
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
-    // Cláusula de guarda: se um sistema específico não tem dados, retorna tudo zerado.
+    // Cláusula de guarda (sem alteração)
     if (!isGeneral && systemIdentities.length === 0) {
       const zeroMetrics = {
         pills: { total: 0, ativos: 0, inativos: 0, desconhecido: 0 },
         tiposDeUsuario: [],
         kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0, adminsDormentes: 0 },
-        divergencias: {
-          inativosRHAtivosApp: 0,
-          cpf: 0,
-          nome: 0,
-          email: 0,
-          acessoPrevistoNaoConcedido: 0,
-          ativosNaoEncontradosRH: 0,
-        },
+        divergencias: { inativosRHAtivosApp: 0, cpf: 0, nome: 0, email: 0, acessoPrevistoNaoConcedido: 0, ativosNaoEncontradosRH: 0 },
         pamRiscos: { acessosIndevidos: 0 },
-        riscos: {
-          prejuizoPotencial: 'R$ 0',
-          valorMitigado: 'R$ 0',
-          indiceConformidade: 100.0,
-          prejuizoBreakdown: [],
-          riscosEmContasPrivilegiadas: 0,
-        },
+        riscos: { prejuizoPotencial: 'R$ 0', valorMitigado: 'R$ 0', indiceConformidade: 100.0, prejuizoBreakdown: [], riscosEmContasPrivilegiadas: 0 },
       };
       return res.status(200).json(zeroMetrics);
     }
-    // ======================== FIM DA ALTERAÇÃO =======================
 
-    // 2. Calcula as métricas simples
+    // Métricas simples (sem alteração)
     const total = systemIdentities.length;
     const active = systemIdentities.filter(i => i.status === 'Ativo').length;
     const inactive = systemIdentities.filter(i => i.status === 'Inativo').length;
     const unknown = total - (active + inactive);
-    
     const byUserType = systemIdentities.reduce((acc, identity) => {
         const key = identity.userType || 'Não categorizado';
         acc[key] = (acc[key] || 0) + 1;
         return acc;
     }, {});
-
     const acessoPrivilegiado = systemIdentities.filter(i => i.status === 'Ativo' && i.profile?.name === 'Admin').length;
-
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    
     const dormantIdentities = systemIdentities.filter(i => {
       const loginDateStr = i.extraData?.last_login;
       if (i.status !== 'Ativo' || !loginDateStr) return false;
       const loginDate = new Date(loginDateStr);
       return !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
     });
-
     const contasDormentes = dormantIdentities.length;
     const adminsDormentes = dormantIdentities.filter(i => i.profile?.name === 'Admin').length;
 
-    // 3. Calcula as métricas de Divergência e Risco
+    // Lógica de Divergência e Risco
     const rhMap = new Map(rhIdentities.map(i => [i.identityId, i]));
     
+    // --- ALTERAÇÃO 2: Cria um Set para consulta rápida das exceções ---
+    const exceptionsSet = new Set(
+      userExceptions.map(ex => `${ex.identityId}_${ex.divergenceCode}`)
+    );
+
     let inativosRHAtivosAppCount = 0;
     let divergenciaCpfCount = 0;
     let divergenciaNomeCount = 0;
     let divergenciaEmailCount = 0;
     let naoEncontradosRHCount = 0;
     const adminsComDivergencia = new Set();
-    
     const divergentSystemIdentities = new Set();
-    
     const cleanText = (text) => text?.trim().toLowerCase();
     const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
 
@@ -99,14 +87,37 @@ const getSystemMetrics = async (req, res) => {
       const rhEquivalent = rhMap.get(identity.identityId);
       let hasDivergence = false;
 
+      // --- ALTERAÇÃO 3: Adiciona a verificação de exceção antes de contar a divergência ---
       if (!rhEquivalent) {
-        naoEncontradosRHCount++;
-        hasDivergence = true;
+        if (!exceptionsSet.has(`${identity.id}_ORPHAN_ACCOUNT`)) {
+          naoEncontradosRHCount++;
+          hasDivergence = true;
+        }
       } else {
-        if (identity.status === 'Ativo' && rhEquivalent.status === 'Inativo') { inativosRHAtivosAppCount++; hasDivergence = true; }
-        if (identity.cpf && rhEquivalent.cpf && cleanCpf(identity.cpf) !== cleanCpf(rhEquivalent.cpf)) { divergenciaCpfCount++; hasDivergence = true; }
-        if (identity.name && rhEquivalent.name && cleanText(identity.name) !== cleanText(rhEquivalent.name)) { divergenciaNomeCount++; hasDivergence = true; }
-        if (identity.email && rhEquivalent.email && cleanText(identity.email) !== cleanText(rhEquivalent.email)) { divergenciaEmailCount++; hasDivergence = true; }
+        if (identity.status === 'Ativo' && rhEquivalent.status === 'Inativo') {
+          if (!exceptionsSet.has(`${identity.id}_ZOMBIE_ACCOUNT`)) {
+            inativosRHAtivosAppCount++;
+            hasDivergence = true;
+          }
+        }
+        if (identity.cpf && rhEquivalent.cpf && cleanCpf(identity.cpf) !== cleanCpf(rhEquivalent.cpf)) {
+          if (!exceptionsSet.has(`${identity.id}_CPF_MISMATCH`)) {
+            divergenciaCpfCount++;
+            hasDivergence = true;
+          }
+        }
+        if (identity.name && rhEquivalent.name && cleanText(identity.name) !== cleanText(rhEquivalent.name)) {
+          if (!exceptionsSet.has(`${identity.id}_NAME_MISMATCH`)) {
+            divergenciaNomeCount++;
+            hasDivergence = true;
+          }
+        }
+        if (identity.email && rhEquivalent.email && cleanText(identity.email) !== cleanText(rhEquivalent.email)) {
+          if (!exceptionsSet.has(`${identity.id}_EMAIL_MISMATCH`)) {
+            divergenciaEmailCount++;
+            hasDivergence = true;
+          }
+        }
       }
 
       if (hasDivergence) {
@@ -118,72 +129,52 @@ const getSystemMetrics = async (req, res) => {
       }
     });
     
+    // O restante do código permanece o mesmo
     let acessoPrevistoNaoConcedidoCount = 0;
     const activeRhIdentities = rhIdentities.filter(rhId => rhId.status === 'Ativo');
-
     if (isGeneral) {
       const identitiesBySystem = systemIdentities.reduce((acc, identity) => {
         const systemKey = identity.sourceSystem;
-        if (!acc[systemKey]) {
-          acc[systemKey] = [];
-        }
+        if (!acc[systemKey]) acc[systemKey] = [];
         acc[systemKey].push(identity);
         return acc;
       }, {});
-
       for (const systemName in identitiesBySystem) {
         const systemSpecificIdentities = identitiesBySystem[systemName];
         const systemIdSet = new Set(systemSpecificIdentities.map(i => i.identityId));
         const missingInThisSystem = activeRhIdentities.filter(rhIdentity => !systemIdSet.has(rhIdentity.identityId));
-        
         acessoPrevistoNaoConcedidoCount += missingInThisSystem.length;
-        
         missingInThisSystem.forEach(rhUser => {
-          if (rhUser.profile?.name === 'Admin') {
-            adminsComDivergencia.add(rhUser.identityId);
-          }
+          if (rhUser.profile?.name === 'Admin') adminsComDivergencia.add(rhUser.identityId);
         });
       }
     } else {
       const systemIdSet = new Set(systemIdentities.map(i => i.identityId));
       const missingUsers = activeRhIdentities.filter(rhIdentity => !systemIdSet.has(rhIdentity.identityId));
       acessoPrevistoNaoConcedidoCount = missingUsers.length;
-
       missingUsers.forEach(rhUser => {
-        if (rhUser.profile?.name === 'Admin') {
-            adminsComDivergencia.add(rhUser.identityId);
-        }
+        if (rhUser.profile?.name === 'Admin') adminsComDivergencia.add(rhUser.identityId);
       });
     }
 
-    // 4. Calcula os KPIs financeiros e de conformidade
     const CUSTOS_DE_RISCO = { CRITICO: 25000, CONFORMIDADE: 5000, OPERACIONAL: 1000, PRODUTIVIDADE: 2500 };
     const prejuizoCalculado = (inativosRHAtivosAppCount * CUSTOS_DE_RISCO.CRITICO) + (divergenciaCpfCount * CUSTOS_DE_RISCO.CONFORMIDADE) + ((divergenciaNomeCount + divergenciaEmailCount) * CUSTOS_DE_RISCO.OPERACIONAL) + (acessoPrevistoNaoConcedidoCount * CUSTOS_DE_RISCO.PRODUTIVIDADE);
     const valorMitigado = prejuizoCalculado * 0.95;
-
     const totalDivergentSystemUsers = divergentSystemIdentities.size;
     const totalDivergentRhUsers = acessoPrevistoNaoConcedidoCount;
     const totalUniqueDivergentUsers = totalDivergentSystemUsers + totalDivergentRhUsers;
-
     const totalPopulation = total + totalDivergentRhUsers;
-
-    const calculatedIndex = totalPopulation > 0 
-      ? ((totalPopulation - totalUniqueDivergentUsers) / totalPopulation) * 100 
-      : 100;
-      
+    const calculatedIndex = totalPopulation > 0 ? ((totalPopulation - totalUniqueDivergentUsers) / totalPopulation) * 100 : 100;
     const indiceConformidade = calculatedIndex.toFixed(1);
-
     const conformidadeCount = divergenciaCpfCount;
     const operacionalCount = divergenciaNomeCount + divergenciaEmailCount;
-
     const prejuizoBreakdown = [
       { label: "Risco Crítico (RH Inativo / App Ativo)", count: inativosRHAtivosAppCount, costPerUnit: CUSTOS_DE_RISCO.CRITICO, subTotal: inativosRHAtivosAppCount * CUSTOS_DE_RISCO.CRITICO },
       { label: "Risco de Conformidade (CPF)", count: conformidadeCount, costPerUnit: CUSTOS_DE_RISCO.CONFORMIDADE, subTotal: conformidadeCount * CUSTOS_DE_RISCO.CONFORMIDADE },
       { label: "Risco Operacional (Nome, E-mail)", count: operacionalCount, costPerUnit: CUSTOS_DE_RISCO.OPERACIONAL, subTotal: operacionalCount * CUSTOS_DE_RISCO.OPERACIONAL },
       { label: "Risco de Produtividade (Acesso Não Concedido)", count: acessoPrevistoNaoConcedidoCount, costPerUnit: CUSTOS_DE_RISCO.PRODUTIVIDADE, subTotal: acessoPrevistoNaoConcedidoCount * CUSTOS_DE_RISCO.PRODUTIVIDADE },
     ];
-
-    // 5. Monta o objeto de resposta final
+    
     const metrics = {
       pills: { total, ativos: active, inativos: inactive, desconhecido: unknown },
       tiposDeUsuario: Object.entries(byUserType).map(([tipo, total]) => ({ tipo, total })).sort((a, b) => b.total - a.total),

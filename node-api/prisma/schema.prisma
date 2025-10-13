@@ -16,20 +16,21 @@ enum ImportStatus {
 }
 
 model User {
-  id            Int         @id @default(autoincrement())
-  name          String
-  email         String      @unique
-  password      String
-  profile_image String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  roleId        Int
-  role          Role        @relation(fields: [roleId], references: [id])
-  groups        Group[]
-  packageId     Int?
-  package       Package?    @relation(fields: [packageId], references: [id])
-  importLogs    ImportLog[]
-  systems       System[] // Relação com os novos sistemas criados pelo usuário
+  id                  Int                   @id @default(autoincrement())
+  name                String
+  email               String                @unique
+  password            String
+  profile_image       String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  roleId              Int
+  role                Role                  @relation(fields: [roleId], references: [id])
+  groups              Group[]
+  packageId           Int?
+  package             Package?              @relation(fields: [packageId], references: [id])
+  importLogs          ImportLog[]
+  systems             System[]
+  divergenceExceptions DivergenceException[] // Adicionado para rastrear exceções criadas pelo usuário
 
   @@map("users")
 }
@@ -74,12 +75,12 @@ model Group {
 }
 
 model Platform {
-  id        Int       @id @default(autoincrement())
-  name      String    @unique
-  key       String    @unique
-  route     String    @unique
-  icon      String?
-  packages  Package[]
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  key      String    @unique
+  route    String    @unique
+  icon     String?
+  packages Package[]
 
   @@map("platforms")
 }
@@ -96,7 +97,6 @@ model Package {
   @@map("packages")
 }
 
-// ======================= INÍCIO DA NOVA ADIÇÃO =======================
 model System {
   id          Int      @id @default(autoincrement())
   name        String   @unique
@@ -108,7 +108,6 @@ model System {
 
   @@map("systems")
 }
-// ======================== FIM DA NOVA ADIÇÃO =======================
 
 model ImportLog {
   id            Int          @id @default(autoincrement())
@@ -137,20 +136,41 @@ model Profile {
 }
 
 model Identity {
-  id           Int      @id @default(autoincrement())
-  sourceSystem String   // Sistema de origem do dado (ex: "TruIM", "SAP", "RH")
-  identityId   String   // ID único da identidade no sistema de origem (ex: email, matrícula)
-  name         String?
-  email        String?
-  status       String?  // Ex: "Ativo", "Inativo"
-  userType     String?  // Ex: "Funcionário", "Terceirizado"
-  cpf          String?  // Campo adicionado para alinhar com o CSV
-  extraData    Json?    // Campo flexível para armazenar outras colunas do CSV
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  profileId    Int?
-  profile      Profile? @relation(fields: [profileId], references: [id])
+  id                   Int                   @id @default(autoincrement())
+  sourceSystem         String
+  identityId           String
+  name                 String?
+  email                String?
+  status               String?
+  userType             String?
+  cpf                  String?
+  extraData            Json?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  profileId            Int?
+  profile              Profile?              @relation(fields: [profileId], references: [id])
+  divergenceExceptions DivergenceException[] // Adicionado para rastrear exceções ligadas a esta identidade
 
   @@unique([sourceSystem, identityId])
   @@map("identities")
+}
+
+model DivergenceException {
+  id             Int      @id @default(autoincrement())
+  divergenceCode String   // Código único da divergência (ex: "CPF_MISMATCH", "ZOMBIE_ACCOUNT")
+  justification  String   // Justificativa fornecida pelo usuário para ignorar a divergência
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime? // Data opcional para a expiração da exceção
+
+  // Relação com a Identidade específica
+  identityId Int
+  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
+
+  // Relação com o Usuário que criou a exceção
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  // Garante que não haja múltiplas exceções para a mesma divergência na mesma identidade
+  @@unique([identityId, divergenceCode])
+  @@map("divergence_exceptions")
 }
