@@ -1,6 +1,6 @@
 // material-react-app/src/layouts/observabilidade/sistemas/index.js
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react"; // <<< ALTERAÇÃO: Adicionado 'useMemo'
 import axios from "axios";
 import { useMaterialUIController } from "context";
 
@@ -29,326 +29,343 @@ import DataTable from "examples/Tables/DataTable";
 
 
 function GerenciarSistemas() {
-  const [controller] = useMaterialUIController();
-  const { token } = controller;
-  
-  const [systems, setSystems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
+    const [controller] = useMaterialUIController();
+    const { token } = controller;
+    
+    const [systems, setSystems] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newSystemData, setNewSystemData] = useState({ name: "", description: "" });
-  
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [systemToDelete, setSystemToDelete] = useState(null);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [newSystemData, setNewSystemData] = useState({ name: "", description: "" });
+    
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [systemToDelete, setSystemToDelete] = useState(null);
 
-  // --- 1. ADICIONAR ESTADOS PARA O MODAL DE EDIÇÃO ---
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [systemToEdit, setSystemToEdit] = useState(null);
-
-
-  const fetchSystems = async () => {
-    if (!token) return;
-    setIsLoading(true);
-    try {
-      const response = await axios.get('/systems', {
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-      setSystems(response.data);
-    } catch (error) {
-      console.error("Erro ao buscar sistemas:", error);
-      setNotification({ open: true, color: "error", title: "Erro de Rede", content: "Não foi possível carregar a lista de sistemas." });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (token) {
-      fetchSystems();
-    }
-  }, [token]);
-
-  const handleOpenAddModal = () => setIsAddModalOpen(true);
-  const handleCloseAddModal = () => {
-    setIsAddModalOpen(false);
-    setNewSystemData({ name: "", description: "" });
-  };
-
-  const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setNewSystemData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleSubmit = async () => {
-    if (!newSystemData.name) {
-      setNotification({ open: true, color: "warning", title: "Atenção", content: "O nome do sistema é obrigatório." });
-      return;
-    }
-
-    try {
-      await axios.post('/systems', newSystemData, {
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-      
-      setNotification({ open: true, color: "success", title: "Sucesso", content: `Sistema "${newSystemData.name}" criado com sucesso!` });
-      handleCloseAddModal();
-      fetchSystems();
-    } catch (error) {
-      console.error("Erro ao criar sistema:", error);
-      const errorMessage = error.response?.data?.message || "Não foi possível criar o sistema.";
-      setNotification({ open: true, color: "error", title: "Erro", content: errorMessage });
-    }
-  };
-
-  const handleOpenDeleteDialog = (system) => {
-    setSystemToDelete(system);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const handleCloseDeleteDialog = () => {
-    setSystemToDelete(null);
-    setIsDeleteDialogOpen(false);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!systemToDelete) return;
-
-    try {
-      await axios.delete(`/systems/${systemToDelete.id}`, {
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-
-      setNotification({ open: true, color: "success", title: "Sucesso", content: `Sistema "${systemToDelete.name}" excluído.` });
-      handleCloseDeleteDialog();
-      fetchSystems();
-    } catch (error) {
-      console.error("Erro ao excluir sistema:", error);
-      const errorMessage = error.response?.data?.message || "Não foi possível excluir o sistema.";
-      setNotification({ open: true, color: "error", title: "Erro", content: errorMessage });
-      handleCloseDeleteDialog();
-    }
-  };
-
-  // --- 2. ADICIONAR FUNÇÕES PARA CONTROLAR A EDIÇÃO ---
-  const handleOpenEditModal = (system) => {
-    setSystemToEdit(system);
-    setIsEditModalOpen(true);
-  };
-
-  const handleCloseEditModal = () => {
-    setSystemToEdit(null);
-    setIsEditModalOpen(false);
-  };
-
-  const handleEditFormChange = (e) => {
-    const { name, value } = e.target;
-    setSystemToEdit(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleUpdateSubmit = async () => {
-    if (!systemToEdit || !systemToEdit.name) {
-      setNotification({ open: true, color: "warning", title: "Atenção", content: "O nome do sistema é obrigatório." });
-      return;
-    }
-
-    try {
-      await axios.patch(`/systems/${systemToEdit.id}`, {
-        name: systemToEdit.name,
-        description: systemToEdit.description,
-      }, {
-        headers: { "Authorization": `Bearer ${token}` },
-      });
-
-      setNotification({ open: true, color: "success", title: "Sucesso", content: `Sistema "${systemToEdit.name}" atualizado.` });
-      handleCloseEditModal();
-      fetchSystems();
-    } catch (error) {
-      console.error("Erro ao atualizar sistema:", error);
-      const errorMessage = error.response?.data?.message || "Não foi possível atualizar o sistema.";
-      setNotification({ open: true, color: "error", title: "Erro", content: errorMessage });
-    }
-  };
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [systemToEdit, setSystemToEdit] = useState(null);
 
 
-  const closeNotification = () => setNotification({ ...notification, open: false });
+    const fetchSystems = async () => {
+        if (!token) return;
+        setIsLoading(true);
+        try {
+            const response = await axios.get('/systems', {
+                headers: { "Authorization": `Bearer ${token}` },
+            });
+            setSystems(response.data);
+        } catch (error) {
+            console.error("Erro ao buscar sistemas:", error);
+            setNotification({ open: true, color: "error", title: "Erro de Rede", content: "Não foi possível carregar a lista de sistemas." });
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
-  const { columns, rows } = {
-    columns: [
-      { Header: "Nome do Sistema", accessor: "name", width: "30%", align: "left" },
-      { Header: "Descrição", accessor: "description", align: "left" },
-      { Header: "Data de Criação", accessor: "createdAt", align: "center" },
-      { Header: "Ações", accessor: "actions", align: "center" },
-    ],
-    // --- 3. ATUALIZAR O onClick DO ÍCONE DE EDIÇÃO ---
-    rows: systems.map(system => ({
-      name: <MDTypography variant="subtitle2" fontWeight="medium">{system.name}</MDTypography>,
-      description: <MDTypography variant="caption">{system.description || "N/A"}</MDTypography>,
-      createdAt: <MDTypography variant="caption">{new Date(system.createdAt).toLocaleDateString('pt-BR')}</MDTypography>,
-      actions: (
-        <MDBox display="flex" justifyContent="center" alignItems="center" sx={{ gap: 2 }}>
-          <MDTypography component="a" color="info" sx={{ cursor: "pointer" }} onClick={() => handleOpenEditModal(system)}>
-            <Icon>edit</Icon>
-          </MDTypography>
-          <MDTypography component="a" color="error" sx={{ cursor: "pointer" }} onClick={() => handleOpenDeleteDialog(system)}>
-            <Icon>delete</Icon>
-          </MDTypography>
-        </MDBox>
-      )
-    }))
-  };
+    useEffect(() => {
+        if (token) {
+            fetchSystems();
+        }
+    }, [token]);
 
-  return (
-    <DashboardLayout>
-      <DashboardNavbar />
-      <MDBox pt={6} pb={3}>
-        <Grid container spacing={6}>
-          <Grid item xs={12}>
-            <Card>
-              <MDBox
-                mx={2}
-                mt={-3}
-                py={3}
-                px={2}
-                variant="gradient"
-                bgColor="info"
-                borderRadius="lg"
-                coloredShadow="info"
-                display="flex"
-                justifyContent="space-between"
-                alignItems="center"
-              >
-                <MDTypography variant="h6" color="white">
-                  Gerenciamento de Sistemas (Data Sources)
-                </MDTypography>
-                <MDButton variant="gradient" color="dark" onClick={handleOpenAddModal}>
-                  <Icon sx={{ fontWeight: "bold" }}>add</Icon>
-                  &nbsp;Adicionar Sistema
-                </MDButton>
-              </MDBox>
-              <MDBox pt={3}>
-                <DataTable
-                  table={{ columns, rows }}
-                  isSorted={false}
-                  entriesPerPage={{ defaultValue: 10 }}
-                  showTotalEntries
-                  noEndBorder
-                  canSearch
-                  isLoading={isLoading}
-                />
-              </MDBox>
-            </Card>
-          </Grid>
-        </Grid>
-      </MDBox>
+    const handleOpenAddModal = () => setIsAddModalOpen(true);
+    const handleCloseAddModal = () => {
+        setIsAddModalOpen(false);
+        setNewSystemData({ name: "", description: "" });
+    };
 
-      {/* Modal de Adicionar */}
-      <Dialog open={isAddModalOpen} onClose={handleCloseAddModal} fullWidth maxWidth="sm">
-        <DialogTitle>Adicionar Novo Sistema</DialogTitle>
-        <DialogContent>
-          <MDBox component="form" role="form" pt={2}>
-            <MDBox mb={2}>
-              <MDInput
-                name="name"
-                label="Nome do Sistema"
-                value={newSystemData.name}
-                onChange={handleFormChange}
-                fullWidth
-                autoFocus
-              />
+    const handleFormChange = (e) => {
+        const { name, value } = e.target;
+        setNewSystemData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async () => {
+        if (!newSystemData.name) {
+            setNotification({ open: true, color: "warning", title: "Atenção", content: "O nome do sistema é obrigatório." });
+            return;
+        }
+
+        try {
+            await axios.post('/systems', newSystemData, {
+                headers: { "Authorization": `Bearer ${token}` },
+            });
+            
+            setNotification({ open: true, color: "success", title: "Sucesso", content: `Sistema "${newSystemData.name}" criado com sucesso!` });
+            handleCloseAddModal();
+            fetchSystems();
+        } catch (error) {
+            console.error("Erro ao criar sistema:", error);
+            const errorMessage = error.response?.data?.message || "Não foi possível criar o sistema.";
+            setNotification({ open: true, color: "error", title: "Erro", content: errorMessage });
+        }
+    };
+
+    const handleOpenDeleteDialog = (system) => {
+        setSystemToDelete(system);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const handleCloseDeleteDialog = () => {
+        setSystemToDelete(null);
+        setIsDeleteDialogOpen(false);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!systemToDelete) return;
+
+        try {
+            await axios.delete(`/systems/${systemToDelete.id}`, {
+                headers: { "Authorization": `Bearer ${token}` },
+            });
+
+            setNotification({ open: true, color: "success", title: "Sucesso", content: `Sistema "${systemToDelete.name}" excluído.` });
+            handleCloseDeleteDialog();
+            fetchSystems();
+        } catch (error) {
+            console.error("Erro ao excluir sistema:", error);
+            const errorMessage = error.response?.data?.message || "Não foi possível excluir o sistema.";
+            setNotification({ open: true, color: "error", title: "Erro", content: errorMessage });
+            handleCloseDeleteDialog();
+        }
+    };
+
+    const handleOpenEditModal = (system) => {
+        setSystemToEdit(system);
+        setIsEditModalOpen(true);
+    };
+
+    const handleCloseEditModal = () => {
+        setSystemToEdit(null);
+        setIsEditModalOpen(false);
+    };
+
+    const handleEditFormChange = (e) => {
+        const { name, value } = e.target;
+        setSystemToEdit(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleUpdateSubmit = async () => {
+        if (!systemToEdit || !systemToEdit.name) {
+            setNotification({ open: true, color: "warning", title: "Atenção", content: "O nome do sistema é obrigatório." });
+            return;
+        }
+
+        try {
+            await axios.patch(`/systems/${systemToEdit.id}`, {
+                name: systemToEdit.name,
+                description: systemToEdit.description,
+            }, {
+                headers: { "Authorization": `Bearer ${token}` },
+            });
+
+            setNotification({ open: true, color: "success", title: "Sucesso", content: `Sistema "${systemToEdit.name}" atualizado.` });
+            handleCloseEditModal();
+            fetchSystems();
+        } catch (error) {
+            console.error("Erro ao atualizar sistema:", error);
+            const errorMessage = error.response?.data?.message || "Não foi possível atualizar o sistema.";
+            setNotification({ open: true, color: "error", title: "Erro", content: errorMessage });
+        }
+    };
+
+
+    const closeNotification = () => setNotification({ ...notification, open: false });
+
+    // <<< INÍCIO DA ALTERAÇÃO >>>
+    const columns = useMemo(() => [
+        { 
+            Header: "Nome do Sistema", 
+            accessor: "name", // Aponta para o texto simples, permitindo a busca
+            width: "30%", 
+            align: "left",
+            // A função 'Cell' renderiza o componente visual sem afetar a busca
+            Cell: ({ value }) => <MDTypography variant="h8" fontWeight="medium">{value}</MDTypography>
+        },
+        { 
+            Header: "Descrição", 
+            accessor: "description", 
+            align: "left",
+            Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography>
+        },
+        { 
+            Header: "Data de Criação", 
+            accessor: "createdAt", 
+            align: "center",
+            Cell: ({ value }) => <MDTypography variant="caption">{new Date(value).toLocaleDateString('pt-BR')}</MDTypography>
+        },
+        { 
+            Header: "Ações", 
+            accessor: "actions", 
+            align: "center",
+            disableSortBy: true,
+            Cell: ({ row: { original: system } }) => (
+                <MDBox display="flex" justifyContent="center" alignItems="center" sx={{ gap: 2 }}>
+                    <MDTypography component="a" color="info" sx={{ cursor: "pointer" }} onClick={() => handleOpenEditModal(system)}>
+                        <Icon>edit</Icon>
+                    </MDTypography>
+                    <MDTypography component="a" color="error" sx={{ cursor: "pointer" }} onClick={() => handleOpenDeleteDialog(system)}>
+                        <Icon>delete</Icon>
+                    </MDTypography>
+                </MDBox>
+            )
+        },
+    ], []);
+
+    // A tabela agora usa diretamente o array de 'systems', simplificando a lógica
+    const rows = useMemo(() => systems, [systems]);
+    // <<< FIM DA ALTERAÇÃO >>>
+
+    return (
+        <DashboardLayout>
+            <DashboardNavbar />
+            <MDBox pt={6} pb={3}>
+                <Grid container spacing={6}>
+                    <Grid item xs={12}>
+                        <Card>
+                            <MDBox
+                                mx={2}
+                                mt={-3}
+                                py={3}
+                                px={2}
+                                variant="gradient"
+                                bgColor="info"
+                                borderRadius="lg"
+                                coloredShadow="info"
+                                display="flex"
+                                justifyContent="space-between"
+                                alignItems="center"
+                            >
+                                <MDTypography variant="h6" color="white">
+                                    Gerenciamento de Sistemas (Data Sources)
+                                </MDTypography>
+                                <MDButton variant="gradient" color="dark" onClick={handleOpenAddModal}>
+                                    <Icon sx={{ fontWeight: "bold" }}>add</Icon>
+                                    &nbsp;Adicionar Sistema
+                                </MDButton>
+                            </MDBox>
+                            <MDBox pt={3}>
+                                <DataTable
+                                    table={{ columns, rows }}
+                                    isSorted={false}
+                                    entriesPerPage={{ defaultValue: 10 }}
+                                    showTotalEntries
+                                    noEndBorder
+                                    canSearch
+                                    isLoading={isLoading}
+                                />
+                            </MDBox>
+                        </Card>
+                    </Grid>
+                </Grid>
             </MDBox>
-            <MDBox>
-              <MDInput
-                name="description"
-                label="Descrição (Opcional)"
-                value={newSystemData.description}
-                onChange={handleFormChange}
-                fullWidth
-                multiline
-                rows={4}
-              />
-            </MDBox>
-          </MDBox>
-        </DialogContent>
-        <DialogActions>
-          <MDButton onClick={handleCloseAddModal} color="secondary">
-            Cancelar
-          </MDButton>
-          <MDButton onClick={handleSubmit} color="info" variant="gradient">
-            Salvar
-          </MDButton>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Modal de Excluir */}
-      <Dialog open={isDeleteDialogOpen} onClose={handleCloseDeleteDialog}>
-        <DialogTitle>Confirmar Exclusão</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Você tem certeza que deseja excluir o sistema "<strong>{systemToDelete?.name}</strong>"? Esta ação não pode ser desfeita.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <MDButton onClick={handleCloseDeleteDialog} color="secondary">
-            Cancelar
-          </MDButton>
-          <MDButton onClick={handleConfirmDelete} color="error" variant="gradient">
-            Excluir
-          </MDButton>
-        </DialogActions>
-      </Dialog>
 
-      {/* --- 4. ADICIONAR O MODAL DE EDIÇÃO --- */}
-      <Dialog open={isEditModalOpen} onClose={handleCloseEditModal} fullWidth maxWidth="sm">
-        <DialogTitle>Editar Sistema</DialogTitle>
-        <DialogContent>
-          <MDBox component="form" role="form" pt={2}>
-            <MDBox mb={2}>
-              <MDInput
-                name="name"
-                label="Nome do Sistema"
-                value={systemToEdit?.name || ""}
-                onChange={handleEditFormChange}
-                fullWidth
-                autoFocus
-              />
-            </MDBox>
-            <MDBox>
-              <MDInput
-                name="description"
-                label="Descrição (Opcional)"
-                value={systemToEdit?.description || ""}
-                onChange={handleEditFormChange}
-                fullWidth
-                multiline
-                rows={4}
-              />
-            </MDBox>
-          </MDBox>
-        </DialogContent>
-        <DialogActions>
-          <MDButton onClick={handleCloseEditModal} color="secondary">
-            Cancelar
-          </MDButton>
-          <MDButton onClick={handleUpdateSubmit} color="info" variant="gradient">
-            Salvar Alterações
-          </MDButton>
-        </DialogActions>
-      </Dialog>
-      
-      <MDSnackbar
-        color={notification.color}
-        icon="notifications"
-        title={notification.title}
-        content={notification.content}
-        dateTime="agora"
-        open={notification.open}
-        onClose={closeNotification}
-        close={closeNotification}
-      />
+            {/* Modal de Adicionar */}
+            <Dialog open={isAddModalOpen} onClose={handleCloseAddModal} fullWidth maxWidth="sm">
+                <DialogTitle>Adicionar Novo Sistema</DialogTitle>
+                <DialogContent>
+                    <MDBox component="form" role="form" pt={2}>
+                        <MDBox mb={2}>
+                            <MDInput
+                                name="name"
+                                label="Nome do Sistema"
+                                value={newSystemData.name}
+                                onChange={handleFormChange}
+                                fullWidth
+                                autoFocus
+                            />
+                        </MDBox>
+                        <MDBox>
+                            <MDInput
+                                name="description"
+                                label="Descrição (Opcional)"
+                                value={newSystemData.description}
+                                onChange={handleFormChange}
+                                fullWidth
+                                multiline
+                                rows={4}
+                            />
+                        </MDBox>
+                    </MDBox>
+                </DialogContent>
+                <DialogActions>
+                    <MDButton onClick={handleCloseAddModal} color="secondary">
+                        Cancelar
+                    </MDButton>
+                    <MDButton onClick={handleSubmit} color="info" variant="gradient">
+                        Salvar
+                    </MDButton>
+                </DialogActions>
+            </Dialog>
+            
+            {/* Modal de Excluir */}
+            <Dialog open={isDeleteDialogOpen} onClose={handleCloseDeleteDialog}>
+                <DialogTitle>Confirmar Exclusão</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        Você tem certeza que deseja excluir o sistema "<strong>{systemToDelete?.name}</strong>"? Esta ação não pode ser desfeita.
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <MDButton onClick={handleCloseDeleteDialog} color="secondary">
+                        Cancelar
+                    </MDButton>
+                    <MDButton onClick={handleConfirmDelete} color="error" variant="gradient">
+                        Excluir
+                    </MDButton>
+                </DialogActions>
+            </Dialog>
 
-    </DashboardLayout>
-  );
+            {/* Modal de Edição */}
+            <Dialog open={isEditModalOpen} onClose={handleCloseEditModal} fullWidth maxWidth="sm">
+                <DialogTitle>Editar Sistema</DialogTitle>
+                <DialogContent>
+                    <MDBox component="form" role="form" pt={2}>
+                        <MDBox mb={2}>
+                            <MDInput
+                                name="name"
+                                label="Nome do Sistema"
+                                value={systemToEdit?.name || ""}
+                                onChange={handleEditFormChange}
+                                fullWidth
+                                autoFocus
+                            />
+                        </MDBox>
+                        <MDBox>
+                            <MDInput
+                                name="description"
+                                label="Descrição (Opcional)"
+                                value={systemToEdit?.description || ""}
+                                onChange={handleEditFormChange}
+                                fullWidth
+                                multiline
+                                rows={4}
+                            />
+                        </MDBox>
+                    </MDBox>
+                </DialogContent>
+                <DialogActions>
+                    <MDButton onClick={handleCloseEditModal} color="secondary">
+                        Cancelar
+                    </MDButton>
+                    <MDButton onClick={handleUpdateSubmit} color="info" variant="gradient">
+                        Salvar Alterações
+                    </MDButton>
+                </DialogActions>
+            </Dialog>
+            
+            <MDSnackbar
+                color={notification.color}
+                icon="notifications"
+                title={notification.title}
+                content={notification.content}
+                dateTime="agora"
+                open={notification.open}
+                onClose={closeNotification}
+                close={closeNotification}
+            />
+
+        </DashboardLayout>
+    );
 }
 
 export default GerenciarSistemas;

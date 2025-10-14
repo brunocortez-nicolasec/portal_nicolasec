@@ -1,14 +1,16 @@
+// material-react-app/src/layouts/observabilidade/geral/hooks/useDashboardData.js
+
 import { useMemo } from "react";
 
 function useDashboardData(metrics, isLoading) {
   const displayData = useMemo(() => {
     // ======================= INÍCIO DA ALTERAÇÃO =======================
+    // A estrutura defaultData agora espelha 100% a estrutura do objeto de retorno final
     const defaultData = {
         imDisplay: {
             pills: { total: 0, ativos: 0, inativos: 0, desconhecido: 0 },
             tiposChart: { labels: [], datasets: { data: [] } },
             tiposList: [],
-            // Estrutura de divergências alinhada com o novo back-end
             divergencias: { 
                 inativosRHAtivosApp: 0, 
                 cpf: 0, 
@@ -17,10 +19,9 @@ function useDashboardData(metrics, isLoading) {
                 nome: 0,
                 ativosNaoEncontradosRH: 0,
             },
-            kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0 },
+            kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0, adminsDormentes: 0 },
         },
         pamDisplay: { riscos: { acessosIndevidos: 0 } },
-        // Gráfico de riscos atualizado com os novos pontos de atenção
         riscosConsolidadosChart: { 
             labels: ["Contas Admin com Risco", "Acessos Ativos Indevidos", "Contas Órfãs"], 
             datasets: [{ label: "Total de Eventos de Risco", color: "error", data: [0, 0, 0] }] 
@@ -35,9 +36,9 @@ function useDashboardData(metrics, isLoading) {
     if (!metrics) {
         return defaultData;
     }
-
+    
     const imDisplay = {
-        pills: metrics.pills,
+        pills: metrics.pills || defaultData.imDisplay.pills,
         tiposChart: {
             labels: metrics.tiposDeUsuario.map(t => t.tipo),
             datasets: {

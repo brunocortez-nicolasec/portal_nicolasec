@@ -1,10 +1,11 @@
 // material-react-app\src\layouts\observabilidade\geral\components\LiveFeed.js
-import React, { useMemo, useState, useEffect } from "react"; // Adicionado useEffect
+
+import React, { useMemo, useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import axios from "axios"; // Adicionado axios
-import { useMaterialUIController } from "context"; // Adicionado context
+import axios from "axios";
+import { useMaterialUIController } from "context";
 
 // Componentes do Template
 import Card from "@mui/material/Card";
@@ -78,11 +79,11 @@ const DivergenceModal = React.forwardRef(({ user, onClose }, ref) => {
                         <Grid item xs={12} md={6}>
                              <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Status e Acesso</MDTypography>
                              <MDBox mt={2}>
-                                <InfoDetail label="Tipo" value={user.userType} />
-                                <InfoDetail label="Status RH" value={user.rh_status} />
-                                <InfoDetail label="Status App" value={user.app_status} />
-                                <InfoDetail label="Perfil App" value={user.perfil} />
-                                <InfoDetail label="Último Login" value={user.last_login ? new Date(user.last_login).toLocaleDateString('pt-BR') : '-'} />
+                                 <InfoDetail label="Tipo" value={user.userType} />
+                                 <InfoDetail label="Status RH" value={user.rh_status} />
+                                 <InfoDetail label="Status App" value={user.app_status} />
+                                 <InfoDetail label="Perfil App" value={user.perfil} />
+                                 <InfoDetail label="Último Login" value={user.last_login ? new Date(user.last_login).toLocaleDateString('pt-BR') : '-'} />
                              </MDBox>
                         </Grid>
                     </Grid>
@@ -112,7 +113,6 @@ const DivergenceModal = React.forwardRef(({ user, onClose }, ref) => {
 
 
 function LiveFeed({ data }) {
-    // --- 1. ADICIONAR ESTADOS E LÓGICA PARA BUSCAR SISTEMAS DINAMICAMENTE ---
     const [controller] = useMaterialUIController();
     const { token } = controller;
     const [systemOptions, setSystemOptions] = useState([]);
@@ -132,18 +132,38 @@ function LiveFeed({ data }) {
         };
         fetchSystems();
     }, [token]);
-    // --- FIM DA ADIÇÃO ---
 
     const [searchTerm, setSearchTerm] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedUser, setSelectedUser] = useState(null);
     const [anchorEl, setAnchorEl] = useState(null);
     
-    const initialFilters = { nome: "", email: "", perfil: "", sistema: null, divergencia: null, criticas: null };
+    const initialFilters = { 
+        nome: "", 
+        email: "", 
+        perfil: "", 
+        sistema: null, 
+        divergencia: null, 
+        criticas: null, 
+        divergenceType: null
+    };
+
+    // <<< INÍCIO DA ALTERAÇÃO >>>
+    // Adicionada a opção 'ACCESS_NOT_GRANTED' à lista
+    const divergenceOptions = [
+        { code: 'ORPHAN', label: 'Conta Órfã' },
+        { code: 'ZOMBIE', label: 'Acesso Ativo Indevido' },
+        { code: 'ACCESS_NOT_GRANTED', label: 'Acesso Previsto Não Concedido' },
+        { code: 'CPF_MISMATCH', label: 'Divergência de CPF' },
+        { code: 'NAME_MISMATCH', label: 'Divergência de Nome' },
+        { code: 'EMAIL_MISMATCH', label: 'Divergência de E-mail' },
+        { code: 'USERTYPE_MISMATCH', label: 'Divergência de Tipo de Usuário' },
+        { code: 'DORMANT_ADMIN', label: 'Admin Dormente' },
+    ];
+    // <<< FIM DA ALTERAÇÃO >>>
+
     const [filters, setFilters] = useState(initialFilters);
     const [tempFilters, setTempFilters] = useState(initialFilters);
-
-    // A linha abaixo com a lista fixa foi removida.
     
     const open = Boolean(anchorEl);
     
@@ -201,7 +221,8 @@ function LiveFeed({ data }) {
                 const matchSistema = !filters.sistema || (u.sourceSystem && u.sourceSystem === filters.sistema);
                 const matchDivergencia = filters.divergencia === null || (filters.divergencia === 'Sim' && u.divergence) || (filters.divergencia === 'Não' && !u.divergence);
                 const matchCriticas = filters.criticas === null || (filters.criticas === 'Sim' && u.isCritical) || (filters.criticas === 'Não' && !u.isCritical);
-                return matchNome && matchEmail && matchPerfil && matchSistema && matchDivergencia && matchCriticas;
+                const matchDivergenceType = !filters.divergenceType || (u.divergenceDetails && u.divergenceDetails.some(d => d.code === filters.divergenceType.code));
+                return matchNome && matchEmail && matchPerfil && matchSistema && matchDivergencia && matchCriticas && matchDivergenceType;
             });
         }
         
@@ -275,7 +296,6 @@ function LiveFeed({ data }) {
                         <MDBox mt={2}><MDInput label="Perfil" name="perfil" value={tempFilters.perfil} onChange={handleTempFilterChange} fullWidth /></MDBox>
                         
                         <MDBox mt={2}>
-                            {/* --- 2. ATUALIZAR O AUTOCOMPLETE DOS FILTROS --- */}
                             <Autocomplete 
                                 options={systemOptions}
                                 value={tempFilters.sistema}
@@ -284,8 +304,18 @@ function LiveFeed({ data }) {
                             />
                         </MDBox>
                         
+                        
                         <MDBox mt={2}>
                             <Autocomplete options={['Sim', 'Não']} value={tempFilters.divergencia} onChange={(e, val) => handleTempAutocompleteChange('divergencia', val)} renderInput={(params) => <TextField {...params} label="Possui Divergência?" />} />
+                        </MDBox>
+                        <MDBox mt={2}>
+                            <Autocomplete 
+                                options={divergenceOptions}
+                                getOptionLabel={(option) => option.label || ""}
+                                value={tempFilters.divergenceType}
+                                onChange={(event, newValue) => handleTempAutocompleteChange('divergenceType', newValue)}
+                                renderInput={(params) => <TextField {...params} label="Tipo de Divergência" />} 
+                            />
                         </MDBox>
                         <MDBox mt={2} mb={2}>
                             <Autocomplete options={['Sim', 'Não']} value={tempFilters.criticas} onChange={(e, val) => handleTempAutocompleteChange('criticas', val)} renderInput={(params) => <TextField {...params} label="Possui Críticas?" />} />

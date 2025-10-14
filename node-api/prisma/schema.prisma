@@ -16,21 +16,21 @@ enum ImportStatus {
 }
 
 model User {
-  id                  Int                   @id @default(autoincrement())
-  name                String
-  email               String                @unique
-  password            String
-  profile_image       String?
-  createdAt           DateTime              @default(now())
-  updatedAt           DateTime              @updatedAt
-  roleId              Int
-  role                Role                  @relation(fields: [roleId], references: [id])
-  groups              Group[]
-  packageId           Int?
-  package             Package?              @relation(fields: [packageId], references: [id])
-  importLogs          ImportLog[]
-  systems             System[]
-  divergenceExceptions DivergenceException[] // Adicionado para rastrear exceções criadas pelo usuário
+  id                   Int                   @id @default(autoincrement())
+  name                 String
+  email                String                @unique
+  password             String
+  profile_image        String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  roleId               Int
+  role                 Role                  @relation(fields: [roleId], references: [id])
+  groups               Group[]
+  packageId            Int?
+  package              Package?              @relation(fields: [packageId], references: [id])
+  importLogs           ImportLog[]
+  systems              System[]
+  divergenceExceptions DivergenceException[]
 
   @@map("users")
 }
@@ -149,7 +149,7 @@ model Identity {
   updatedAt            DateTime              @updatedAt
   profileId            Int?
   profile              Profile?              @relation(fields: [profileId], references: [id])
-  divergenceExceptions DivergenceException[] // Adicionado para rastrear exceções ligadas a esta identidade
+  divergenceExceptions DivergenceException[]
 
   @@unique([sourceSystem, identityId])
   @@map("identities")
@@ -157,20 +157,22 @@ model Identity {
 
 model DivergenceException {
   id             Int      @id @default(autoincrement())
-  divergenceCode String   // Código único da divergência (ex: "CPF_MISMATCH", "ZOMBIE_ACCOUNT")
-  justification  String   // Justificativa fornecida pelo usuário para ignorar a divergência
+  divergenceCode String
+  justification  String
   createdAt      DateTime @default(now())
-  expiresAt      DateTime? // Data opcional para a expiração da exceção
+  expiresAt      DateTime?
 
-  // Relação com a Identidade específica
+  // --- ALTERAÇÃO AQUI ---
+  targetSystem   String?  // Sistema de destino para exceções como ACCESS_NOT_GRANTED
+
   identityId Int
   identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
 
-  // Relação com o Usuário que criou a exceção
   userId Int
   user   User @relation(fields: [userId], references: [id])
 
-  // Garante que não haja múltiplas exceções para a mesma divergência na mesma identidade
-  @@unique([identityId, divergenceCode])
+  // --- E AQUI ---
+  // Garante que não haja múltiplas exceções para a mesma divergência na mesma identidade e sistema de destino
+  @@unique([identityId, divergenceCode, targetSystem])
   @@map("divergence_exceptions")
 }

@@ -1,4 +1,4 @@
-// material-react-app\src\routes.js
+// material-react-app/src/routes.js
 
 // Material Dashboard 2 React layouts
 import UserProfile from "layouts/user-profile";
@@ -19,8 +19,9 @@ import DashboardTruPAM from "layouts/observabilidade/trupam";
 import DashboardTruAM from "layouts/observabilidade/truam";
 import VisaoGeral from "layouts/observabilidade/geral";
 import ImportManagement from "layouts/observabilidade/importManagement";
-// --- 1. ATUALIZAR O CAMINHO DO IMPORT ---
 import GerenciarSistemas from "layouts/observabilidade/sistemas";
+// --- 1. ADICIONAR IMPORT PARA O NOVO COMPONENTE ---
+import GerenciarExcecoes from "layouts/observabilidade/excecoes";
 
 
 // @mui icons
@@ -81,7 +82,6 @@ const routes = [
     key: "observabilidade",
     icon: <Icon fontSize="small">monitoring</Icon>,
     collapse: [
-      // --- 2. ADICIONAR A NOVA ROTA AQUI ---
       {
         name: "Importações",
         key: "gerenciar-importacoes",
@@ -92,9 +92,17 @@ const routes = [
       {
         name: "Sistemas",
         key: "sistemas",
-        route: "/observabilidade/sistemas", // Rota atualizada
+        route: "/observabilidade/sistemas",
         component: <GerenciarSistemas />,
         icon: <Icon fontSize="small">storage</Icon>,
+      },
+      // --- 2. ADICIONAR O NOVO OBJETO DA ROTA AQUI ---
+      {
+        name: "Exceções",
+        key: "gerenciar-excecoes",
+        route: "/observabilidade/excecoes",
+        component: <GerenciarExcecoes />,
+        icon: <Icon fontSize="small">gavel</Icon>,
       },
       {
         name: "TruIM",
@@ -126,7 +134,6 @@ const routes = [
     icon: <Icon fontSize="small">admin_panel_settings</Icon>,
     role: "Admin",
     collapse: [
-    // --- 3. ROTA REMOVIDA DE "ADMINISTRAR" ---
     {
       name: "Usuários",
       key: "usuarios",
