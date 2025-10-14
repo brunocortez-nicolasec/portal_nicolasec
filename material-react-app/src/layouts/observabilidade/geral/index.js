@@ -52,62 +52,62 @@ const ModalContent = React.forwardRef(({ title, data, onClose }, ref) => (
 ));
 
 const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onIgnoreAll, onClose }, ref) => {
-  const columns = [
-    { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
-    { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
-    { Header: "Sistema", accessor: "sourceSystem", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
-    { Header: "Ações", accessor: "id", align: "center", disableGlobalFilter: true,
-      Cell: ({ row }) => (
-        <MDButton variant="outlined" color="info" size="small" onClick={() => onIgnore(row.original)}>Ignorar</MDButton>
-      )
-    },
-  ];
+    const columns = [
+        { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
+        { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
+        { Header: "Sistema", accessor: "sourceSystem", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
+        { Header: "Ações", accessor: "id", align: "center", disableGlobalFilter: true,
+            Cell: ({ row }) => (
+                <MDButton variant="outlined" color="info" size="small" onClick={() => onIgnore(row.original)}>Ignorar</MDButton>
+            )
+        },
+    ];
 
-  return (
-    <Box ref={ref} tabIndex={-1}>
-      <Card sx={{ width: "80vw", maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
-        <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
-          <MDTypography variant="h6">{title}</MDTypography>
-          <MDBox>
-            {data.length > 0 && !isLoading && (
-              <MDButton variant="gradient" color="info" size="small" onClick={onIgnoreAll} sx={{ mr: 2 }}>
-                Ignorar Todos
-              </MDButton>
-            )}
-            <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
-          </MDBox>
-        </MDBox>
-        <MDBox p={2} pt={0}>
-          {isLoading ? (
-            <MDBox display="flex" justifyContent="center" alignItems="center" sx={{ minHeight: '200px' }}><CircularProgress color="info" /></MDBox>
-          ) : (
-            <DataTable table={{ columns, rows: data }} isSorted entriesPerPage={{ defaultValue: 5 }} showTotalEntries canSearch />
-          )}
-        </MDBox>
-      </Card>
-    </Box>
-  );
+    return (
+        <Box ref={ref} tabIndex={-1}>
+            <Card sx={{ width: "80vw", maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
+                <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
+                    <MDTypography variant="h6">{title}</MDTypography>
+                    <MDBox>
+                        {data.length > 0 && !isLoading && (
+                            <MDButton variant="gradient" color="info" size="small" onClick={onIgnoreAll} sx={{ mr: 2 }}>
+                                Ignorar Todos
+                            </MDButton>
+                        )}
+                        <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
+                    </MDBox>
+                </MDBox>
+                <MDBox p={2} pt={0}>
+                    {isLoading ? (
+                        <MDBox display="flex" justifyContent="center" alignItems="center" sx={{ minHeight: '200px' }}><CircularProgress color="info" /></MDBox>
+                    ) : (
+                        <DataTable table={{ columns, rows: data }} isSorted entriesPerPage={{ defaultValue: 5 }} showTotalEntries canSearch />
+                    )}
+                </MDBox>
+            </Card>
+        </Box>
+    );
 });
 
 const JustificationModal = ({ open, onClose, onSubmit }) => {
-  const [justification, setJustification] = useState("");
-  const handleSubmit = () => { onSubmit(justification); setJustification(""); };
+    const [justification, setJustification] = useState("");
+    const handleSubmit = () => { onSubmit(justification); setJustification(""); };
 
-  return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Justificar Exceção</DialogTitle>
-      <DialogContent>
-        <DialogContentText sx={{ mb: 2 }}>
-          Por favor, forneça uma justificativa para ignorar esta divergência. Esta ação será registrada para fins de auditoria.
-        </DialogContentText>
-        <TextField autoFocus margin="dense" id="justification" label="Justificativa" type="text" fullWidth multiline rows={4} variant="outlined" value={justification} onChange={(e) => setJustification(e.target.value)} />
-      </DialogContent>
-      <DialogActions>
-        <MDButton onClick={onClose} color="secondary">Cancelar</MDButton>
-        <MDButton onClick={handleSubmit} color="info" variant="gradient" disabled={!justification.trim()}>Salvar Exceção</MDButton>
-      </DialogActions>
-    </Dialog>
-  );
+    return (
+        <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+            <DialogTitle>Justificar Exceção</DialogTitle>
+            <DialogContent>
+                <DialogContentText sx={{ mb: 2 }}>
+                    Por favor, forneça uma justificativa para ignorar esta divergência. Esta ação será registrada para fins de auditoria.
+                </DialogContentText>
+                <TextField autoFocus margin="dense" id="justification" label="Justificativa" type="text" fullWidth multiline rows={4} variant="outlined" value={justification} onChange={(e) => setJustification(e.target.value)} />
+            </DialogContent>
+            <DialogActions>
+                <MDButton onClick={onClose} color="secondary">Cancelar</MDButton>
+                <MDButton onClick={handleSubmit} color="info" variant="gradient" disabled={!justification.trim()}>Salvar Exceção</MDButton>
+            </DialogActions>
+        </Dialog>
+    );
 };
 
 
@@ -129,10 +129,7 @@ function VisaoGeral() {
     const fetchDashboardData = async () => {
         if (!token) return;
         setIsLoading(true);
-        // ======================= INÍCIO DA ALTERAÇÃO =======================
-        // Adicionado um parâmetro de cache-busting `_=` com o timestamp atual para forçar a busca de novos dados
         const metricsPromise = axios.get(`/metrics/${plataformaSelecionada}?_=${new Date().getTime()}`, { headers: { "Authorization": `Bearer ${token}` } });
-        // ======================== FIM DA ALTERAÇÃO =======================
         const liveFeedParams = { system: plataformaSelecionada.toLowerCase() === 'geral' ? undefined : plataformaSelecionada };
         const liveFeedPromise = axios.get('/live-feed', { headers: { "Authorization": `Bearer ${token}` }, params: liveFeedParams });
         try {
@@ -190,80 +187,80 @@ function VisaoGeral() {
     };
     
     const handleConfirmException = async (justification) => {
-      const { identity, isBulk } = exceptionState;
-      const { code, data } = drillDownState;
-  
-      if (!code || !justification) return;
-  
-      try {
-        if (isBulk) {
-          if (code === 'ACCESS_NOT_GRANTED') {
-            const groupedBySystem = data.reduce((acc, item) => {
-              const system = item.sourceSystem;
-              if (!acc[system]) {
-                acc[system] = [];
-              }
-              const originalId = parseInt(String(item.id).split('-')[0], 10);
-              if (!isNaN(originalId)) {
-                acc[system].push(originalId);
-              }
-              return acc;
-            }, {});
-  
-            const promises = Object.entries(groupedBySystem).map(([system, ids]) => {
-              if (ids.length === 0) return Promise.resolve();
-              const payload = {
-                identityIds: ids,
-                divergenceCode: code,
-                justification,
-                targetSystem: system,
-              };
-              return axios.post('/divergences/exceptions/bulk', payload, { headers: { "Authorization": `Bearer ${token}` } });
-            });
-  
-            await Promise.all(promises);
-  
-          } else {
-            const identityIds = data.map(item => item.id);
-            if (identityIds.length === 0) return;
+        const { identity, isBulk } = exceptionState;
+        const { code, data } = drillDownState;
+    
+        if (!code || !justification) return;
+    
+        try {
+            if (isBulk) {
+                if (code === 'ACCESS_NOT_GRANTED') {
+                    const groupedBySystem = data.reduce((acc, item) => {
+                        const system = item.sourceSystem;
+                        if (!acc[system]) {
+                            acc[system] = [];
+                        }
+                        const originalId = parseInt(String(item.id).split('-')[0], 10);
+                        if (!isNaN(originalId)) {
+                            acc[system].push(originalId);
+                        }
+                        return acc;
+                    }, {});
+    
+                    const promises = Object.entries(groupedBySystem).map(([system, ids]) => {
+                        if (ids.length === 0) return Promise.resolve();
+                        const payload = {
+                            identityIds: ids,
+                            divergenceCode: code,
+                            justification,
+                            targetSystem: system,
+                        };
+                        return axios.post('/divergences/exceptions/bulk', payload, { headers: { "Authorization": `Bearer ${token}` } });
+                    });
+    
+                    await Promise.all(promises);
+    
+                } else {
+                    const identityIds = data.map(item => item.id);
+                    if (identityIds.length === 0) return;
+                    
+                    const payload = {
+                        identityIds,
+                        divergenceCode: code,
+                        justification,
+                    };
+                    await axios.post('/divergences/exceptions/bulk', payload, { headers: { "Authorization": `Bearer ${token}` } });
+                }
+            } else {
+                if (!identity) return;
+                
+                const identityId = code === 'ACCESS_NOT_GRANTED' 
+                    ? parseInt(String(identity.id).split('-')[0], 10)
+                    : identity.id;
+    
+                if (isNaN(identityId)) {
+                    throw new Error("ID da identidade é inválido.");
+                }
+    
+                const payload = {
+                    identityId: identityId,
+                    divergenceCode: code,
+                    justification,
+                };
+    
+                if (code === 'ACCESS_NOT_GRANTED') {
+                    payload.targetSystem = identity.sourceSystem;
+                }
+                await axios.post('/divergences/exceptions', payload, { headers: { "Authorization": `Bearer ${token}` } });
+            }
             
-            const payload = {
-              identityIds,
-              divergenceCode: code,
-              justification,
-            };
-            await axios.post('/divergences/exceptions/bulk', payload, { headers: { "Authorization": `Bearer ${token}` } });
-          }
-        } else {
-          if (!identity) return;
-          
-          const identityId = code === 'ACCESS_NOT_GRANTED' 
-            ? parseInt(String(identity.id).split('-')[0], 10)
-            : identity.id;
-  
-          if (isNaN(identityId)) {
-            throw new Error("ID da identidade é inválido.");
-          }
-  
-          const payload = {
-            identityId: identityId,
-            divergenceCode: code,
-            justification,
-          };
-  
-          if (code === 'ACCESS_NOT_GRANTED') {
-            payload.targetSystem = identity.sourceSystem;
-          }
-          await axios.post('/divergences/exceptions', payload, { headers: { "Authorization": `Bearer ${token}` } });
+            handleCloseExceptionModal();
+            handleCloseDrillDownModal();
+            fetchDashboardData();
+    
+        } catch (error) {
+            console.error("Erro ao criar exceção(ões):", error);
         }
-        
-        handleCloseExceptionModal();
-        handleCloseDrillDownModal();
-        fetchDashboardData();
-  
-      } catch (error) {
-        console.error("Erro ao criar exceção(ões):", error);
-      }
     };
     
     const handleFinancialCardClick = (cardType) => {
@@ -282,23 +279,38 @@ function VisaoGeral() {
         handleOpenModal();
     };
 
-    const handlePieChartClick = async (event, elements) => {
-        if (!elements || elements.length === 0 || !token) return;
+    // <<< INÍCIO DA CORREÇÃO >>>
+    const handlePieChartClick = (event, elements) => {
+        if (!elements || elements.length === 0) return;
         const { index } = elements[0];
         const clickedLabel = displayData.imDisplay.tiposChart.labels[index];
         if (!clickedLabel) return;
-        try {
-            const params = { userType: clickedLabel, system: plataformaSelecionada === "Geral" ? undefined : plataformaSelecionada };
-            const response = await axios.get('/identities', { headers: { "Authorization": `Bearer ${token}` }, params });
-            setModalContent({
-                title: `Detalhes: Tipo de Usuário "${clickedLabel}"`,
-                data: { columns: [ { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Perfil", accessor: "profile.name" }, { Header: "Status", accessor: "status" } ], rows: response.data },
-            });
-            handleOpenModal();
-        } catch (error) {
-            console.error("Erro ao buscar detalhes das identidades:", error);
-        }
+    
+        // Filtra os dados já existentes no 'liveFeedData', mas adiciona uma condição
+        // para excluir os usuários "faltantes" (aqueles com 'app_status' "Não encontrado"),
+        // garantindo que a lista do modal corresponda à contagem do gráfico.
+        const usersOfType = liveFeedData.filter(user => 
+            user.userType === clickedLabel && user.app_status !== 'Não encontrado'
+        );
+    
+        setModalContent({
+            title: `Detalhes: Tipo de Usuário "${clickedLabel}"`,
+            data: {
+                columns: [
+                    { Header: "ID", accessor: "identityId" },
+                    { Header: "Nome", accessor: "name" },
+                    { Header: "Email", accessor: "email" },
+                    { Header: "Sistema", accessor: "sourceSystem" },
+                    { Header: "Perfil", accessor: "perfil" },
+                    { Header: "Status App", accessor: "app_status" },
+                ],
+                // Agora estamos usando a lista corretamente filtrada.
+                rows: usersOfType,
+            },
+        });
+        handleOpenModal();
     };
+    // <<< FIM DA CORREÇÃO >>>
 
     const handleBarChartClick = async (event, elements) => {
         if (!elements || elements.length === 0 || !token) return;
@@ -339,14 +351,14 @@ function VisaoGeral() {
             <DashboardNavbar />
             
             <Modal open={drillDownState.isOpen} onClose={handleCloseDrillDownModal} sx={{ display: "grid", placeItems: "center" }}>
-              <DrillDownModal 
-                title={drillDownState.title} 
-                data={drillDownState.data} 
-                isLoading={drillDownState.isLoading} 
-                onClose={handleCloseDrillDownModal} 
-                onIgnore={handleOpenExceptionModal}
-                onIgnoreAll={handleOpenBulkConfirm}
-              />
+                <DrillDownModal 
+                    title={drillDownState.title} 
+                    data={drillDownState.data} 
+                    isLoading={drillDownState.isLoading} 
+                    onClose={handleCloseDrillDownModal} 
+                    onIgnore={handleOpenExceptionModal}
+                    onIgnoreAll={handleOpenBulkConfirm}
+                />
             </Modal>
     
             <JustificationModal open={exceptionState.isOpen} onClose={handleCloseExceptionModal} onSubmit={handleConfirmException} />
