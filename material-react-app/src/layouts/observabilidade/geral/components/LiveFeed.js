@@ -54,14 +54,29 @@ const InfoDetail = ({ label, value }) => (
     </Grid>
 );
 
-const DivergenceModal = React.forwardRef(({ user, onClose }, ref) => {
+// <<< INÍCIO DA ALTERAÇÃO 1: Passando a prop 'darkMode' para o modal >>>
+const DivergenceModal = React.forwardRef(({ user, onClose, darkMode }, ref) => {
+// <<< FIM DA ALTERAÇÃO 1 >>>
     if (!user) return null;
     return (
         <Box ref={ref} tabIndex={-1}>
             <Card sx={{ width: "80vw", maxWidth: "700px", maxHeight: "90vh", overflowY: "auto" }}>
                 <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
                     <MDTypography variant="h6">Detalhes da Identidade</MDTypography>
-                    <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
+                    {/* <<< INÍCIO DA ALTERAÇÃO 2: Substituído o MDButton pelo Icon, seguindo o modelo do Configurator >>> */}
+                    <Icon
+                        sx={({ typography: { size }, palette: { dark, white } }) => ({
+                            fontSize: `${size.lg} !important`,
+                            color: darkMode ? white.main : dark.main,
+                            stroke: "currentColor",
+                            strokeWidth: "2px",
+                            cursor: "pointer",
+                        })}
+                        onClick={onClose}
+                    >
+                        close
+                    </Icon>
+                    {/* <<< FIM DA ALTERAÇÃO 2 >>> */}
                 </MDBox>
                 <Divider sx={{ margin: 0 }} />
                 <MDBox p={3}>
@@ -113,8 +128,10 @@ const DivergenceModal = React.forwardRef(({ user, onClose }, ref) => {
 
 
 function LiveFeed({ data }) {
+    // <<< INÍCIO DA ALTERAÇÃO 3: Extraindo o 'darkMode' do controller >>>
     const [controller] = useMaterialUIController();
-    const { token } = controller;
+    const { token, darkMode } = controller;
+    // <<< FIM DA ALTERAÇÃO 3 >>>
     const [systemOptions, setSystemOptions] = useState([]);
 
     useEffect(() => {
@@ -148,8 +165,6 @@ function LiveFeed({ data }) {
         divergenceType: null
     };
 
-    // <<< INÍCIO DA ALTERAÇÃO >>>
-    // Adicionada a opção 'ACCESS_NOT_GRANTED' à lista
     const divergenceOptions = [
         { code: 'ORPHAN', label: 'Conta Órfã' },
         { code: 'ZOMBIE', label: 'Acesso Ativo Indevido' },
@@ -160,7 +175,6 @@ function LiveFeed({ data }) {
         { code: 'USERTYPE_MISMATCH', label: 'Divergência de Tipo de Usuário' },
         { code: 'DORMANT_ADMIN', label: 'Admin Dormente' },
     ];
-    // <<< FIM DA ALTERAÇÃO >>>
 
     const [filters, setFilters] = useState(initialFilters);
     const [tempFilters, setTempFilters] = useState(initialFilters);
@@ -264,7 +278,9 @@ function LiveFeed({ data }) {
     return (
         <>
             <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
-                <DivergenceModal user={selectedUser} onClose={handleCloseModal} />
+                {/* <<< INÍCIO DA ALTERAÇÃO 4: Passando o darkMode para o modal >>> */}
+                <DivergenceModal user={selectedUser} onClose={handleCloseModal} darkMode={darkMode} />
+                {/* <<< FIM DA ALTERAÇÃO 4 >>> */}
             </Modal>
 
             <Card>
@@ -274,7 +290,7 @@ function LiveFeed({ data }) {
                     </MDTypography>
                     <MDBox display="flex" alignItems="center" gap={1} sx={{ flexGrow: 1, justifyContent: 'center', mx: 2 }}>
                         <MDInput
-                            placeholder="Buscar Usuário"
+                            label="Buscar Usuário"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             sx={{ width: '175px' }}
@@ -304,10 +320,6 @@ function LiveFeed({ data }) {
                             />
                         </MDBox>
                         
-                        
-                        <MDBox mt={2}>
-                            <Autocomplete options={['Sim', 'Não']} value={tempFilters.divergencia} onChange={(e, val) => handleTempAutocompleteChange('divergencia', val)} renderInput={(params) => <TextField {...params} label="Possui Divergência?" />} />
-                        </MDBox>
                         <MDBox mt={2}>
                             <Autocomplete 
                                 options={divergenceOptions}
@@ -316,6 +328,10 @@ function LiveFeed({ data }) {
                                 onChange={(event, newValue) => handleTempAutocompleteChange('divergenceType', newValue)}
                                 renderInput={(params) => <TextField {...params} label="Tipo de Divergência" />} 
                             />
+                        </MDBox>
+                        
+                        <MDBox mt={2}>
+                            <Autocomplete options={['Sim', 'Não']} value={tempFilters.divergencia} onChange={(e, val) => handleTempAutocompleteChange('divergencia', val)} renderInput={(params) => <TextField {...params} label="Possui Divergência?" />} />
                         </MDBox>
                         <MDBox mt={2} mb={2}>
                             <Autocomplete options={['Sim', 'Não']} value={tempFilters.criticas} onChange={(e, val) => handleTempAutocompleteChange('criticas', val)} renderInput={(params) => <TextField {...params} label="Possui Críticas?" />} />

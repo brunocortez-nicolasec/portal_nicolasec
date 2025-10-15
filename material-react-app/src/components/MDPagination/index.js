@@ -1,38 +1,26 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
+// material-react-app/src/components/MDPagination/index.js
 
 import { forwardRef, createContext, useContext, useMemo } from "react";
-
-// prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
+import { useTheme } from "@mui/material/styles"; // <<< ALTERAÇÃO 1: Importar o hook de tema
 
-// Material Dashboard 2 React components
 import MDBox from "components/MDBox";
-
-// Custom styles for MDPagination
 import MDPaginationItemRoot from "components/MDPagination/MDPaginationItemRoot";
 
-// The Pagination main context
 const Context = createContext();
 
 const MDPagination = forwardRef(
   ({ item, variant, color, size, active, children, ...rest }, ref) => {
     const context = useContext(Context);
     const paginationSize = context ? context.size : null;
+    const theme = useTheme(); // <<< ALTERAÇÃO 2: Acessar o tema atual
 
     const value = useMemo(() => ({ variant, color, size }), [variant, color, size]);
+
+    // <<< INÍCIO DA ALTERAÇÃO 3: Lógica de cor aprimorada >>>
+    // Define a cor para os botões inativos. No modo escuro, usa 'white', caso contrário, 'secondary'.
+    const inactiveColor = theme.palette.mode === 'dark' ? "white" : "secondary";
+    // <<< FIM DA ALTERAÇÃO 3 >>>
 
     return (
       <Context.Provider value={value}>
@@ -41,7 +29,8 @@ const MDPagination = forwardRef(
             {...rest}
             ref={ref}
             variant={active ? context.variant : "outlined"}
-            color={active ? context.color : "secondary"}
+            // <<< ALTERAÇÃO 4: Aplica a cor inativa correta >>>
+            color={active ? context.color : inactiveColor}
             iconOnly
             circular
             ownerState={{ variant, active, paginationSize }}
@@ -63,7 +52,6 @@ const MDPagination = forwardRef(
   }
 );
 
-// Setting default values for the props of MDPagination
 MDPagination.defaultProps = {
   item: false,
   variant: "gradient",
@@ -72,7 +60,6 @@ MDPagination.defaultProps = {
   active: false,
 };
 
-// Typechecking props for the MDPagination
 MDPagination.propTypes = {
   item: PropTypes.bool,
   variant: PropTypes.oneOf(["gradient", "contained"]),

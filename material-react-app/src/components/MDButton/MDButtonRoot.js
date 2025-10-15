@@ -1,18 +1,4 @@
-/* eslint-disable prefer-destructuring */
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
+// material-react-app/src/components/MDButton/MDButtonRoot.js
 
 // @mui material components
 import Button from "@mui/material/Button";
@@ -204,11 +190,17 @@ export default styled(Button)(({ theme, ownerState }) => {
 
   // styles for the button with variant="text"
   const textStyles = () => {
-    // color value
-    const colorValue = palette[color] ? palette[color].main : white.main;
+    // <<< INÍCIO DA ALTERAÇÃO FINAL >>>
+    // Define a cor base e a cor de hover/foco.
+    let colorValue = palette[color] ? palette[color].main : white.main;
+    let focusedColorValue = palette[color] ? palette[color].focus : white.focus;
 
-    // color value when button is focused
-    const focusedColorValue = palette[color] ? palette[color].focus : white.focus;
+    // Sobrescreve as cores APENAS para a prop 'color="white"' para que ela se adapte ao tema.
+    if (color === "white") {
+      colorValue = darkMode ? white.main : text.secondary;
+      focusedColorValue = darkMode ? white.focus : text.primary;
+    }
+    // <<< FIM DA ALTERAÇÃO FINAL >>>
 
     return {
       color: colorValue,

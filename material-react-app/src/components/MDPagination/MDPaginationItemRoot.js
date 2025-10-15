@@ -1,17 +1,4 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
+// material-react-app/src/components/MDPagination/MDPaginationItemRoot.js
 
 // @mui material components
 import { styled } from "@mui/material/styles";
@@ -26,7 +13,7 @@ export default styled(MDButton)(({ theme, ownerState }) => {
   const { borderColor } = borders;
   const { pxToRem } = functions;
   const { fontWeightRegular, size: fontSize } = typography;
-  const { light } = palette;
+  const { light, grey, text, action, mode } = palette;
 
   // width, height, minWidth and minHeight values
   let sizeValue = pxToRem(36);
@@ -48,6 +35,13 @@ export default styled(MDButton)(({ theme, ownerState }) => {
     height: sizeValue,
     minHeight: sizeValue,
 
+    // <<< INÍCIO DA ALTERAÇÃO FINAL >>>
+    // Aplica estilos específicos apenas para o modo escuro e para itens não ativos
+    ...(mode === "dark" && !active && {
+      color: text.secondary, // Cor do texto inativo mais clara
+      borderColor: grey[700], // Cor da borda inativa mais clara
+    }),
+
     "&:hover, &:focus, &:active": {
       transform: "none",
       boxShadow: (variant !== "gradient" || variant !== "contained") && "none !important",
@@ -55,8 +49,14 @@ export default styled(MDButton)(({ theme, ownerState }) => {
     },
 
     "&:hover": {
-      backgroundColor: light.main,
-      borderColor,
+      // Define um fundo de hover que funciona em ambos os modos
+      backgroundColor: action.hover, 
+      borderColor, // Mantém a borda padrão no hover (ou a do modo escuro, se aplicável)
+      // No modo escuro, força o texto a ficar branco no hover para garantir a legibilidade
+      ...(mode === "dark" && {
+        color: text.primary,
+      }),
     },
+    // <<< FIM DA ALTERAÇÃO FINAL >>>
   };
 });

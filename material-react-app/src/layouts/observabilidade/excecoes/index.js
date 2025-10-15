@@ -1,6 +1,6 @@
 // material-react-app/src/layouts/observabilidade/excecoes/index.js
 
-import { useState, useEffect, useMemo } from "react"; // <<< ALTERAÇÃO: Adicionado 'useMemo'
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { useMaterialUIController } from "context";
 
@@ -53,7 +53,9 @@ const SectionTitle = ({ children }) => (
     </MDTypography>
 );
 
-const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenceLabel }) => {
+// <<< INÍCIO DA ALTERAÇÃO 1: Passando a prop 'darkMode' para o modal >>>
+const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenceLabel, darkMode }) => {
+// <<< FIM DA ALTERAÇÃO 1 >>>
     if (!open) return null;
 
     const renderDivergenceSpecifics = () => {
@@ -94,7 +96,20 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
             <Card sx={{ width: "90%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
                 <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
                     <MDTypography variant="h6">Detalhes da Exceção</MDTypography>
-                    <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
+                    {/* <<< INÍCIO DA ALTERAÇÃO 2: Substituído o MDButton pelo Icon, seguindo o modelo do Configurator >>> */}
+                    <Icon
+                        sx={({ typography: { size }, palette: { dark, white } }) => ({
+                            fontSize: `${size.lg} !important`,
+                            color: darkMode ? white.main : dark.main,
+                            stroke: "currentColor",
+                            strokeWidth: "2px",
+                            cursor: "pointer",
+                        })}
+                        onClick={onClose}
+                    >
+                        close
+                    </Icon>
+                    {/* <<< FIM DA ALTERAÇÃO 2 >>> */}
                 </MDBox>
                 <Divider sx={{ my: 0 }} />
                 <MDBox p={3}>
@@ -138,8 +153,10 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
 
 
 function GerenciarExcecoes() {
+    // <<< INÍCIO DA ALTERAÇÃO 3: Extraindo o 'darkMode' do controller >>>
     const [controller] = useMaterialUIController();
-    const { token } = controller;
+    const { token, darkMode } = controller;
+    // <<< FIM DA ALTERAÇÃO 3 >>>
     const [exceptions, setExceptions] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
@@ -308,15 +325,12 @@ function GerenciarExcecoes() {
         doc.save("relatorio_excecoes.pdf");
     };
 
-    // <<< INÍCIO DA ALTERAÇÃO >>>
     const columns = useMemo(() => [
         {
             Header: "Identidade",
-            // O accessor agora aponta para o nome, que é uma string pesquisável.
             accessor: "identity.name",
             width: "25%",
             align: "left",
-            // Usamos a propriedade Cell para renderizar nosso componente customizado.
             Cell: ({ row: { original: ex } }) => (
                 <MDBox 
                     lineHeight={1} 
@@ -336,7 +350,6 @@ function GerenciarExcecoes() {
             Header: "Ações", 
             accessor: "actions", 
             align: "center",
-            // A ordenação e a busca não se aplicam a esta coluna
             disableSortBy: true,
             Cell: ({ row: { original: ex } }) => (
                 <MDButton variant="text" color="error" onClick={() => handleOpenDeleteDialog(ex)}>
@@ -344,10 +357,9 @@ function GerenciarExcecoes() {
                 </MDButton>
             )
         },
-    ], [exceptions]); // Recalcula as colunas se as exceções mudarem
+    ], [exceptions]);
 
     const rows = useMemo(() => exceptions, [exceptions]);
-    // <<< FIM DA ALTERAÇÃO >>>
 
     return (
         <DashboardLayout>
@@ -402,6 +414,7 @@ function GerenciarExcecoes() {
                 isLoading={detailsModalState.isLoading}
                 details={detailsModalState.data}
                 getDivergenceLabel={getDivergenceLabel}
+                darkMode={darkMode} // <<< ALTERAÇÃO: Passando o darkMode para o modal
             />
 
             <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>

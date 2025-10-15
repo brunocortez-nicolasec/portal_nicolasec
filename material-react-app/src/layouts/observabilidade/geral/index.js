@@ -37,12 +37,25 @@ import KpiStack from "./components/KpiStack";
 
 // --- COMPONENTES DE MODAL ---
 
-const ModalContent = React.forwardRef(({ title, data, onClose }, ref) => (
+const ModalContent = React.forwardRef(({ title, data, onClose, darkMode }, ref) => (
     <Box ref={ref} tabIndex={-1}>
         <Card sx={{ width: "80vw", maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
             <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
                 <MDTypography variant="h6">{title}</MDTypography>
-                <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
+                {/* <<< INÍCIO DA ALTERAÇÃO >>> */}
+                <Icon
+                    sx={({ typography: { size }, palette: { dark, white } }) => ({
+                        fontSize: `${size.lg} !important`,
+                        color: darkMode ? white.main : dark.main,
+                        stroke: "currentColor",
+                        strokeWidth: "2px",
+                        cursor: "pointer",
+                    })}
+                    onClick={onClose}
+                >
+                    close
+                </Icon>
+                {/* <<< FIM DA ALTERAÇÃO >>> */}
             </MDBox>
             <MDBox p={2} pt={0}>
                 <DataTable table={data} isSorted={false} entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }} showTotalEntries canSearch />
@@ -51,7 +64,7 @@ const ModalContent = React.forwardRef(({ title, data, onClose }, ref) => (
     </Box>
 ));
 
-const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onIgnoreAll, onClose }, ref) => {
+const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onIgnoreAll, onClose, darkMode }, ref) => {
     const columns = [
         { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
         { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
@@ -68,13 +81,26 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
             <Card sx={{ width: "80vw", maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
                 <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
                     <MDTypography variant="h6">{title}</MDTypography>
-                    <MDBox>
+                    <MDBox display="flex" alignItems="center">
                         {data.length > 0 && !isLoading && (
                             <MDButton variant="gradient" color="info" size="small" onClick={onIgnoreAll} sx={{ mr: 2 }}>
                                 Ignorar Todos
                             </MDButton>
                         )}
-                        <MDButton iconOnly onClick={onClose}><Icon>close</Icon></MDButton>
+                        {/* <<< INÍCIO DA ALTERAÇÃO >>> */}
+                        <Icon
+                            sx={({ typography: { size }, palette: { dark, white } }) => ({
+                                fontSize: `${size.lg} !important`,
+                                color: darkMode ? white.main : dark.main,
+                                stroke: "currentColor",
+                                strokeWidth: "2px",
+                                cursor: "pointer",
+                            })}
+                            onClick={onClose}
+                        >
+                            close
+                        </Icon>
+                        {/* <<< FIM DA ALTERAÇÃO >>> */}
                     </MDBox>
                 </MDBox>
                 <MDBox p={2} pt={0}>
@@ -89,6 +115,7 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
     );
 });
 
+// ... (o resto do arquivo permanece o mesmo, sem alterações)
 const JustificationModal = ({ open, onClose, onSubmit }) => {
     const [justification, setJustification] = useState("");
     const handleSubmit = () => { onSubmit(justification); setJustification(""); };
@@ -113,7 +140,7 @@ const JustificationModal = ({ open, onClose, onSubmit }) => {
 
 function VisaoGeral() {
     const [controller] = useMaterialUIController();
-    const { token } = controller;
+    const { token, darkMode } = controller; // <<< ALTERAÇÃO: darkMode é extraído do controller
 
     const [plataformaSelecionada, setPlataformaSelecionada] = useState("Geral");
     const [metrics, setMetrics] = useState(null);
@@ -279,16 +306,12 @@ function VisaoGeral() {
         handleOpenModal();
     };
 
-    // <<< INÍCIO DA CORREÇÃO >>>
     const handlePieChartClick = (event, elements) => {
         if (!elements || elements.length === 0) return;
         const { index } = elements[0];
         const clickedLabel = displayData.imDisplay.tiposChart.labels[index];
         if (!clickedLabel) return;
     
-        // Filtra os dados já existentes no 'liveFeedData', mas adiciona uma condição
-        // para excluir os usuários "faltantes" (aqueles com 'app_status' "Não encontrado"),
-        // garantindo que a lista do modal corresponda à contagem do gráfico.
         const usersOfType = liveFeedData.filter(user => 
             user.userType === clickedLabel && user.app_status !== 'Não encontrado'
         );
@@ -304,13 +327,11 @@ function VisaoGeral() {
                     { Header: "Perfil", accessor: "perfil" },
                     { Header: "Status App", accessor: "app_status" },
                 ],
-                // Agora estamos usando a lista corretamente filtrada.
                 rows: usersOfType,
             },
         });
         handleOpenModal();
     };
-    // <<< FIM DA CORREÇÃO >>>
 
     const handleBarChartClick = async (event, elements) => {
         if (!elements || elements.length === 0 || !token) return;
@@ -358,6 +379,7 @@ function VisaoGeral() {
                     onClose={handleCloseDrillDownModal} 
                     onIgnore={handleOpenExceptionModal}
                     onIgnoreAll={handleOpenBulkConfirm}
+                    darkMode={darkMode} // <<< ALTERAÇÃO: Passando o darkMode para o modal
                 />
             </Modal>
     
@@ -377,7 +399,12 @@ function VisaoGeral() {
             </Dialog>
 
             <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
-                <ModalContent title={modalContent.title} data={modalContent.data} onClose={handleCloseModal} />
+                <ModalContent 
+                    title={modalContent.title} 
+                    data={modalContent.data} 
+                    onClose={handleCloseModal} 
+                    darkMode={darkMode} // <<< ALTERAÇÃO: Passando o darkMode para o modal
+                />
             </Modal>
 
             <MDBox py={3}>

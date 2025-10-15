@@ -1,12 +1,17 @@
+// material-react-app/src/examples/Tables/DataTable/index.js
+
 import { useMemo, useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { useTable, useGlobalFilter, useAsyncDebounce, useSortBy, usePagination } from "react-table";
 
+// @mui material components
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableContainer from "@mui/material/TableContainer";
 import TableRow from "@mui/material/TableRow";
 import Icon from "@mui/material/Icon";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
@@ -92,35 +97,53 @@ function DataTable({
         <MDBox display="flex" justifyContent="space-between" alignItems="center" p={3}>
           {entriesPerPage && (
             <MDBox display="flex" alignItems="center">
-              <select
+              <Select
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
-                style={{
-                  background: 'transparent',
-                  padding: '8px 12px',
-                  border: '1px solid #d2d6da',
-                  borderRadius: '0.375rem',
-                  color: '#495057',
-                  marginRight: '8px'
+                size="small"
+                sx={{
+                  minWidth: "4.5rem",
+                  height: "2.5rem",
+                  mr: 1,
+                  "& .MuiSelect-select": {
+                    textAlign: "center",
+                    paddingRight: "24px !important",
+                  }
+                }}
+                MenuProps={{
+                  sx: {
+                    "& .MuiPaper-root": {
+                      minWidth: "4.5rem",
+                    },
+                  },
                 }}
               >
                 {entries.map((entry) => (
-                  <option key={entry} value={entry}>
+                  <MenuItem 
+                    key={entry} 
+                    value={entry} 
+                    sx={{ 
+                      justifyContent: "center",
+                      minWidth: "auto !important",
+                      padding: "6px 8px",
+                    }}
+                  >
                     {entry}
-                  </option>
+                  </MenuItem>
                 ))}
-              </select>
-              <MDTypography variant="caption" color="secondary">
-                &nbsp;&nbsp;itens por página
+              </Select>
+              <MDTypography variant="caption" color="text">
+                itens por página
               </MDTypography>
             </MDBox>
           )}
           {canSearch && (
-            <MDBox width="12rem" ml="auto">
+            <MDBox width="10rem" ml="auto">
               <MDInput
-                placeholder="Pesquisar..."
-                value={search}
+                label="Pesquisar..."
+                value={search || ""}
                 size="small"
+                fullWidth
                 onChange={({ currentTarget }) => {
                   setSearch(currentTarget.value);
                   onSearchChange(currentTarget.value);
@@ -178,16 +201,35 @@ function DataTable({
       >
         {showTotalEntries && (
           <MDBox mb={{ xs: 3, sm: 0 }}>
-            <MDTypography variant="button" color="secondary" fontWeight="regular">
+            <MDTypography variant="button" color="text" fontWeight="regular">
               Mostrando de {entriesStart} a {entriesEnd} de {rows.length} itens totais
             </MDTypography>
           </MDBox>
         )}
         {pageOptions.length > 1 && (
+          // <<< INÍCIO DA ALTERAÇÃO >>>
           <MDPagination
             variant={pagination.variant ? pagination.variant : "gradient"}
             color={pagination.color ? pagination.color : "info"}
+            sx={(theme) => ({
+              // Aplica o override apenas no modo escuro
+              ...(theme.palette.mode === 'dark' && {
+                // Alvo: Todos os botões da paginação (números e setas)
+                "& .MuiPaginationItem-root": {
+                  // Para itens que NÃO estão selecionados
+                  "&:not(.Mui-selected)": {
+                    borderColor: theme.palette.grey[700], // Borda mais clara e visível
+                    color: theme.palette.text.secondary, // Texto mais claro
+                    "&:hover": {
+                      backgroundColor: theme.palette.action.hover, // Fundo de hover padrão
+                      color: theme.palette.text.primary, // Garante que o texto fique BRANCO no hover
+                    },
+                  },
+                },
+              }),
+            })}
           >
+          {/* <<< FIM DA ALTERAÇÃO >>> */}
             {canPreviousPage && (
               <MDPagination item onClick={() => previousPage()}>
                 <Icon sx={{ fontWeight: "bold" }}>chevron_left</Icon>
