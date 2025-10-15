@@ -1,24 +1,7 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
-
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
+// material-react-app/src/examples/LayoutContainers/DashboardLayout/index.js
 
 import { useEffect } from "react";
-
-// react-router-dom components
 import { useLocation } from "react-router-dom";
-
-// prop-types is a library for typechecking of props.
 import PropTypes from "prop-types";
 
 // Material Dashboard 2 React components
@@ -26,6 +9,8 @@ import MDBox from "components/MDBox";
 
 // Material Dashboard 2 React context
 import { useMaterialUIController, setLayout } from "context";
+
+import Footer from "examples/Footer";
 
 function DashboardLayout({ children }) {
   const [controller, dispatch] = useMaterialUIController();
@@ -39,8 +24,13 @@ function DashboardLayout({ children }) {
   return (
     <MDBox
       sx={({ breakpoints, transitions, functions: { pxToRem } }) => ({
-        p: 3,
         position: "relative",
+        // <<< INÍCIO DA ALTERAÇÃO 1: Estrutura de layout principal >>>
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh", // Ocupa a altura total da tela
+        // O padding foi removido daqui
+        // <<< FIM DA ALTERAÇÃO 1 >>>
 
         [breakpoints.up("xl")]: {
           marginLeft: miniSidenav ? pxToRem(120) : pxToRem(274),
@@ -51,7 +41,17 @@ function DashboardLayout({ children }) {
         },
       })}
     >
-      {children}
+      {/* <<< INÍCIO DA ALTERAÇÃO 2: Wrapper para o conteúdo da página >>> */}
+      <MDBox sx={{ p: 3, flexGrow: 1 }}>
+        {children}
+      </MDBox>
+      {/* <<< FIM DA ALTERAÇÃO 2 >>> */}
+
+      {/* <<< INÍCIO DA ALTERAÇÃO 3: Wrapper para o footer com padding controlado >>> */}
+      <MDBox px={3} pb={1}>
+        <Footer />
+      </MDBox>
+      {/* <<< FIM DA ALTERAÇÃO 3 >>> */}
     </MDBox>
   );
 }

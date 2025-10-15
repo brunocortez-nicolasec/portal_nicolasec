@@ -1,4 +1,4 @@
-// CÓDIGO CORRIGIDO
+// material-react-app/src/examples/Sidenav/index.js
 
 import { useEffect, useMemo } from "react";
 import { useLocation, NavLink } from "react-router-dom";
@@ -25,7 +25,6 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
   const location = useLocation();
   const collapseName = location.pathname.replace("/", "");
 
-  // --- CORREÇÃO AQUI: Lendo os dados do caminho correto ---
   const { userRole, userPackage, userPlatformKeys } = useMemo(() => {
     const attributes = user?.data?.attributes;
     if (!attributes) {
@@ -37,7 +36,6 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     return { userRole, userPackage, userPlatformKeys };
   }, [user]);
 
-  // ... (o restante do seu código continua exatamente igual)
   let textColor = "white";
   if (transparentSidenav || (whiteSidenav && !darkMode)) {
     textColor = "dark";
@@ -217,6 +215,23 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         />
         {renderRoutes}
       </List>
+
+      {/* <<< INÍCIO DA ALTERAÇÃO >>> */}
+      <MDBox
+        sx={{
+          position: "absolute",
+          bottom: "1rem", // Distância da parte inferior
+          left: 0,
+          right: 0,
+          textAlign: "center",
+        }}
+      >
+        <MDTypography variant="caption" color={textColor}>
+          Versão 1.0.0
+        </MDTypography>
+      </MDBox>
+      {/* <<< FIM DA ALTERAÇÃO >>> */}
+
     </SidenavRoot>
   );
 }
