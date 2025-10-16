@@ -26,14 +26,13 @@ import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import DataTable from "examples/Tables/DataTable";
 
-// Componente do novo modal dinâmico
+// Componentes do novo modal dinâmico
 import DataSourceModal from "./components/DataSourceModal";
+import DataSourceViewModal from "./components/DataSourceViewModal";
 
 function GerenciarDataSources() {
-    // ======================= INÍCIO DA ALTERAÇÃO 1 =======================
     const [controller] = useMaterialUIController();
-    const { token, darkMode } = controller; // Adicionado 'darkMode'
-    // ======================== FIM DA ALTERAÇÃO 1 =========================
+    const { token, darkMode } = controller;
     
     const [systems, setSystems] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -43,6 +42,9 @@ function GerenciarDataSources() {
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingDataSource, setEditingDataSource] = useState(null);
+
+    const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+    const [dataSourceToView, setDataSourceToView] = useState(null);
 
     const fetchSystems = async () => {
         if (!token) return;
@@ -81,12 +83,49 @@ function GerenciarDataSources() {
       setEditingDataSource(null);
     };
 
-    const handleSaveDataSource = (formData) => {
-        console.log("Salvando Fonte de Dados:", formData);
-        const action = formData.id ? "atualizada" : "criada";
-        setNotification({ open: true, color: "success", title: "Sucesso", content: `Fonte de dados "${formData.name}" ${action} com sucesso!` });
+    const handleViewClick = (dataSource) => {
+      setDataSourceToView(dataSource);
+      setIsViewModalOpen(true);
+    };
+
+    const handleCloseViewModal = () => {
+      setIsViewModalOpen(false);
+      setDataSourceToView(null);
+    };
+
+    const handleSaveDataSource = async (formData) => {
+      try {
+        const headers = { "Authorization": `Bearer ${token}` };
+        let action = "criada";
+        let response;
+  
+        if (formData.id) {
+          action = "atualizada";
+          response = await axios.patch(`/systems/${formData.id}`, formData, { headers });
+        } else {
+          response = await axios.post('/systems', formData, { headers });
+        }
+  
+        setNotification({ 
+          open: true, 
+          color: "success", 
+          title: "Sucesso", 
+          content: `Fonte de dados "${response.data.name}" ${action} com sucesso!` 
+        });
+        
         handleCloseModal();
         fetchSystems();
+
+      } catch (error) {
+        console.error("Erro ao salvar fonte de dados:", error);
+        const errorMessage = error.response?.data?.message || "Ocorreu um erro inesperado.";
+        setNotification({ 
+          open: true, 
+          color: "error", 
+          title: "Erro ao Salvar", 
+          content: errorMessage 
+        });
+      }
     };
 
     const handleOpenDeleteDialog = (system) => {
@@ -151,6 +190,11 @@ function GerenciarDataSources() {
             disableSortBy: true,
             Cell: ({ row: { original: dataSource } }) => (
                 <MDBox display="flex" justifyContent="center" alignItems="center" sx={{ gap: 2 }}>
+                    {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+                    <MDTypography component="a" color="text" sx={{ cursor: "pointer" }} onClick={() => handleViewClick(dataSource)}>
+                        <Icon>visibility</Icon>
+                    </MDTypography>
+                    {/* ======================== FIM DA ALTERAÇÃO ========================= */}
                     <MDTypography component="a" color="info" sx={{ cursor: "pointer" }} onClick={() => handleEditClick(dataSource)}>
                         <Icon>edit</Icon>
                     </MDTypography>
@@ -160,7 +204,7 @@ function GerenciarDataSources() {
                 </MDBox>
             )
         },
-    ], []);
+    ], [systems]); // Adicionado 'systems' como dependência para garantir re-renderização
 
     const rows = useMemo(() => systems, [systems]);
 
@@ -200,7 +244,6 @@ function GerenciarDataSources() {
                 </Grid>
             </MDBox>
 
-            {/* ======================= INÍCIO DA ALTERAÇÃO 2 ======================= */}
             {isModalOpen && (
               <DataSourceModal
                 open={isModalOpen}
@@ -210,8 +253,16 @@ function GerenciarDataSources() {
                 darkMode={darkMode} 
               />
             )}
-            {/* ======================== FIM DA ALTERAÇÃO 2 ========================= */}
             
+            {isViewModalOpen && (
+              <DataSourceViewModal
+                open={isViewModalOpen}
+                onClose={handleCloseViewModal}
+                dataSource={dataSourceToView}
+                darkMode={darkMode}
+              />
+            )}
+
             <Dialog open={isDeleteDialogOpen} onClose={handleCloseDeleteDialog}>
                 <DialogTitle>Confirmar Exclusão</DialogTitle>
                 <DialogContent>

@@ -8,16 +8,95 @@ const prisma = new PrismaClient();
 const router = express.Router();
 
 /**
+ * Helper: Pega o objeto do formulário e o "empacota" para o banco de dados.
+ */
+const packSystemData = (body) => {
+  const { name, description, databaseType } = body;
+  
+  const connectionDetails = { ...body };
+  // Limpa o JSON de detalhes removendo os campos que são colunas principais
+  delete connectionDetails.name;
+  delete connectionDetails.description;
+  delete connectionDetails.databaseType;
+  delete connectionDetails.id;
+  delete connectionDetails.createdAt;
+  delete connectionDetails.updatedAt;
+  delete connectionDetails.userId;
+  delete connectionDetails.type; // Remove 'type' se ele veio do front-end
+
+  return {
+    name,
+    description,
+    type: databaseType, // O tipo da fonte de dados (ex: "Oracle")
+    connectionDetails, // O resto (username, port, serverName, etc.) vira JSON
+  };
+};
+
+/**
+ * Helper: Pega os dados do banco e os "desempacota" para o modal do front-end.
+ */
+const unpackSystemData = (system) => {
+  const { connectionDetails, type, ...restOfSystem } = system;
+  return {
+    ...restOfSystem,     // id, name, description, createdAt, etc.
+    type: type,         // Mantém 'type' para a tabela
+    databaseType: type, // Adiciona 'databaseType' para o modal
+    ...(connectionDetails || {}), // "Desempacota" os campos do JSON (username, port, etc.)
+  };
+};
+
+/**
+ * Helper: Valida os dados da fonte de dados com base no tipo
+ */
+const validateDataSource = (data) => {
+  const { name, databaseType } = data;
+  if (!name) return "O nome da fonte de dados é obrigatório.";
+  if (!databaseType) return "O tipo da fonte de dados é obrigatório.";
+
+  // Validação de campos obrigatórios por tipo
+  switch (databaseType) {
+    case "PostgreSQL":
+      if (!data.username || !data.serverName || !data.port || !data.database) {
+        return "Para PostgreSQL, todos os campos (Username, Server Name, Port, Database) são obrigatórios.";
+      }
+      break;
+    case "Oracle":
+      if (!data.username || !data.serverName || !data.port || !data.serviceName) {
+        return "Para Oracle, todos os campos (Username, Server Name, Port, Service Name/SID) são obrigatórios.";
+      }
+      break;
+    case "Microsoft SQL Server":
+      if (!data.username || !data.serverName || !data.port || !data.database) {
+        return "Para SQL Server, todos os campos (Username, Server Name, Port, Database) são obrigatórios.";
+      }
+      break;
+    case "Other":
+      if (!data.jdbcUrl) {
+        return "Para o tipo 'Other', a JDBC URL é obrigatória.";
+      }
+      break;
+    case "CSV":
+      // CSV só precisa de um nome, que já foi validado.
+      break;
+    default:
+      return "Tipo de fonte de dados desconhecido.";
+  }
+  return null; // Sem erros
+};
+
+
+/**
  * @route   GET /systems
- * @desc    Busca todos os sistemas criados pelo usuário logado
+ * @desc    Busca todos os sistemas (fontes de dados) e os "desempacota"
  * @access  Private
  */
 const getSystems = async (req, res) => {
   try {
-    const systems = await prisma.system.findMany({
+    const systemsFromDb = await prisma.system.findMany({
       where: { userId: req.user.id },
       orderBy: { createdAt: 'desc' },
     });
+    const systems = systemsFromDb.map(unpackSystemData);
     res.status(200).json(systems);
   } catch (error) {
     console.error("Erro ao buscar sistemas:", error);
@@ -27,15 +106,18 @@ const getSystems = async (req, res) => {
 
 /**
  * @route   POST /systems
- * @desc    Cria um novo sistema para o usuário logado
+ * @desc    Cria um novo sistema (fonte de dados)
  * @access  Private
  */
 const createSystem = async (req, res) => {
-  const { name, description } = req.body;
-
-  if (!name) {
-    return res.status(400).json({ message: "O nome do sistema é obrigatório." });
+  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  const validationError = validateDataSource(req.body);
+  if (validationError) {
+    return res.status(400).json({ message: validationError });
   }
+
+  const { name } = req.body;
+  // ======================== FIM DA ALTERAÇÃO =========================
 
   try {
     const existingSystem = await prisma.system.findFirst({
@@ -43,79 +125,78 @@ const createSystem = async (req, res) => {
     });
 
     if (existingSystem) {
-      return res.status(409).json({ message: `O sistema "${name}" já existe.` });
+      return res.status(409).json({ message: `A fonte de dados "${name}" já existe.` });
     }
+
+    const dataToSave = packSystemData(req.body);
 
     const newSystem = await prisma.system.create({
       data: {
-        name,
-        description,
+        ...dataToSave,
         userId: req.user.id,
       },
     });
-    res.status(201).json(newSystem);
+    res.status(201).json(unpackSystemData(newSystem));
   } catch (error) {
     console.error("Erro ao criar sistema:", error);
     res.status(500).json({ message: "Erro interno do servidor." });
   }
 };
 
-// ======================= INÍCIO DA ADIÇÃO =======================
 /**
  * @route   PATCH /systems/:id
- * @desc    Atualiza um sistema específico do usuário logado
+ * @desc    Atualiza um sistema (fonte de dados)
  * @access  Private
  */
 const updateSystem = async (req, res) => {
   const systemId = parseInt(req.params.id, 10);
-  const { name, description } = req.body;
-
   if (isNaN(systemId)) {
     return res.status(400).json({ message: "ID de sistema inválido." });
   }
-  if (!name) {
-    return res.status(400).json({ message: "O nome do sistema é obrigatório." });
+
+  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  const validationError = validateDataSource(req.body);
+  if (validationError) {
+    return res.status(400).json({ message: validationError });
   }
 
+  const { name } = req.body;
+  // ======================== FIM DA ALTERAÇÃO =========================
+
   try {
-    // 1. Verifica se o sistema pertence ao usuário
     const system = await prisma.system.findFirst({
       where: { id: systemId, userId: req.user.id },
     });
 
     if (!system) {
-      return res.status(404).json({ message: "Sistema não encontrado ou não pertence a este usuário." });
+      return res.status(404).json({ message: "Fonte de dados não encontrada." });
     }
 
-    // 2. Verifica se o novo nome já está em uso por outro sistema do mesmo usuário
     const existingSystemWithNewName = await prisma.system.findFirst({
       where: {
         name: { equals: name, mode: 'insensitive' },
         userId: req.user.id,
-        id: { not: systemId }, // Exclui o próprio sistema da busca
+        id: { not: systemId },
       },
     });
 
     if (existingSystemWithNewName) {
-      return res.status(409).json({ message: `O nome "${name}" já está em uso por outro sistema.` });
+      return res.status(409).json({ message: `O nome "${name}" já está em uso.` });
     }
 
-    // 3. Atualiza o sistema
+    const dataToSave = packSystemData(req.body);
+
     const updatedSystem = await prisma.system.update({
       where: { id: systemId },
-      data: {
-        name,
-        description,
-      },
+      data: dataToSave,
     });
 
-    res.status(200).json(updatedSystem);
+    res.status(200).json(unpackSystemData(updatedSystem));
   } catch (error) {
     console.error("Erro ao atualizar sistema:", error);
     res.status(500).json({ message: "Erro interno do servidor." });
   }
 };
-// ======================== FIM DA ADIÇÃO =======================
 
 
 /**
@@ -154,9 +235,7 @@ const deleteSystem = async (req, res) => {
 // Definindo as rotas
 router.get("/", passport.authenticate("jwt", { session: false }), getSystems);
 router.post("/", passport.authenticate("jwt", { session: false }), createSystem);
-// ======================= INÍCIO DA ADIÇÃO =======================
 router.patch("/:id", passport.authenticate("jwt", { session: false }), updateSystem);
-// ======================== FIM DA ADIÇÃO =======================
 router.delete("/:id", passport.authenticate("jwt", { session: false }), deleteSystem);
 
 export default router;

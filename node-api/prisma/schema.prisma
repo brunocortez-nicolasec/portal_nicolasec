@@ -1,3 +1,5 @@
+// node-api/prisma/schema.prisma
+
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -97,6 +99,7 @@ model Package {
   @@map("packages")
 }
 
+// ======================= INÍCIO DA ALTERAÇÃO =======================
 model System {
   id          Int      @id @default(autoincrement())
   name        String   @unique
@@ -106,8 +109,13 @@ model System {
   userId      Int
   user        User     @relation(fields: [userId], references: [id])
 
+  // Campos para a nova arquitetura de Fontes de Dados
+  type        String   @default("CSV") // "CSV", "PostgreSQL", "Oracle", etc.
+  connectionDetails Json?  // Armazena todos os detalhes de conexão (user, port, server, etc.)
+  
   @@map("systems")
 }
+// ======================== FIM DA ALTERAÇÃO =========================
 
 model ImportLog {
   id            Int          @id @default(autoincrement())
@@ -156,23 +164,17 @@ model Identity {
 }
 
 model DivergenceException {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   divergenceCode String
   justification  String
-  createdAt      DateTime @default(now())
+  createdAt      DateTime  @default(now())
   expiresAt      DateTime?
+  targetSystem   String?
+  identityId     Int
+  identity       Identity  @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  userId         Int
+  user           User      @relation(fields: [userId], references: [id])
 
-  // --- ALTERAÇÃO AQUI ---
-  targetSystem   String?  // Sistema de destino para exceções como ACCESS_NOT_GRANTED
-
-  identityId Int
-  identity   Identity @relation(fields: [identityId], references: [id], onDelete: Cascade)
-
-  userId Int
-  user   User @relation(fields: [userId], references: [id])
-
-  // --- E AQUI ---
-  // Garante que não haja múltiplas exceções para a mesma divergência na mesma identidade e sistema de destino
   @@unique([identityId, divergenceCode, targetSystem])
   @@map("divergence_exceptions")
 }

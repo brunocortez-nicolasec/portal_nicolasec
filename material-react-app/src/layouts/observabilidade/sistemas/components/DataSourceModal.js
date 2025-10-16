@@ -25,7 +25,7 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
   const defaultState = {
     name: "",
     databaseType: "CSV",
-    description: "",
+    description: "", // Descrição é um campo padrão
     username: "",
     serverName: "",
     port: "",
@@ -49,6 +49,7 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
   useEffect(() => {
     if (open) {
       if (initialData) {
+        // Garante que o estado inicialize corretamente, mesclando dados existentes com o padrão
         setFormData({ ...defaultState, ...initialData });
       } else {
         setFormData(defaultState);
@@ -64,10 +65,13 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
       Other: "",
       CSV: "",
     };
-    if (Object.keys(defaults).includes(formData.databaseType)) {
-      setFormData((prev) => ({ ...prev, port: defaults[prev.databaseType] }));
+    // Garante que a mudança de porta só ocorra se o usuário não estiver editando
+    if (!initialData) {
+      if (Object.keys(defaults).includes(formData.databaseType)) {
+        setFormData((prev) => ({ ...prev, port: defaults[prev.databaseType] }));
+      }
     }
-  }, [formData.databaseType]);
+  }, [formData.databaseType, initialData]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -89,19 +93,8 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
   const renderDynamicFields = () => {
     switch (formData.databaseType) {
       case "CSV":
-        return (
-          <Grid item xs={12}>
-            <MDInput
-              label="Descrição (Opcional)"
-              name="description"
-              value={formData.description}
-              onChange={handleInputChange}
-              fullWidth
-              multiline
-              rows={3}
-            />
-          </Grid>
-        );
+        // O campo Descrição foi removido daqui
+        return null; 
       case "PostgreSQL":
         return (
           <>
@@ -157,7 +150,7 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
         <MDBox component="form" p={3} pt={0}>
           <Grid container spacing={3}>
             <Grid item xs={12}>
-              <MDInput label="Nome da fonte" name="name" value={formData.name} onChange={handleInputChange} fullWidth autoFocus />
+              <MDInput label="Name" name="name" value={formData.name} onChange={handleInputChange} fullWidth autoFocus />
             </Grid>
             <Grid item xs={12}>
               <MDTypography variant="caption" fontWeight="medium" color="text">Tipo de Fonte</MDTypography>
@@ -169,6 +162,20 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
                 <MenuItem value="Other">Other</MenuItem>
               </Select>
             </Grid>
+
+            {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+            <Grid item xs={12}>
+              <MDInput
+                label="Descrição (Opcional)"
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+                fullWidth
+                multiline
+                rows={3}
+              />
+            </Grid>
+            {/* ======================== FIM DA ALTERAÇÃO ========================= */}
 
             {renderDynamicFields()}
 
@@ -192,7 +199,7 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
                 />
                 <FormControlLabel
                   control={<Checkbox name="isJdbcUrlEditable" checked={formData.isJdbcUrlEditable} onChange={handleInputChange} />}
-                  label="Editar"
+                  label="Edit"
                   sx={checkboxLabelStyles}
                 />
               </Grid>
