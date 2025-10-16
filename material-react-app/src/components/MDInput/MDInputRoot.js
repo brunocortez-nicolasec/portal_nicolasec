@@ -1,19 +1,5 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
+// material-react-app/src/components/MDInput/MDInputRoot.js
 
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
-
-// @mui material components
 import TextField from "@mui/material/TextField";
 import { styled } from "@mui/material/styles";
 
@@ -21,7 +7,7 @@ export default styled(TextField)(({ theme, ownerState }) => {
   const { palette, functions } = theme;
   const { error, success, disabled } = ownerState;
 
-  const { grey, transparent, error: colorError, success: colorSuccess } = palette;
+  const { transparent, error: colorError, success: colorSuccess, action, text } = palette;
   const { pxToRem } = functions;
 
   // styles for the input with error={true}
@@ -62,10 +48,18 @@ export default styled(TextField)(({ theme, ownerState }) => {
     },
   });
 
+  // ======================= INÍCIO DA CORREÇÃO =======================
   return {
-    backgroundColor: disabled ? `${grey[200]} !important` : transparent.main,
+    // Substituído grey[200] pelo token de tema correto 'action.disabledBackground'
+    backgroundColor: disabled ? `${action.disabledBackground} !important` : transparent.main,
     pointerEvents: disabled ? "none" : "auto",
     ...(error && errorStyles()),
     ...(success && successStyles()),
+
+    // Adicionado para corrigir a cor do TEXTO desabilitado em ambos os modos
+    "& .MuiInputBase-input.Mui-disabled": {
+      WebkitTextFillColor: text.disabled,
+    },
   };
+  // ======================== FIM DA CORREÇÃO =========================
 });

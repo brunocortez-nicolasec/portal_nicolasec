@@ -14,7 +14,7 @@ import rtlPlugin from "stylis-plugin-rtl";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 import routes from "routes";
-import { useMaterialUIController, setMiniSidenav, setOpenConfigurator, logout } from "context"; 
+import { useMaterialUIController, setMiniSidenav, setOpenConfigurator, logout } from "context";
 import { DashboardProvider } from "context/DashboardContext";
 import brandWhite from "assets/images/logo-ct.png";
 import brandDark from "assets/images/logo-ct-dark.png";
@@ -71,11 +71,11 @@ export default function App() {
       setOnMouseEnter(false);
     }
   };
-  
+
   const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
 
   const navigate = useNavigate();
-  
+
   setupAxiosInterceptors(() => {
     logout(dispatch);
     navigate("/auth/login");
@@ -101,7 +101,7 @@ export default function App() {
             exact
             path={route.route}
             element={
-              <ProtectedRoute isAuthenticated={!!token}> 
+              <ProtectedRoute isAuthenticated={!!token}>
                 {route.component}
               </ProtectedRoute>
             }
@@ -124,7 +124,9 @@ export default function App() {
           <Sidenav
             color={sidenavColor}
             brand={(transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite}
-            brandName="Mind The Gap"
+            // ======================= INÍCIO DA ALTERAÇÃO =======================
+            // A linha 'brandName' foi removida daqui
+            // ======================== FIM DA ALTERAÇÃO =========================
             routes={routes}
           />
           <Configurator />
@@ -158,9 +160,7 @@ export default function App() {
             key="user-management"
           />
           {getRoutes(routes)}
-          {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
           <Route path="*" element={<Navigate to="/mind-the-gap" />} />
-          {/* ======================== FIM DA ALTERAÇÃO ======================= */}
         </Routes>
       </DashboardProvider>
     </ThemeProvider>

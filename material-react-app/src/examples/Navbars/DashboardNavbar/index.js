@@ -1,16 +1,16 @@
 // material-react-app/src/examples/Navbars/DashboardNavbar/index.js
 
 import { useState, useEffect } from "react";
-import { useLocation, Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import PropTypes from "prop-types";
 import AppBar from "@mui/material/AppBar";
 import Toolbar from "@mui/material/Toolbar";
 import IconButton from "@mui/material/IconButton";
 import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
 import Icon from "@mui/material/Icon";
 import MDBox from "components/MDBox";
-import MDInput from "components/MDInput";
-import Breadcrumbs from "examples/Breadcrumbs";
+import MDTypography from "components/MDTypography";
 import NotificationItem from "examples/Items/NotificationItem";
 import AuthService from "services/auth-service";
 import {
@@ -21,28 +21,21 @@ import {
   navbarMobileMenu,
 } from "examples/Navbars/DashboardNavbar/styles";
 
-// 1. Imports do contexto corrigidos
 import {
   useMaterialUIController,
   setTransparentNavbar,
   setMiniSidenav,
   setOpenConfigurator,
-  logout, // Adicionada a nova função 'logout'
+  logout,
 } from "context";
 
-import MDButton from "components/MDButton";
-
-// A linha "import { AuthContext } from "context";" foi REMOVIDA.
-
 function DashboardNavbar({ absolute, light, isMini }) {
-  // A linha "const authContext = useContext(AuthContext);" foi REMOVIDA.
-
   const [navbarType, setNavbarType] = useState();
-  const [controller, dispatch] = useMaterialUIController(); // 'dispatch' já está disponível aqui
+  const [controller, dispatch] = useMaterialUIController();
   const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller;
   const [openMenu, setOpenMenu] = useState(false);
-  const route = useLocation().pathname.split("/").slice(1);
-  let navigate = useNavigate();
+  const [userMenu, setUserMenu] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (fixedNavbar) {
@@ -50,11 +43,9 @@ function DashboardNavbar({ absolute, light, isMini }) {
     } else {
       setNavbarType("static");
     }
-
     function handleTransparentNavbar() {
       setTransparentNavbar(dispatch, (fixedNavbar && window.scrollY === 0) || !fixedNavbar);
     }
-
     window.addEventListener("scroll", handleTransparentNavbar);
     handleTransparentNavbar();
     return () => window.removeEventListener("scroll", handleTransparentNavbar);
@@ -64,15 +55,14 @@ function DashboardNavbar({ absolute, light, isMini }) {
   const handleConfiguratorOpen = () => setOpenConfigurator(dispatch, !openConfigurator);
   const handleOpenMenu = (event) => setOpenMenu(event.currentTarget);
   const handleCloseMenu = () => setOpenMenu(false);
+  const handleOpenUserMenu = (event) => setUserMenu(event.currentTarget);
+  const handleCloseUserMenu = () => setUserMenu(null);
 
   const renderMenu = () => (
     <Menu
       anchorEl={openMenu}
       anchorReference={null}
-      anchorOrigin={{
-        vertical: "bottom",
-        horizontal: "left",
-      }}
+      anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
       open={Boolean(openMenu)}
       onClose={handleCloseMenu}
       sx={{ mt: 2 }}
@@ -83,21 +73,41 @@ function DashboardNavbar({ absolute, light, isMini }) {
     </Menu>
   );
 
-  const iconsStyle = ({ palette: { dark, white, text }, functions: { rgba } }) => ({
+  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  const defaultIconStyle = ({ palette: { dark, white }}) => ({
     color: () => {
-      let colorValue = light || darkMode ? white.main : dark.main;
-      if (transparentNavbar && !light) {
-        colorValue = darkMode ? rgba(text.main, 0.6) : text.main;
+      // Simplificado: Se for modo escuro OU a prop 'light' estiver ativa, a cor será branca.
+      // Caso contrário (modo claro padrão), será escura.
+      if (darkMode || light) {
+        return white.main;
       }
-      return colorValue;
+      return dark.main;
+    },
+    transition: 'transform 0.2s ease-in-out',
+    '&:hover': {
+      transform: 'scale(1.1)',
+    },
+  });
+  // ======================== FIM DA ALTERAÇÃO =========================
+
+  const userIconStyle = ({ palette: { white, info } }) => ({
+    color: () => (light ? white.main : info.main),
+    fontSize: 'inherit !important',
+    transition: 'color 0.2s ease-in-out, transform 0.2s ease-in-out',
+    '&:hover': {
+      transform: 'scale(1.1)',
     },
   });
 
-  // 2. Função de logout corrigida
   const handleLogOut = async () => {
-    await AuthService.logout(); // Mantivemos a chamada à sua API de logout
-    logout(dispatch); // Limpa o token do estado global e localStorage
-    navigate("/auth/login"); // Redireciona para a página de login
+    await AuthService.logout();
+    logout(dispatch);
+    navigate("/auth/login");
+  };
+
+  const handleLogoutAndCloseMenu = () => {
+    handleCloseUserMenu();
+    handleLogOut();
   };
 
   return (
@@ -108,11 +118,13 @@ function DashboardNavbar({ absolute, light, isMini }) {
     >
       <Toolbar sx={(theme) => navbarContainer(theme)}>
         <MDBox color="inherit" mb={{ xs: 1, md: 0 }} sx={(theme) => navbarRow(theme, { isMini })}>
-          <Breadcrumbs icon="home" title={route[route.length - 1]} route={route} light={light} />
+          <MDTypography variant="h4" fontWeight="bold" color="dark">
+            Mind The Gap
+          </MDTypography>
         </MDBox>
         {isMini ? null : (
           <MDBox sx={(theme) => navbarRow(theme, { isMini })}>
-            <MDBox display="flex" alignItems="center" color={light ? "white" : "inherit"}>
+            <MDBox color={light ? "white" : "inherit"} sx={{ display: "flex", alignItems: "center" }}>
               <IconButton
                 size="small"
                 disableRipple
@@ -120,31 +132,47 @@ function DashboardNavbar({ absolute, light, isMini }) {
                 sx={navbarMobileMenu}
                 onClick={handleMiniSidenav}
               >
-                <Icon sx={iconsStyle} fontSize="medium">
+                <Icon sx={defaultIconStyle} fontSize="medium">
                   {miniSidenav ? "menu_open" : "menu"}
                 </Icon>
               </IconButton>
+              
               <IconButton
-                size="small"
+                size="medium"
                 disableRipple
                 color="inherit"
-                sx={navbarIconButton}
+                sx={{ ...navbarIconButton}}
                 onClick={handleConfiguratorOpen}
               >
-                <Icon sx={iconsStyle}>settings</Icon>
+                <Icon sx={defaultIconStyle}>settings</Icon>
               </IconButton>
-              {renderMenu()}
-              <MDBox>
-                <MDButton
-                  variant="gradient"
-                  color="info"
-                  size="small" // Ajustado para "small" para melhor alinhamento
-                  type="button"
-                  onClick={handleLogOut}
-                >
+              
+              <IconButton
+                size="large"
+                disableRipple
+                color="inherit"
+                sx={{ ...navbarIconButton}}
+                onClick={handleOpenUserMenu}
+              >
+                <Icon sx={userIconStyle}>account_circle</Icon>
+              </IconButton>
+
+              <Menu
+                anchorEl={userMenu}
+                open={Boolean(userMenu)}
+                onClose={handleCloseUserMenu}
+                anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+              >
+                <MenuItem component={Link} to="/user-profile" onClick={handleCloseUserMenu}>
+                  Perfil do Usuário
+                </MenuItem>
+                <MenuItem onClick={handleLogoutAndCloseMenu}>
                   Desconecte-se
-                </MDButton>
-              </MDBox>
+                </MenuItem>
+              </Menu>
+              
+              {renderMenu()}
             </MDBox>
           </MDBox>
         )}

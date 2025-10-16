@@ -32,7 +32,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
     }
     const userRole = attributes.role;
     const userPackage = attributes.package;
-    const userPlatformKeys = userPackage?.platforms?.map(p => p.key) || [];
+    const userPlatformKeys = userPackage?.platforms?.map((p) => p.key) || [];
     return { userRole, userPackage, userPlatformKeys };
   }, [user]);
 
@@ -59,11 +59,11 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
   const renderRoutes = routes.map(
     ({ type, name, icon, title, noCollapse, key, href, route, collapse, role }) => {
       let returnValue;
-      
+
       if (role && role !== userRole) {
         return null;
       }
-      
+
       if (key === "tas") {
         const isAdmin = userRole === "Admin";
         if (!isAdmin && !userPackage) {
@@ -71,12 +71,12 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         }
         let platformsToShow = collapse;
         if (!isAdmin && userPackage) {
-          platformsToShow = collapse.filter(platform => userPlatformKeys.includes(platform.key));
+          platformsToShow = collapse.filter((platform) => userPlatformKeys.includes(platform.key));
         }
         if (platformsToShow.length === 0) {
           return null;
         }
-        
+
         returnValue = (
           <SidenavCollapse
             key={key}
@@ -99,8 +99,19 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
           );
         } else if (href) {
           returnValue = (
-            <Link href={href} key={key} target="_blank" rel="noreferrer" sx={{ textDecoration: "none" }}>
-              <SidenavCollapse name={name} icon={icon} active={key === collapseName} noCollapse={noCollapse} />
+            <Link
+              href={href}
+              key={key}
+              target="_blank"
+              rel="noreferrer"
+              sx={{ textDecoration: "none" }}
+            >
+              <SidenavCollapse
+                name={name}
+                icon={icon}
+                active={key === collapseName}
+                noCollapse={noCollapse}
+              />
             </Link>
           );
         } else {
@@ -141,25 +152,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
       return returnValue;
     }
   );
-  
-  const renderExampleRoutes = routes.map(
-    ({ type, name, icon, noCollapse, key, href, route }) => {
-      let returnValue;
-      if (type === "examples") {
-        returnValue = href ? (
-          <Link href={href} key={key} target="_blank" rel="noreferrer" sx={{ textDecoration: "none" }}>
-            <SidenavCollapse name={name} icon={icon} active={key === collapseName} noCollapse={noCollapse} />
-          </Link>
-        ) : (
-          <NavLink key={key} to={route}>
-            <SidenavCollapse name={name} icon={icon} active={key === collapseName} />
-          </NavLink>
-        );
-      }
-      return returnValue;
-    }
-  );
-  
+
   return (
     <SidenavRoot
       {...rest}
@@ -180,33 +173,24 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
             <Icon sx={{ fontWeight: "bold" }}>close</Icon>
           </MDTypography>
         </MDBox>
-        <MDBox component={NavLink} to="/" display="flex" alignItems="center">
+        {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+        <MDBox component={NavLink} to="/" display="flex" alignItems="center" justifyContent="center">
           {brand && <MDBox component="img" src={brand} alt="Brand" width="2rem" />}
-          <MDBox
-            width={!brandName && "100%"}
-            sx={(theme) => sidenavLogoLabel(theme, { miniSidenav })}
-          >
-            <MDTypography component="h6" variant="button" fontWeight="medium" color={textColor}>
-              {brandName}
-            </MDTypography>
-          </MDBox>
-        </MDBox>
-      </MDBox>
-      <Divider
-        light={
-          (!darkMode && !whiteSidenav && !transparentSidenav) ||
-          (darkMode && !transparentSidenav && whiteSidenav)
-        }
-      />
-      <List>
-        <MDBox display="flex" flexDirection="column">
-          {!miniSidenav && (
-            <MDTypography color={textColor} variant="body2" fontWeight="medium" pl="1.5rem" alignSelf="flex-start">
-              Gerenciamento
-            </MDTypography>
+          {brandName && (
+            <MDBox
+              width={!brandName && "100%"}
+              sx={(theme) => sidenavLogoLabel(theme, { miniSidenav })}
+            >
+              <MDTypography component="h6" variant="button" fontWeight="medium" color={textColor}>
+                {brandName}
+              </MDTypography>
+            </MDBox>
           )}
-          {renderExampleRoutes}
         </MDBox>
+        {/* ======================== FIM DA ALTERAÇÃO ========================= */}
+      </MDBox>
+
+      <List>
         <Divider
           light={
             (!darkMode && !whiteSidenav && !transparentSidenav) ||
@@ -216,11 +200,10 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         {renderRoutes}
       </List>
 
-      {/* <<< INÍCIO DA ALTERAÇÃO >>> */}
       <MDBox
         sx={{
           position: "absolute",
-          bottom: "1rem", // Distância da parte inferior
+          bottom: "1rem",
           left: 0,
           right: 0,
           textAlign: "center",
@@ -230,8 +213,6 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
           Versão 1.0.0
         </MDTypography>
       </MDBox>
-      {/* <<< FIM DA ALTERAÇÃO >>> */}
-
     </SidenavRoot>
   );
 }
@@ -239,12 +220,13 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
 Sidenav.defaultProps = {
   color: "info",
   brand: "",
+  brandName: "", // Alterado para string vazia para não ser mais obrigatório
 };
 
 Sidenav.propTypes = {
   color: PropTypes.oneOf(["primary", "secondary", "info", "success", "warning", "error", "dark"]),
   brand: PropTypes.string,
-  brandName: PropTypes.string.isRequired,
+  brandName: PropTypes.string, // Alterado para não ser mais .isRequired
   routes: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 

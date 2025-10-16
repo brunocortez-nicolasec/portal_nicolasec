@@ -1,19 +1,5 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
+// material-react-app\src\layouts\authentication\components\BasicLayoutLanding\index.js
 
-* Product Page: https://www.creative-tim.com/product/material-dashboard-react
-* Copyright 2022 Creative Tim (https://www.creative-tim.com)
-
-Coded by www.creative-tim.com
-
- =========================================================
-
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
-
-// prop-types is a library for typechecking of props
 import PropTypes from "prop-types";
 
 // @mui material components
@@ -23,25 +9,18 @@ import Grid from "@mui/material/Grid";
 import MDBox from "components/MDBox";
 
 // Material Dashboard 2 React example components
-import DefaultNavbar from "examples/Navbars/DefaultNavbar";
 import PageLayout from "examples/LayoutContainers/PageLayout";
 
 // Authentication pages components
 import Footer from "layouts/authentication/components/Footer";
-import { Typography, List, ListItem, ListItemText } from "@mui/material";
+import { Typography } from "@mui/material";
 import { useLocation } from "react-router-dom";
 
 function BasicLayout({ image, children }) {
   const { pathname } = useLocation();
   return (
     <PageLayout>
-      
-      <MDBox
-        sx={{ height: "auto", minHeight: "100vh" }}
-        display="flex"
-        flexDirection="column"
-        minHeight="100vh"
-      >
+      <MDBox>
         <MDBox
           position="absolute"
           width="100%"
@@ -60,12 +39,13 @@ function BasicLayout({ image, children }) {
         >
           <MDBox
             position="relative"
-            height="100%"
+            minHeight="100vh"
             display="flex"
             flexDirection="column"
             width="100%"
-            justifyContent="center" 
+            justifyContent="space-between"
           >
+            <MDBox />
             <MDBox paddingBottom="3rem" sx={{ textAlign: "center" }}>
               {pathname === "/auth/login" && (
                 <MDBox display="flex" width="100%" justifyContent="center" sx={{ zIndex: "99" }}>
@@ -80,9 +60,6 @@ function BasicLayout({ image, children }) {
                     <Typography variant="h3" style={{ color: "white" }}>
                       Faça o Login no Mind The Gap!
                     </Typography>
-                    <Typography variant="body2" style={{ color: "white" }} margin="0.5rem 0">
-                      Se conecte para ver todos os serviços e plataformas de segurança da informação disponibilizados por NicolaSec
-                    </Typography>
                   </MDBox>
                 </MDBox>
               )}
@@ -94,18 +71,20 @@ function BasicLayout({ image, children }) {
                 </Grid>
               </MDBox>
             </MDBox>
+            <Footer />
           </MDBox>
-          
         </MDBox>
       </MDBox>
     </PageLayout>
   );
 }
 
+// ======================= INÍCIO DA CORREÇÃO =======================
 // Typechecking props for the BasicLayout
 BasicLayout.propTypes = {
   image: PropTypes.string.isRequired,
   children: PropTypes.node.isRequired,
 };
+// ======================== FIM DA CORREÇÃO =========================
 
 export default BasicLayout;

@@ -42,7 +42,6 @@ const ModalContent = React.forwardRef(({ title, data, onClose, darkMode }, ref) 
         <Card sx={{ width: "80vw", maxWidth: "900px", maxHeight: "90vh", overflowY: "auto" }}>
             <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
                 <MDTypography variant="h6">{title}</MDTypography>
-                {/* <<< INÍCIO DA ALTERAÇÃO >>> */}
                 <Icon
                     sx={({ typography: { size }, palette: { dark, white } }) => ({
                         fontSize: `${size.lg} !important`,
@@ -55,7 +54,6 @@ const ModalContent = React.forwardRef(({ title, data, onClose, darkMode }, ref) 
                 >
                     close
                 </Icon>
-                {/* <<< FIM DA ALTERAÇÃO >>> */}
             </MDBox>
             <MDBox p={2} pt={0}>
                 <DataTable table={data} isSorted={false} entriesPerPage={{ defaultValue: 10, entries: [5, 10, 25] }} showTotalEntries canSearch />
@@ -65,16 +63,19 @@ const ModalContent = React.forwardRef(({ title, data, onClose, darkMode }, ref) 
 ));
 
 const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onIgnoreAll, onClose, darkMode }, ref) => {
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
     const columns = [
         { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
         { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
         { Header: "Sistema", accessor: "sourceSystem", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
+        { Header: "Perfil", accessor: "profile.name", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> },
         { Header: "Ações", accessor: "id", align: "center", disableGlobalFilter: true,
             Cell: ({ row }) => (
                 <MDButton variant="outlined" color="info" size="small" onClick={() => onIgnore(row.original)}>Ignorar</MDButton>
             )
         },
     ];
+    // ======================== FIM DA ALTERAÇÃO =========================
 
     return (
         <Box ref={ref} tabIndex={-1}>
@@ -87,7 +88,6 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
                                 Ignorar Todos
                             </MDButton>
                         )}
-                        {/* <<< INÍCIO DA ALTERAÇÃO >>> */}
                         <Icon
                             sx={({ typography: { size }, palette: { dark, white } }) => ({
                                 fontSize: `${size.lg} !important`,
@@ -100,7 +100,6 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
                         >
                             close
                         </Icon>
-                        {/* <<< FIM DA ALTERAÇÃO >>> */}
                     </MDBox>
                 </MDBox>
                 <MDBox p={2} pt={0}>
@@ -115,7 +114,6 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
     );
 });
 
-// ... (o resto do arquivo permanece o mesmo, sem alterações)
 const JustificationModal = ({ open, onClose, onSubmit }) => {
     const [justification, setJustification] = useState("");
     const handleSubmit = () => { onSubmit(justification); setJustification(""); };
@@ -140,7 +138,7 @@ const JustificationModal = ({ open, onClose, onSubmit }) => {
 
 function VisaoGeral() {
     const [controller] = useMaterialUIController();
-    const { token, darkMode } = controller; // <<< ALTERAÇÃO: darkMode é extraído do controller
+    const { token, darkMode } = controller;
 
     const [plataformaSelecionada, setPlataformaSelecionada] = useState("Geral");
     const [metrics, setMetrics] = useState(null);
@@ -379,7 +377,7 @@ function VisaoGeral() {
                     onClose={handleCloseDrillDownModal} 
                     onIgnore={handleOpenExceptionModal}
                     onIgnoreAll={handleOpenBulkConfirm}
-                    darkMode={darkMode} // <<< ALTERAÇÃO: Passando o darkMode para o modal
+                    darkMode={darkMode}
                 />
             </Modal>
     
@@ -403,7 +401,7 @@ function VisaoGeral() {
                     title={modalContent.title} 
                     data={modalContent.data} 
                     onClose={handleCloseModal} 
-                    darkMode={darkMode} // <<< ALTERAÇÃO: Passando o darkMode para o modal
+                    darkMode={darkMode}
                 />
             </Modal>
 

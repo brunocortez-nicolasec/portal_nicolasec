@@ -1,6 +1,5 @@
 // material-react-app/src/routes.js
 
-// Material Dashboard 2 React layouts
 import UserProfile from "layouts/user-profile";
 
 import Login from "auth/login";
@@ -34,14 +33,7 @@ const routes = [
         route: "/mind-the-gap",
         component: <VisaoGeral />,
     },
-    {
-        type: "examples",
-        name: "Perfil de Usuário",
-        key: "user-profile",
-        icon: <Icon fontSize="small">person</Icon>,
-        route: "/user-profile",
-        component: <UserProfile />,
-    },
+    // O BLOCO "Perfil de Usuário" FOI REMOVIDO DAQUI
     {
         type: "auth",
         name: "Login",
