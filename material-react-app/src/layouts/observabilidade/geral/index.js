@@ -71,7 +71,7 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
         { Header: "Perfil", accessor: "profile.name", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> },
         { Header: "Ações", accessor: "id", align: "center", disableGlobalFilter: true,
             Cell: ({ row }) => (
-                <MDButton variant="outlined" color="info" size="small" onClick={() => onIgnore(row.original)}>Ignorar</MDButton>
+                <MDButton variant="gradient" color="success" size="small" onClick={() => onIgnore(row.original)}>Ignorar</MDButton>
             )
         },
     ];

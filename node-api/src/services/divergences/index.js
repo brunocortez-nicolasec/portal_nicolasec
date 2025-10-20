@@ -89,7 +89,15 @@ const getExceptions = async (req, res) => {
       orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { name: true } },
-        identity: { select: { name: true, email: true, sourceSystem: true } },
+        identity: { 
+          select: { 
+            name: true, 
+            email: true, 
+            sourceSystem: true,
+            // Perfil incluído aqui também para potencial uso futuro na tabela principal
+            profile: { select: { name: true }} 
+          } 
+        }, 
       },
     });
     res.status(200).json(exceptions);
@@ -195,8 +203,9 @@ const getDivergencesByCode = async (req, res) => {
               const ninetyDaysAgo = new Date();
               ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
               if (appUser.profile?.name !== 'Admin' || appUser.status !== 'Ativo') return false;
-              const loginDateStr = appUser.extraData?.last_login;
-              if (!loginDateStr) return false;
+              // Ajuste para verificar extraData.last_login
+              const loginDateStr = typeof appUser.extraData === 'object' && appUser.extraData !== null ? appUser.extraData.last_login : null;
+              if (!loginDateStr) return false; 
               const loginDate = new Date(loginDateStr);
               return !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
           }
@@ -240,7 +249,8 @@ const getDivergencesByCode = async (req, res) => {
             missingInThisSystem.forEach(rhUser => {
                 results.push({ 
                   ...rhUser, 
-                  sourceSystem: systemName
+                  id: `${rhUser.id}-${systemName}`, // Cria um ID único composto para a linha
+                  sourceSystem: systemName // Sobrescreve sourceSystem para indicar o sistema alvo
                 });
             });
         });
@@ -276,7 +286,15 @@ const getExceptionDetails = async (req, res) => {
       where: { id: exceptionId },
       include: {
         user: { select: { name: true } },
-        identity: true, // Traz todos os dados da identidade
+        // ======================= INÍCIO DA ALTERAÇÃO =======================
+        identity: { // Traz a identidade relacionada...
+          include: {
+            profile: { // ...e TAMBÉM o perfil relacionado à identidade
+              select: { name: true } 
+            }
+          }
+        },
+        // ======================== FIM DA ALTERAÇÃO =========================
       },
     });
 
@@ -284,6 +302,7 @@ const getExceptionDetails = async (req, res) => {
       return res.status(404).json({ message: "Exceção não encontrada." });
     }
 
+    // A lógica para buscar 'divergenceDetails' permanece a mesma
     const divergenceDetails = {};
     const identity = exception.identity;
 
@@ -331,7 +350,7 @@ router.post("/exceptions", passport.authenticate("jwt", { session: false }), cre
 router.post("/exceptions/bulk", passport.authenticate("jwt", { session: false }), createBulkDivergenceExceptions);
 router.post("/exceptions/bulk-delete", passport.authenticate("jwt", { session: false }), deleteBulkExceptions);
 router.get("/exceptions", passport.authenticate("jwt", { session: false }), getExceptions);
-router.get("/exceptions/:id", passport.authenticate("jwt", { session: false }), getExceptionDetails);
+router.get("/exceptions/:id", passport.authenticate("jwt", { session: false }), getExceptionDetails); // Rota de detalhes (corrigida)
 router.delete("/exceptions/:id", passport.authenticate("jwt", { session: false }), deleteException);
 router.get("/by-code/:code", passport.authenticate("jwt", { session: false }), getDivergencesByCode);
 

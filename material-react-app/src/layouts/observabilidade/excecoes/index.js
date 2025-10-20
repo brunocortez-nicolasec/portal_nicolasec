@@ -33,7 +33,8 @@ import PropTypes from 'prop-types'; // Adicionado para PropTypes
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import DataTable from "examples/Tables/DataTable";
+import DataTable from "examples/Tables/DataTable"; // DataTable importado corretamente
+
 
 // --- COMPONENTE HELPER PADRONIZADO ---
 // (Exatamente o mesmo do DataSourceViewModal)
@@ -71,6 +72,13 @@ DetailItem.propTypes = {
   children: PropTypes.node,
   darkMode: PropTypes.bool,
 };
+// Valor padrão adicionado
+DetailItem.defaultProps = {
+  darkMode: false,
+  value: null,
+  children: null,
+};
+
 
 // --- MODAL DE DETALHES DA EXCEÇÃO (REFEITO COM O NOVO LAYOUT) ---
 const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenceLabel, darkMode }) => {
@@ -154,6 +162,9 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
                   <DetailItem icon="badge" label="CPF" value={details.identity?.cpf} darkMode={darkMode} />
                   <DetailItem icon="vpn_key" label="ID de Origem" value={details.identity?.identityId} darkMode={darkMode} />
                   <DetailItem icon="computer" label="Sistema Origem" value={details.identity?.sourceSystem} darkMode={darkMode} /> 
+                  {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+                  <DetailItem icon="admin_panel_settings" label="Perfil" value={details.identity?.profile?.name} darkMode={darkMode} />
+                  {/* ======================== FIM DA ALTERAÇÃO ========================= */}
                 </Grid>
 
                 <Grid item xs={12} md={6}>
@@ -169,12 +180,10 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
               <MDBox>
                 <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Detalhes da Exceção</MDTypography>
                 <Grid container spacing={3}>
-                    {/* Coluna Esquerda Exceção */}
                     <Grid item xs={12} md={6}>
                         <DetailItem icon="how_to_reg" label="Aprovado por" value={details.user?.name} darkMode={darkMode} />
                         <DetailItem icon="event" label="Data" value={details.createdAt ? new Date(details.createdAt).toLocaleString('pt-BR') : ""} darkMode={darkMode} />
                     </Grid>
-                    {/* Coluna Direita Exceção */}
                     <Grid item xs={12} md={6}>
                         <DetailItem icon="comment" label="Justificativa" value={details.justification} darkMode={darkMode} />
                     </Grid>

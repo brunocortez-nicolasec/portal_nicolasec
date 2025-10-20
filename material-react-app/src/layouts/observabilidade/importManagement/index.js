@@ -369,9 +369,6 @@ function ImportManagement() {
                                   </>
                               )}
                           </MDBox>
-                          <MDBox p={2} pt={0} display="flex" justifyContent="flex-end">
-                            <MDButton onClick={handleCloseDetailsModal} color="info">Fechar</MDButton>
-                          </MDBox>
                       </Card>
                     </Modal>
                 );

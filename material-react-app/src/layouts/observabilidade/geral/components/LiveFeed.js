@@ -17,6 +17,7 @@ import Menu from "@mui/material/Menu";
 import { Box } from "@mui/material";
 import Autocomplete from "@mui/material/Autocomplete";
 import TextField from "@mui/material/TextField";
+import CircularProgress from "@mui/material/CircularProgress";
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDInput from "components/MDInput";
@@ -25,28 +26,15 @@ import DataTable from "examples/Tables/DataTable";
 import colors from "assets/theme/base/colors";
 import MDBadge from "components/MDBadge";
 
-// ======================= INÍCIO DA ALTERAÇÃO =======================
-
-// --- COMPONENTES AUXILIARES DO MODAL ---
-
-// Novo componente de item de detalhe, seguindo o modelo padrão
+// --- COMPONENTE HELPER PADRONIZADO ---
 function DetailItem({ icon, label, value, children, darkMode }) {
   const valueColor = darkMode ? "white" : "text.secondary";
-  
   return (
     <MDBox display="flex" alignItems="center" mb={1.5} lineHeight={1}>
-      <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>
-        {icon}
-      </Icon>
-      <MDTypography variant="button" fontWeight="bold" color="text">
-        {label}:&nbsp;
-      </MDTypography>
-      
-      {value && (
-        <MDTypography variant="button" fontWeight="regular" color={valueColor}>
-          {value}
-        </MDTypography>
-      )}
+      <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>{icon}</Icon>
+      <MDTypography variant="button" fontWeight="bold" color="text">{label}:&nbsp;</MDTypography>
+      {value != null && value !== '' && (<MDTypography variant="button" fontWeight="regular" color={valueColor}>{value}</MDTypography>)}
+      {!value && value !== false && !children && (<MDTypography variant="button" fontWeight="regular" color={valueColor}>N/A</MDTypography>)}
       {children}
     </MDBox>
   );
@@ -59,10 +47,118 @@ DetailItem.propTypes = {
   children: PropTypes.node,
   darkMode: PropTypes.bool,
 };
+DetailItem.defaultProps = {
+  darkMode: false,
+  value: null,
+  children: null,
+};
 
-// Componente do Modal de Detalhes da Identidade, agora reformatado
-const DivergenceModal = React.forwardRef(({ user, onClose, darkMode }, ref) => {
+
+// --- MODAL DE DETALHES DA IDENTIDADE (REFEITO COM COMPARAÇÃO) ---
+const DivergenceModal = React.forwardRef(({ user, onClose, darkMode, getDivergenceLabel }, ref) => {
   if (!user) return null;
+
+  // Função para renderizar a comparação detalhada das divergências
+  const renderComparisonSection = () => {
+    // ======================= INÍCIO DA ALTERAÇÃO 1 =======================
+    // Verifica se há detalhes de divergência
+    if (!user?.divergenceDetails || user.divergenceDetails.length === 0) {
+      return (
+        <MDBox display="flex" alignItems="center" mb={1}>
+          {/* Corrigido: Ícone verde 'success' quando não há inconsistências */}
+          <Icon color="success" fontSize="small" sx={{ mr: 1.5 }}>check_circle</Icon>
+          <MDTypography variant="button" color={darkMode ? "white" : "text.secondary"}>
+            Nenhuma inconsistência encontrada.
+          </MDTypography>
+        </MDBox>
+      );
+    }
+
+    // Mapeia CADA divergência encontrada para exibir sua comparação
+    return user.divergenceDetails.map((divergence, index) => {
+      const { code, rhData, appData, targetSystem, text } = divergence;
+      let specificDetails = null;
+
+      switch (code) {
+        case "CPF_MISMATCH":
+          specificDetails = (
+            <>
+              <DetailItem icon="badge" label={`CPF no RH`} value={rhData?.cpf} darkMode={darkMode} />
+              <DetailItem icon="badge" label={`CPF em ${appData?.sourceSystem}`} value={appData?.cpf} darkMode={darkMode} />
+            </>
+          );
+          break;
+        case "NAME_MISMATCH":
+          specificDetails = (
+            <>
+              <DetailItem icon="person" label={`Nome no RH`} value={rhData?.name} darkMode={darkMode} />
+              <DetailItem icon="person" label={`Nome em ${appData?.sourceSystem}`} value={appData?.name} darkMode={darkMode} />
+            </>
+          );
+          break;
+        case "EMAIL_MISMATCH":
+          specificDetails = (
+            <>
+              <DetailItem icon="email" label={`Email no RH`} value={rhData?.email} darkMode={darkMode} />
+              <DetailItem icon="email" label={`Email em ${appData?.sourceSystem}`} value={appData?.email} darkMode={darkMode} />
+            </>
+          );
+          break;
+        case "ZOMBIE_ACCOUNT":
+           specificDetails = (
+             <>
+               <DetailItem icon="toggle_off" label={`Status no RH`} value={rhData?.status} darkMode={darkMode} />
+               <DetailItem icon="toggle_on" label={`Status em ${appData?.sourceSystem}`} value={appData?.status} darkMode={darkMode} />
+             </>
+           );
+           break;
+        case "ACCESS_NOT_GRANTED":
+           specificDetails = <DetailItem icon="link_off" label={`Acesso esperado em`} value={targetSystem} darkMode={darkMode} />;
+           break;
+        case "ORPHAN":
+           specificDetails = <DetailItem icon="person_off" label="Detalhe" value={text} darkMode={darkMode} />
+           break;
+        case "DORMANT_ADMIN":
+           specificDetails = <DetailItem icon="history_toggle_off" label="Detalhe" value={text} darkMode={darkMode} />
+           break;
+        case "USERTYPE_MISMATCH":
+           specificDetails = (
+             <>
+               <DetailItem icon="work_outline" label={`Tipo no RH`} value={rhData?.userType} darkMode={darkMode} />
+               <DetailItem icon="work" label={`Tipo em ${appData?.sourceSystem}`} value={appData?.userType} darkMode={darkMode} />
+             </>
+           );
+           break;
+        default:
+          specificDetails = <DetailItem icon="warning" label="Detalhe" value={text} darkMode={darkMode} />;
+          break;
+      }
+      
+      // Retorna o TÍTULO da divergência + os detalhes específicos
+      return (
+        <MDBox key={`${code}-${index}`} mt={index > 0 ? 2.5 : 0}>
+           {/* Título da Divergência (Ícone vermelho e alinhado) */}
+           <MDBox display="flex" alignItems="center" sx={{ mb: 1.5 }}> {/* Margin bottom igual ao DetailItem */}
+              {/* Corrigido: Ícone 'error' (vermelho) e margem 'mr: 1.5' para alinhar */}
+              <Icon fontSize="small" sx={{ mr: 1.5 }} color="error">warning</Icon> 
+              <MDTypography 
+                variant="button" 
+                fontWeight="medium" 
+                color={darkMode ? "white" : "dark"}
+              >
+                {getDivergenceLabel(code)} {/* Usa a função para obter o nome amigável */}
+              </MDTypography>
+           </MDBox>
+           {/* Corrigido: Removido o 'pl={1}' para alinhar os detalhes com o título */}
+           {specificDetails}
+        </MDBox>
+      );
+    });
+    // ======================== FIM DA ALTERAÇÃO 1 =========================
+  };
+
+  if (!user) return null; // Não renderiza nada se não houver usuário selecionado
+
   return (
     <Box ref={ref} tabIndex={-1}>
       <Card sx={{ width: "80vw", maxWidth: "700px", maxHeight: "90vh", overflowY: "auto" }}>
@@ -84,68 +180,60 @@ const DivergenceModal = React.forwardRef(({ user, onClose, darkMode }, ref) => {
         
         <MDBox p={3} pt={1}>
           <Grid container spacing={3}>
-            {/* Coluna da Esquerda: Identificação */}
             <Grid item xs={12} md={6}>
               <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Identificação</MDTypography>
               <DetailItem icon="person" label="Nome" value={user.name} darkMode={darkMode} />
               <DetailItem icon="email" label="Email" value={user.email} darkMode={darkMode} />
-              <DetailItem icon="badge" label="CPF" value={user.cpf || "N/A"} darkMode={darkMode} />
+              <DetailItem icon="badge" label="CPF" value={user.cpf} darkMode={darkMode} />
               <DetailItem icon="vpn_key" label="ID de Origem" value={user.id_user} darkMode={darkMode} />
+              <DetailItem icon="computer" label="Sistema Origem" value={user.sourceSystem} darkMode={darkMode} /> 
+              <DetailItem icon="admin_panel_settings" label="Perfil App" value={user.perfil} darkMode={darkMode} />
             </Grid>
-
-            {/* Coluna da Direita: Status e Acesso */}
             <Grid item xs={12} md={6}>
               <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Status e Acesso</MDTypography>
-              <DetailItem icon="work" label="Tipo" value={user.userType || "N/A"} darkMode={darkMode} />
-              <DetailItem icon="approval" label="Status RH" value={user.rh_status || "N/A"} darkMode={darkMode} />
-              <DetailItem icon="apps" label="Status App" value={user.app_status || "N/A"} darkMode={darkMode} />
-              <DetailItem icon="admin_panel_settings" label="Perfil App" value={user.perfil || "N/A"} darkMode={darkMode} />
-              <DetailItem icon="login" label="Último Login" value={user.last_login ? new Date(user.last_login).toLocaleDateString('pt-BR') : 'N/A'} darkMode={darkMode} />
+              <DetailItem icon="work" label="Tipo" value={user.userType} darkMode={darkMode} />
+              <DetailItem icon="approval" label="Status RH" value={user.rh_status} darkMode={darkMode} />
+              <DetailItem icon="apps" label="Status App" value={user.app_status} darkMode={darkMode} />
+              <DetailItem icon="login" label="Último Login" value={user.last_login ? new Date(user.last_login).toLocaleDateString('pt-BR') : ''} darkMode={darkMode} />
             </Grid>
           </Grid>
 
-          <Divider sx={{ mt: 1.5, mb: 2 }} />
+          <Divider sx={{ my: 2 }} />
           
           <MDBox>
-            <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>
+            <MDTypography variant="h6" fontWeight="medium" sx={{ mb: user.divergenceDetails && user.divergenceDetails.length > 0 ? 2 : 1 }}> {/* Ajustado MB para 2 */}
               Inconsistências Encontradas
             </MDTypography>
-            {user.divergenceDetails && user.divergenceDetails.length > 0 ? (
-              user.divergenceDetails.map((detail) => (
-                <MDBox key={detail.code} display="flex" alignItems="center" mb={1}>
-                  <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>warning</Icon>
-                  <MDTypography variant="button" color={darkMode ? "white" : "text.secondary"}>
-                    {detail.text}
-                  </MDTypography>
-                </MDBox>
-              ))
-            ) : (
-              <MDBox display="flex" alignItems="center" mb={1}>
-                <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>check_circle</Icon>
-                <MDTypography variant="button" color={darkMode ? "white" : "text.secondary"}>
-                  Nenhuma inconsistência encontrada.
-                </MDTypography>
-              </MDBox>
-            )}
+            {renderComparisonSection()}
           </MDBox>
         </MDBox>
       </Card>
     </Box>
   );
 });
-
-// ======================== FIM DA ALTERAÇÃO =========================
+DivergenceModal.propTypes = {
+    user: PropTypes.object,
+    onClose: PropTypes.func.isRequired,
+    darkMode: PropTypes.bool,
+    getDivergenceLabel: PropTypes.func.isRequired,
+};
+DivergenceModal.defaultProps = {
+    user: null,
+    darkMode: false,
+};
 
 const AuthorCell = ({ nome, tipo }) => (
     <MDBox display="flex" alignItems="center" lineHeight={1}>
         <MDBox lineHeight={1}>
             <MDTypography display="block" variant="button" fontWeight="medium" sx={{ "&:hover": { color: colors.info.main }}}>
-                {nome}
+                {nome || "N/A"}
             </MDTypography>
             <MDTypography variant="caption">Tipo: {tipo || 'N/A'}</MDTypography>
         </MDBox>
     </MDBox>
 );
+AuthorCell.propTypes = { nome: PropTypes.string, tipo: PropTypes.string };
+AuthorCell.defaultProps = { nome: null, tipo: null };
 
 const StatusCell = ({ status }) => {
     let color = "secondary";
@@ -155,6 +243,8 @@ const StatusCell = ({ status }) => {
     if (text === "NÃO ENCONTRADO") color = "secondary";
     return <MDTypography variant="caption" color={color} fontWeight="medium">{text}</MDTypography>;
 };
+StatusCell.propTypes = { status: PropTypes.string };
+StatusCell.defaultProps = { status: null };
 
 
 function LiveFeed({ data }) {
@@ -169,14 +259,16 @@ function LiveFeed({ data }) {
                 const response = await axios.get('/systems', {
                     headers: { "Authorization": `Bearer ${token}` },
                 });
+                // Filtra para pegar apenas nomes de sistemas (fontes de dados)
                 const systemNames = response.data.map(system => system.name);
-                setSystemOptions(systemNames);
+                setSystemOptions(systemNames); // Define as opções para o filtro
             } catch (error) {
                 console.error("Erro ao buscar a lista de sistemas para os filtros:", error);
             }
         };
         fetchSystems();
     }, [token]);
+
 
     const [searchTerm, setSearchTerm] = useState("");
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -208,6 +300,20 @@ function LiveFeed({ data }) {
     const [tempFilters, setTempFilters] = useState(initialFilters);
     
     const open = Boolean(anchorEl);
+    
+    // Define a função getDivergenceLabel aqui para ser passada ao modal
+    const divergenceLabels = {
+        ACCESS_NOT_GRANTED: "Acesso Previsto Não Concedido",
+        ZOMBIE: "Acesso Ativo Indevido", // Corrigido de ZOMBIE_ACCOUNT para ZOMBIE
+        ZOMBIE_ACCOUNT: "Acesso Ativo Indevido", // Adicionado para garantir
+        CPF_MISMATCH: "Divergência de CPF",
+        NAME_MISMATCH: "Divergência de Nome",
+        EMAIL_MISMATCH: "Divergência de E-mail",
+        DORMANT_ADMIN: "Admin Dormente",
+        ORPHAN: "Conta Órfã",
+        USERTYPE_MISMATCH: "Divergência de Tipo de Usuário",
+    };
+    const getDivergenceLabel = (code) => divergenceLabels[code] || code; // Retorna o próprio código se não encontrar
     
     const handleFilterMenuOpen = (event) => { setTempFilters(filters); setAnchorEl(event.currentTarget); };
     const handleFilterMenuClose = () => setAnchorEl(null);
@@ -306,7 +412,13 @@ function LiveFeed({ data }) {
     return (
         <>
             <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
-                <DivergenceModal user={selectedUser} onClose={handleCloseModal} darkMode={darkMode} />
+                {/* Passa a função getDivergenceLabel para o modal */}
+                <DivergenceModal 
+                  user={selectedUser} 
+                  onClose={handleCloseModal} 
+                  darkMode={darkMode} 
+                  getDivergenceLabel={getDivergenceLabel} 
+                />
             </Modal>
 
             <Card>
