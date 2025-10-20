@@ -168,7 +168,10 @@ const getDivergencesByCode = async (req, res) => {
   try {
     let divergenceData = [];
     
-    const rhIdentities = await prisma.identity.findMany({ where: { sourceSystem: 'RH' } });
+    const rhIdentities = await prisma.identity.findMany({ 
+      where: { sourceSystem: 'RH' },
+      include: { profile: { select: { name: true } } } // Inclui perfil para usuários do RH
+    });
     const rhMap = new Map(rhIdentities.map(i => [i.identityId, i]));
 
     // Define o appWhere (filtro para sistemas) aqui para ser reutilizado
@@ -205,7 +208,6 @@ const getDivergencesByCode = async (req, res) => {
             const ninetyDaysAgo = new Date();
             ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
             if (appUser.profile?.name !== 'Admin' || appUser.status !== 'Ativo') return false;
-            // Ajuste para verificar extraData.last_login
             const loginDateStr = typeof appUser.extraData === 'object' && appUser.extraData !== null ? appUser.extraData.last_login : null;
             if (!loginDateStr) return false; 
             const loginDate = new Date(loginDateStr);
@@ -213,10 +215,13 @@ const getDivergencesByCode = async (req, res) => {
           }
           return false;
         });
-        divergenceData = allDivergences.map(id => ({
-          ...id,
-          profile: id.profile?.name // Achata o perfil para a tabela
-        }));
+
+        // ======================= INÍCIO DA ALTERAÇÃO 1 =======================
+        // Removemos o '.map()' que estava "achatando" o perfil.
+        // O 'allDivergences' já contém os objetos completos com 'profile' aninhado.
+        divergenceData = allDivergences;
+        // ======================== FIM DA ALTERAÇÃO 1 =========================
+        
         break;
       }
       
@@ -229,18 +234,13 @@ const getDivergencesByCode = async (req, res) => {
         });
         const exceptionsSet = new Set(exceptions.map(ex => `${ex.identityId}_${ex.targetSystem}`));
 
-        // Busca todas as identidades de App (já filtradas, se 'system' foi passado)
         const appIdentities = await prisma.identity.findMany({ where: appWhere });
         
-        // ======================= INÍCIO DA ALTERAÇÃO =======================
-        // CORREÇÃO: Em vez de buscar na tabela 'System', buscamos os nomes
-        // dos sistemas que *realmente têm dados* na tabela 'Identity'.
         const processedSystems = await prisma.identity.groupBy({
           by: ['sourceSystem'],
-          where: appWhere, // Usa o mesmo filtro (não 'RH' e opcionalmente filtrado por 'system')
+          where: appWhere,
         });
         const systemNames = processedSystems.map(s => s.sourceSystem);
-        // ======================== FIM DA ALTERAÇÃO =========================
 
         const identitiesBySystem = appIdentities.reduce((acc, identity) => {
           const systemKey = identity.sourceSystem;
@@ -249,7 +249,6 @@ const getDivergencesByCode = async (req, res) => {
           return acc;
         }, {});
 
-        // Itera SOMENTE sobre os sistemas que têm dados processados
         (system && system.toLowerCase() !== 'geral' ? [system] : systemNames).forEach(systemName => {
             const systemIdSet = identitiesBySystem[systemName] || new Set();
             const missingInThisSystem = activeRhUsers.filter(rhUser => {
@@ -257,12 +256,15 @@ const getDivergencesByCode = async (req, res) => {
             });
             
             missingInThisSystem.forEach(rhUser => {
+                // ======================= INÍCIO DA ALTERAÇÃO 2 =======================
+                // Removemos a linha 'profile: rhUser.profile?.name'
+                // O '...rhUser' já contém o objeto 'profile' completo.
                 results.push({ 
                   ...rhUser, 
-                  id: `${rhUser.id}-${systemName}`, // ID único composto
-                  sourceSystem: systemName, // Sistema onde o acesso está faltando
-                  profile: rhUser.profile?.name // Achata o perfil
+                  id: `${rhUser.id}-${systemName}`,
+                  sourceSystem: systemName,
                 });
+                // ======================== FIM DA ALTERAÇÃO 2 =========================
             });
         });
         
