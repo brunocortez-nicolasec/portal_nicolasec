@@ -94,7 +94,6 @@ const getExceptions = async (req, res) => {
             name: true, 
             email: true, 
             sourceSystem: true,
-            // Perfil incluído aqui também para potencial uso futuro na tabela principal
             profile: { select: { name: true }} 
           } 
         }, 
@@ -171,6 +170,12 @@ const getDivergencesByCode = async (req, res) => {
     
     const rhIdentities = await prisma.identity.findMany({ where: { sourceSystem: 'RH' } });
     const rhMap = new Map(rhIdentities.map(i => [i.identityId, i]));
+
+    // Define o appWhere (filtro para sistemas) aqui para ser reutilizado
+    const appWhere = { sourceSystem: { not: 'RH' } };
+    if (system && system.toLowerCase() !== 'geral') {
+      appWhere.sourceSystem = { equals: system, mode: 'insensitive' };
+    }
     
     switch (code) {
       case 'ZOMBIE_ACCOUNT':
@@ -184,10 +189,7 @@ const getDivergencesByCode = async (req, res) => {
         });
         const exceptedIdentityIds = new Set(exceptions.map(ex => ex.identityId));
 
-        const appWhere = { sourceSystem: { not: 'RH' } };
-        if (system && system.toLowerCase() !== 'geral') {
-          appWhere.sourceSystem = { equals: system, mode: 'insensitive' };
-        }
+        // Busca identidades de App (já filtradas, se 'system' foi passado)
         const appIdentities = await prisma.identity.findMany({ where: appWhere, include: { profile: true } });
 
         const allDivergences = appIdentities.filter(appUser => {
@@ -200,18 +202,21 @@ const getDivergencesByCode = async (req, res) => {
           if (code === 'NAME_MISMATCH') return rhUser && appUser.name && rhUser.name && cleanText(appUser.name) !== cleanText(rhUser.name);
           if (code === 'EMAIL_MISMATCH') return rhUser && appUser.email && rhUser.email && cleanText(appUser.email) !== cleanText(rhUser.email);
           if (code === 'DORMANT_ADMIN') {
-              const ninetyDaysAgo = new Date();
-              ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-              if (appUser.profile?.name !== 'Admin' || appUser.status !== 'Ativo') return false;
-              // Ajuste para verificar extraData.last_login
-              const loginDateStr = typeof appUser.extraData === 'object' && appUser.extraData !== null ? appUser.extraData.last_login : null;
-              if (!loginDateStr) return false; 
-              const loginDate = new Date(loginDateStr);
-              return !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
+            const ninetyDaysAgo = new Date();
+            ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+            if (appUser.profile?.name !== 'Admin' || appUser.status !== 'Ativo') return false;
+            // Ajuste para verificar extraData.last_login
+            const loginDateStr = typeof appUser.extraData === 'object' && appUser.extraData !== null ? appUser.extraData.last_login : null;
+            if (!loginDateStr) return false; 
+            const loginDate = new Date(loginDateStr);
+            return !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
           }
           return false;
         });
-        divergenceData = allDivergences;
+        divergenceData = allDivergences.map(id => ({
+          ...id,
+          profile: id.profile?.name // Achata o perfil para a tabela
+        }));
         break;
       }
       
@@ -224,14 +229,18 @@ const getDivergencesByCode = async (req, res) => {
         });
         const exceptionsSet = new Set(exceptions.map(ex => `${ex.identityId}_${ex.targetSystem}`));
 
-        const appWhere = { sourceSystem: { not: 'RH' } };
-        if (system && system.toLowerCase() !== 'geral') {
-          appWhere.sourceSystem = { equals: system, mode: 'insensitive' };
-        }
+        // Busca todas as identidades de App (já filtradas, se 'system' foi passado)
         const appIdentities = await prisma.identity.findMany({ where: appWhere });
         
-        const allAppSystems = await prisma.system.findMany({ where: { userId: req.user.id }});
-        const systemNames = allAppSystems.map(s => s.name);
+        // ======================= INÍCIO DA ALTERAÇÃO =======================
+        // CORREÇÃO: Em vez de buscar na tabela 'System', buscamos os nomes
+        // dos sistemas que *realmente têm dados* na tabela 'Identity'.
+        const processedSystems = await prisma.identity.groupBy({
+          by: ['sourceSystem'],
+          where: appWhere, // Usa o mesmo filtro (não 'RH' e opcionalmente filtrado por 'system')
+        });
+        const systemNames = processedSystems.map(s => s.sourceSystem);
+        // ======================== FIM DA ALTERAÇÃO =========================
 
         const identitiesBySystem = appIdentities.reduce((acc, identity) => {
           const systemKey = identity.sourceSystem;
@@ -240,6 +249,7 @@ const getDivergencesByCode = async (req, res) => {
           return acc;
         }, {});
 
+        // Itera SOMENTE sobre os sistemas que têm dados processados
         (system && system.toLowerCase() !== 'geral' ? [system] : systemNames).forEach(systemName => {
             const systemIdSet = identitiesBySystem[systemName] || new Set();
             const missingInThisSystem = activeRhUsers.filter(rhUser => {
@@ -249,8 +259,9 @@ const getDivergencesByCode = async (req, res) => {
             missingInThisSystem.forEach(rhUser => {
                 results.push({ 
                   ...rhUser, 
-                  id: `${rhUser.id}-${systemName}`, // Cria um ID único composto para a linha
-                  sourceSystem: systemName // Sobrescreve sourceSystem para indicar o sistema alvo
+                  id: `${rhUser.id}-${systemName}`, // ID único composto
+                  sourceSystem: systemName, // Sistema onde o acesso está faltando
+                  profile: rhUser.profile?.name // Achata o perfil
                 });
             });
         });
@@ -286,15 +297,13 @@ const getExceptionDetails = async (req, res) => {
       where: { id: exceptionId },
       include: {
         user: { select: { name: true } },
-        // ======================= INÍCIO DA ALTERAÇÃO =======================
-        identity: { // Traz a identidade relacionada...
+        identity: {
           include: {
-            profile: { // ...e TAMBÉM o perfil relacionado à identidade
+            profile: { 
               select: { name: true } 
             }
           }
         },
-        // ======================== FIM DA ALTERAÇÃO =========================
       },
     });
 
@@ -302,11 +311,9 @@ const getExceptionDetails = async (req, res) => {
       return res.status(404).json({ message: "Exceção não encontrada." });
     }
 
-    // A lógica para buscar 'divergenceDetails' permanece a mesma
     const divergenceDetails = {};
     const identity = exception.identity;
 
-    // Busca os dados conflitantes com base no tipo de divergência
     switch (exception.divergenceCode) {
       case 'CPF_MISMATCH':
       case 'NAME_MISMATCH':
@@ -324,14 +331,12 @@ const getExceptionDetails = async (req, res) => {
       }
       
       case 'ACCESS_NOT_GRANTED': {
-        // A identidade na exceção é do RH
         divergenceDetails.rhData = identity;
         divergenceDetails.targetSystem = exception.targetSystem;
         break;
       }
 
       default:
-        // Para outros casos como ORPHAN_ACCOUNT, DORMANT_ADMIN, os dados já estão na identidade principal
         divergenceDetails.appData = identity;
         break;
     }
@@ -350,7 +355,7 @@ router.post("/exceptions", passport.authenticate("jwt", { session: false }), cre
 router.post("/exceptions/bulk", passport.authenticate("jwt", { session: false }), createBulkDivergenceExceptions);
 router.post("/exceptions/bulk-delete", passport.authenticate("jwt", { session: false }), deleteBulkExceptions);
 router.get("/exceptions", passport.authenticate("jwt", { session: false }), getExceptions);
-router.get("/exceptions/:id", passport.authenticate("jwt", { session: false }), getExceptionDetails); // Rota de detalhes (corrigida)
+router.get("/exceptions/:id", passport.authenticate("jwt", { session: false }), getExceptionDetails);
 router.delete("/exceptions/:id", passport.authenticate("jwt", { session: false }), deleteException);
 router.get("/by-code/:code", passport.authenticate("jwt", { session: false }), getDivergencesByCode);
 
