@@ -28,135 +28,172 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import MDSnackbar from "components/MDSnackbar";
+import PropTypes from 'prop-types'; // Adicionado para PropTypes
 
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
 import DataTable from "examples/Tables/DataTable";
 
-// --- COMPONENTES DO NOVO MODAL DE DETALHES ---
+// --- COMPONENTE HELPER PADRONIZADO ---
+// (Exatamente o mesmo do DataSourceViewModal)
+function DetailItem({ icon, label, value, children, darkMode }) {
+  const valueColor = darkMode ? "white" : "text.secondary";
 
-const DetailItem = ({ label, value }) => (
-    <MDBox mb={1.5} display="flex" flexDirection="column">
-        <MDTypography variant="caption" color="text" fontWeight="regular" sx={{ mb: 0.5 }}>
-            {label}
+  return (
+    <MDBox display="flex" alignItems="center" mb={1.5} lineHeight={1}>
+      <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>
+        {icon}
+      </Icon>
+      <MDTypography variant="button" fontWeight="bold" color="text">
+        {label}:&nbsp;
+      </MDTypography>
+
+      {value != null && value !== '' && ( // Verifica se value não é nulo ou vazio
+        <MDTypography variant="button" fontWeight="regular" color={valueColor}>
+          {value}
         </MDTypography>
-        <MDTypography variant="button" fontWeight="medium" color="dark">
-            {value || "N/A"}
-        </MDTypography>
+      )}
+       {!value && value !== false && !children && ( // Exibe N/A se value for nulo/vazio e não houver children
+         <MDTypography variant="button" fontWeight="regular" color={valueColor}>
+           N/A
+         </MDTypography>
+       )}
+      {children}
     </MDBox>
-);
+  );
+}
 
-const SectionTitle = ({ children }) => (
-    <MDTypography variant="overline" color="text" fontWeight="bold" sx={{ mb: 2 }}>
-        {children}
-    </MDTypography>
-);
+DetailItem.propTypes = {
+  icon: PropTypes.string.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.any,
+  children: PropTypes.node,
+  darkMode: PropTypes.bool,
+};
 
-// <<< INÍCIO DA ALTERAÇÃO 1: Passando a prop 'darkMode' para o modal >>>
+// --- MODAL DE DETALHES DA EXCEÇÃO (REFEITO COM O NOVO LAYOUT) ---
 const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenceLabel, darkMode }) => {
-// <<< FIM DA ALTERAÇÃO 1 >>>
-    if (!open) return null;
+  if (!open) return null;
 
-    const renderDivergenceSpecifics = () => {
-        if (!details || !details.divergenceDetails) return null;
-        const { divergenceCode, divergenceDetails } = details;
-        const { rhData, appData, targetSystem } = divergenceDetails;
+  // Função interna para renderizar os campos de detalhes específicos da divergência
+  const renderDivergenceSpecifics = () => {
+    if (!details || !details.divergenceDetails) return null;
+    const { divergenceCode, divergenceDetails } = details;
+    const { rhData, appData, targetSystem } = divergenceDetails;
 
-        switch (divergenceCode) {
-            case "CPF_MISMATCH":
-                return <>
-                    <DetailItem label={`CPF no RH`} value={rhData?.cpf} />
-                    <DetailItem label={`CPF em ${appData?.sourceSystem}`} value={appData?.cpf} />
-                </>;
-            case "NAME_MISMATCH":
-                return <>
-                    <DetailItem label={`Nome no RH`} value={rhData?.name} />
-                    <DetailItem label={`Nome em ${appData?.sourceSystem}`} value={appData?.name} />
-                </>;
-            case "EMAIL_MISMATCH":
-                return <>
-                    <DetailItem label={`Email no RH`} value={rhData?.email} />
-                    <DetailItem label={`Email em ${appData?.sourceSystem}`} value={appData?.email} />
-                </>;
-            case "ZOMBIE_ACCOUNT":
-                return <>
-                    <DetailItem label={`Status no RH`} value={rhData?.status} />
-                    <DetailItem label={`Status em ${appData?.sourceSystem}`} value={appData?.status} />
-                </>;
-            case "ACCESS_NOT_GRANTED":
-                 return <DetailItem label={`Acesso esperado em`} value={targetSystem} />;
-            default:
-                return <DetailItem label="Detalhes" value="Nenhuma informação adicional para este tipo." />;
-        }
-    };
+    switch (divergenceCode) {
+      case "CPF_MISMATCH":
+        return (
+          <>
+            <DetailItem icon="badge" label={`CPF no RH`} value={rhData?.cpf} darkMode={darkMode} />
+            <DetailItem icon="badge" label={`CPF em ${appData?.sourceSystem}`} value={appData?.cpf} darkMode={darkMode} />
+          </>
+        );
+      case "NAME_MISMATCH":
+        return (
+          <>
+            <DetailItem icon="person" label={`Nome no RH`} value={rhData?.name} darkMode={darkMode} />
+            <DetailItem icon="person" label={`Nome em ${appData?.sourceSystem}`} value={appData?.name} darkMode={darkMode} />
+          </>
+        );
+      case "EMAIL_MISMATCH":
+        return (
+          <>
+            <DetailItem icon="email" label={`Email no RH`} value={rhData?.email} darkMode={darkMode} />
+            <DetailItem icon="email" label={`Email em ${appData?.sourceSystem}`} value={appData?.email} darkMode={darkMode} />
+          </>
+        );
+      case "ZOMBIE_ACCOUNT":
+        return (
+          <>
+            <DetailItem icon="toggle_off" label={`Status no RH`} value={rhData?.status} darkMode={darkMode} />
+            <DetailItem icon="toggle_on" label={`Status em ${appData?.sourceSystem}`} value={appData?.status} darkMode={darkMode} />
+          </>
+        );
+      case "ACCESS_NOT_GRANTED":
+        return <DetailItem icon="link_off" label={`Acesso esperado em`} value={targetSystem} darkMode={darkMode} />;
+      default:
+        // Mantém a estrutura visual mesmo sem detalhes específicos
+        return <DetailItem icon="help_outline" label="Detalhes" value="Nenhuma informação adicional." darkMode={darkMode} />;
+    }
+  };
 
-    return (
-        <Modal open={open} onClose={onClose} sx={{ display: "grid", placeItems: "center" }}>
-            <Card sx={{ width: "90%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
-                <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
-                    <MDTypography variant="h6">Detalhes da Exceção</MDTypography>
-                    {/* <<< INÍCIO DA ALTERAÇÃO 2: Substituído o MDButton pelo Icon, seguindo o modelo do Configurator >>> */}
-                    <Icon
-                        sx={({ typography: { size }, palette: { dark, white } }) => ({
-                            fontSize: `${size.lg} !important`,
-                            color: darkMode ? white.main : dark.main,
-                            stroke: "currentColor",
-                            strokeWidth: "2px",
-                            cursor: "pointer",
-                        })}
-                        onClick={onClose}
-                    >
-                        close
-                    </Icon>
-                    {/* <<< FIM DA ALTERAÇÃO 2 >>> */}
-                </MDBox>
-                <Divider sx={{ my: 0 }} />
-                <MDBox p={3}>
-                    {isLoading ? (
-                        <MDBox display="flex" justifyContent="center" py={5}><CircularProgress color="info" /></MDBox>
-                    ) : details ? (
-                        <>
-                            <Grid container spacing={3}>
-                                <Grid item xs={12} md={6}>
-                                    <SectionTitle>Identidade</SectionTitle>
-                                    <DetailItem label="Nome" value={details.identity?.name} />
-                                    <DetailItem label="Email" value={details.identity?.email} />
-                                    <DetailItem label="CPF" value={details.identity?.cpf} />
-                                    <DetailItem label="ID de Origem" value={details.identity?.identityId} />
-                                </Grid>
+  return (
+    <Modal open={open} onClose={onClose} sx={{ display: "grid", placeItems: "center" }}>
+      <Card sx={{ width: "90%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
+        {/* Cabeçalho */}
+        <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
+          <MDTypography variant="h5">Detalhes da Exceção</MDTypography>
+          <Icon
+            sx={({ typography: { size }, palette: { dark, white } }) => ({
+              fontSize: `${size.lg} !important`,
+              color: darkMode ? white.main : dark.main,
+              stroke: "currentColor",
+              strokeWidth: "2px",
+              cursor: "pointer",
+            })}
+            onClick={onClose}
+          >
+            close
+          </Icon>
+        </MDBox>
+        
+        {/* Corpo */}
+        <MDBox p={3} pt={1}>
+          {isLoading ? (
+            <MDBox display="flex" justifyContent="center" py={5}><CircularProgress color="info" /></MDBox>
+          ) : details ? (
+            <>
+              {/* Seção Superior: Identidade e Divergência */}
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Identidade</MDTypography>
+                  <DetailItem icon="person_outline" label="Nome" value={details.identity?.name} darkMode={darkMode} />
+                  <DetailItem icon="email" label="Email" value={details.identity?.email} darkMode={darkMode} />
+                  <DetailItem icon="badge" label="CPF" value={details.identity?.cpf} darkMode={darkMode} />
+                  <DetailItem icon="vpn_key" label="ID de Origem" value={details.identity?.identityId} darkMode={darkMode} />
+                  <DetailItem icon="computer" label="Sistema Origem" value={details.identity?.sourceSystem} darkMode={darkMode} /> 
+                </Grid>
 
-                                <Grid item xs={12} md={6}>
-                                    <SectionTitle>Divergência Ignorada</SectionTitle>
-                                    <DetailItem label="Tipo de Divergência" value={getDivergenceLabel(details.divergenceCode)} />
-                                    {renderDivergenceSpecifics()}
-                                </Grid>
-                            </Grid>
+                <Grid item xs={12} md={6}>
+                  <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Divergência Ignorada</MDTypography>
+                  <DetailItem icon="warning" label="Tipo" value={getDivergenceLabel(details.divergenceCode)} darkMode={darkMode} />
+                  {renderDivergenceSpecifics()}
+                </Grid>
+              </Grid>
 
-                            <Divider sx={{ my: 2 }} />
+              <Divider sx={{ my: 2 }} />
 
-                            <MDBox>
-                                <SectionTitle>Detalhes da Exceção</SectionTitle>
-                                <DetailItem label="Aprovado por" value={details.user?.name} />
-                                <DetailItem label="Data da Aprovação" value={new Date(details.createdAt).toLocaleDateString('pt-BR')} />
-                                <DetailItem label="Justificativa" value={details.justification} />
-                            </MDBox>
-                        </>
-                    ) : (
-                        <MDTypography>Não foi possível carregar os detalhes.</MDTypography>
-                    )}
-                </MDBox>
-            </Card>
-        </Modal>
-    );
+              {/* Seção Inferior: Detalhes da Exceção */}
+              <MDBox>
+                <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Detalhes da Exceção</MDTypography>
+                <Grid container spacing={3}>
+                    {/* Coluna Esquerda Exceção */}
+                    <Grid item xs={12} md={6}>
+                        <DetailItem icon="how_to_reg" label="Aprovado por" value={details.user?.name} darkMode={darkMode} />
+                        <DetailItem icon="event" label="Data" value={details.createdAt ? new Date(details.createdAt).toLocaleString('pt-BR') : ""} darkMode={darkMode} />
+                    </Grid>
+                    {/* Coluna Direita Exceção */}
+                    <Grid item xs={12} md={6}>
+                        <DetailItem icon="comment" label="Justificativa" value={details.justification} darkMode={darkMode} />
+                    </Grid>
+                </Grid>
+              </MDBox>
+            </>
+          ) : (
+            <MDTypography>Não foi possível carregar os detalhes.</MDTypography>
+          )}
+        </MDBox>
+      </Card>
+    </Modal>
+  );
 };
 
 
 function GerenciarExcecoes() {
-    // <<< INÍCIO DA ALTERAÇÃO 3: Extraindo o 'darkMode' do controller >>>
     const [controller] = useMaterialUIController();
     const { token, darkMode } = controller;
-    // <<< FIM DA ALTERAÇÃO 3 >>>
     const [exceptions, setExceptions] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
@@ -357,7 +394,7 @@ function GerenciarExcecoes() {
                 </MDButton>
             )
         },
-    ], [exceptions]);
+    ], [exceptions]); // Dependência de 'exceptions' adicionada
 
     const rows = useMemo(() => exceptions, [exceptions]);
 
@@ -414,7 +451,7 @@ function GerenciarExcecoes() {
                 isLoading={detailsModalState.isLoading}
                 details={detailsModalState.data}
                 getDivergenceLabel={getDivergenceLabel}
-                darkMode={darkMode} // <<< ALTERAÇÃO: Passando o darkMode para o modal
+                darkMode={darkMode}
             />
 
             <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>

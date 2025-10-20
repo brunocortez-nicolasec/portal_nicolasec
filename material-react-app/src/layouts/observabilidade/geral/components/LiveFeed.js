@@ -25,7 +25,116 @@ import DataTable from "examples/Tables/DataTable";
 import colors from "assets/theme/base/colors";
 import MDBadge from "components/MDBadge";
 
-// --- Componentes Auxiliares (Sem alterações) ---
+// ======================= INÍCIO DA ALTERAÇÃO =======================
+
+// --- COMPONENTES AUXILIARES DO MODAL ---
+
+// Novo componente de item de detalhe, seguindo o modelo padrão
+function DetailItem({ icon, label, value, children, darkMode }) {
+  const valueColor = darkMode ? "white" : "text.secondary";
+  
+  return (
+    <MDBox display="flex" alignItems="center" mb={1.5} lineHeight={1}>
+      <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>
+        {icon}
+      </Icon>
+      <MDTypography variant="button" fontWeight="bold" color="text">
+        {label}:&nbsp;
+      </MDTypography>
+      
+      {value && (
+        <MDTypography variant="button" fontWeight="regular" color={valueColor}>
+          {value}
+        </MDTypography>
+      )}
+      {children}
+    </MDBox>
+  );
+}
+
+DetailItem.propTypes = {
+  icon: PropTypes.string.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.any,
+  children: PropTypes.node,
+  darkMode: PropTypes.bool,
+};
+
+// Componente do Modal de Detalhes da Identidade, agora reformatado
+const DivergenceModal = React.forwardRef(({ user, onClose, darkMode }, ref) => {
+  if (!user) return null;
+  return (
+    <Box ref={ref} tabIndex={-1}>
+      <Card sx={{ width: "80vw", maxWidth: "700px", maxHeight: "90vh", overflowY: "auto" }}>
+        <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
+          <MDTypography variant="h5">Detalhes da Identidade</MDTypography>
+          <Icon
+            sx={({ typography: { size }, palette: { dark, white } }) => ({
+              fontSize: `${size.lg} !important`,
+              color: darkMode ? white.main : dark.main,
+              stroke: "currentColor",
+              strokeWidth: "2px",
+              cursor: "pointer",
+            })}
+            onClick={onClose}
+          >
+            close
+          </Icon>
+        </MDBox>
+        
+        <MDBox p={3} pt={1}>
+          <Grid container spacing={3}>
+            {/* Coluna da Esquerda: Identificação */}
+            <Grid item xs={12} md={6}>
+              <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Identificação</MDTypography>
+              <DetailItem icon="person" label="Nome" value={user.name} darkMode={darkMode} />
+              <DetailItem icon="email" label="Email" value={user.email} darkMode={darkMode} />
+              <DetailItem icon="badge" label="CPF" value={user.cpf || "N/A"} darkMode={darkMode} />
+              <DetailItem icon="vpn_key" label="ID de Origem" value={user.id_user} darkMode={darkMode} />
+            </Grid>
+
+            {/* Coluna da Direita: Status e Acesso */}
+            <Grid item xs={12} md={6}>
+              <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Status e Acesso</MDTypography>
+              <DetailItem icon="work" label="Tipo" value={user.userType || "N/A"} darkMode={darkMode} />
+              <DetailItem icon="approval" label="Status RH" value={user.rh_status || "N/A"} darkMode={darkMode} />
+              <DetailItem icon="apps" label="Status App" value={user.app_status || "N/A"} darkMode={darkMode} />
+              <DetailItem icon="admin_panel_settings" label="Perfil App" value={user.perfil || "N/A"} darkMode={darkMode} />
+              <DetailItem icon="login" label="Último Login" value={user.last_login ? new Date(user.last_login).toLocaleDateString('pt-BR') : 'N/A'} darkMode={darkMode} />
+            </Grid>
+          </Grid>
+
+          <Divider sx={{ mt: 1.5, mb: 2 }} />
+          
+          <MDBox>
+            <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>
+              Inconsistências Encontradas
+            </MDTypography>
+            {user.divergenceDetails && user.divergenceDetails.length > 0 ? (
+              user.divergenceDetails.map((detail) => (
+                <MDBox key={detail.code} display="flex" alignItems="center" mb={1}>
+                  <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>warning</Icon>
+                  <MDTypography variant="button" color={darkMode ? "white" : "text.secondary"}>
+                    {detail.text}
+                  </MDTypography>
+                </MDBox>
+              ))
+            ) : (
+              <MDBox display="flex" alignItems="center" mb={1}>
+                <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>check_circle</Icon>
+                <MDTypography variant="button" color={darkMode ? "white" : "text.secondary"}>
+                  Nenhuma inconsistência encontrada.
+                </MDTypography>
+              </MDBox>
+            )}
+          </MDBox>
+        </MDBox>
+      </Card>
+    </Box>
+  );
+});
+
+// ======================== FIM DA ALTERAÇÃO =========================
 
 const AuthorCell = ({ nome, tipo }) => (
     <MDBox display="flex" alignItems="center" lineHeight={1}>
@@ -47,91 +156,10 @@ const StatusCell = ({ status }) => {
     return <MDTypography variant="caption" color={color} fontWeight="medium">{text}</MDTypography>;
 };
 
-const InfoDetail = ({ label, value }) => (
-    <Grid container spacing={1} sx={{ mb: 1.5 }}>
-        <Grid item xs={5}><MDTypography variant="caption" color="text" sx={{ fontWeight: 'regular' }}>{label}:</MDTypography></Grid>
-        <Grid item xs={7}><MDTypography variant="button" fontWeight="medium">{value || "-"}</MDTypography></Grid>
-    </Grid>
-);
-
-// <<< INÍCIO DA ALTERAÇÃO 1: Passando a prop 'darkMode' para o modal >>>
-const DivergenceModal = React.forwardRef(({ user, onClose, darkMode }, ref) => {
-// <<< FIM DA ALTERAÇÃO 1 >>>
-    if (!user) return null;
-    return (
-        <Box ref={ref} tabIndex={-1}>
-            <Card sx={{ width: "80vw", maxWidth: "700px", maxHeight: "90vh", overflowY: "auto" }}>
-                <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
-                    <MDTypography variant="h6">Detalhes da Identidade</MDTypography>
-                    {/* <<< INÍCIO DA ALTERAÇÃO 2: Substituído o MDButton pelo Icon, seguindo o modelo do Configurator >>> */}
-                    <Icon
-                        sx={({ typography: { size }, palette: { dark, white } }) => ({
-                            fontSize: `${size.lg} !important`,
-                            color: darkMode ? white.main : dark.main,
-                            stroke: "currentColor",
-                            strokeWidth: "2px",
-                            cursor: "pointer",
-                        })}
-                        onClick={onClose}
-                    >
-                        close
-                    </Icon>
-                    {/* <<< FIM DA ALTERAÇÃO 2 >>> */}
-                </MDBox>
-                <Divider sx={{ margin: 0 }} />
-                <MDBox p={3}>
-                    <Grid container spacing={4}>
-                        <Grid item xs={12} md={6}>
-                            <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Identificação</MDTypography>
-                            <MDBox mt={2}>
-                                <InfoDetail label="Nome" value={user.name} />
-                                <InfoDetail label="Email" value={user.email} />
-                                <InfoDetail label="CPF" value={user.cpf} />
-                                <InfoDetail label="ID de Origem" value={user.id_user} />
-                            </MDBox>
-                        </Grid>
-
-                        <Grid item xs={12} md={6}>
-                             <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Status e Acesso</MDTypography>
-                             <MDBox mt={2}>
-                                 <InfoDetail label="Tipo" value={user.userType} />
-                                 <InfoDetail label="Status RH" value={user.rh_status} />
-                                 <InfoDetail label="Status App" value={user.app_status} />
-                                 <InfoDetail label="Perfil App" value={user.perfil} />
-                                 <InfoDetail label="Último Login" value={user.last_login ? new Date(user.last_login).toLocaleDateString('pt-BR') : '-'} />
-                             </MDBox>
-                        </Grid>
-                    </Grid>
-
-                    <Divider sx={{ mt: 3, mb: 2 }} />
-                    <MDBox>
-                        <MDTypography variant="button" fontWeight="bold" color="secondary" textTransform="uppercase">Inconsistências Encontradas</MDTypography>
-                        <MDBox mt={1}>
-                            {user.divergenceDetails && user.divergenceDetails.length > 0 ? (
-                                user.divergenceDetails.map((detail) => (
-                                    <MDTypography key={detail.code} variant="body2" color="text" display="block" mt={0.5}>
-                                        • {detail.text}
-                                    </MDTypography>
-                                ))
-                            ) : (
-                                <MDTypography variant="body2" color="text" display="block" mt={0.5}>
-                                    • Nenhuma inconsistência encontrada.
-                                </MDTypography>
-                            )}
-                        </MDBox>
-                    </MDBox>
-                </MDBox>
-            </Card>
-        </Box>
-    );
-});
-
 
 function LiveFeed({ data }) {
-    // <<< INÍCIO DA ALTERAÇÃO 3: Extraindo o 'darkMode' do controller >>>
     const [controller] = useMaterialUIController();
     const { token, darkMode } = controller;
-    // <<< FIM DA ALTERAÇÃO 3 >>>
     const [systemOptions, setSystemOptions] = useState([]);
 
     useEffect(() => {
@@ -278,9 +306,7 @@ function LiveFeed({ data }) {
     return (
         <>
             <Modal open={isModalOpen} onClose={handleCloseModal} sx={{ display: "grid", placeItems: "center" }}>
-                {/* <<< INÍCIO DA ALTERAÇÃO 4: Passando o darkMode para o modal >>> */}
                 <DivergenceModal user={selectedUser} onClose={handleCloseModal} darkMode={darkMode} />
-                {/* <<< FIM DA ALTERAÇÃO 4 >>> */}
             </Modal>
 
             <Card>

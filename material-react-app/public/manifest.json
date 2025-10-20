@@ -1,9 +1,9 @@
 {
-  "short_name": "Material Dashboard",
-  "name": "Material Dashboard 2 React",
+  "short_name": "Mind The Gap",
+  "name": "Mind The Gap - NicolaSec",
   "icons": [
     {
-      "src": "favicon.png",
+      "src": "mtg_fundo_branco.png",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/png"
     }

@@ -1,6 +1,6 @@
 // material-react-app/src/layouts/observabilidade/importManagement/index.js
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { useMaterialUIController } from "context";
 
@@ -14,6 +14,9 @@ import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import MDAlert from "components/MDAlert";
 import Box from "@mui/material/Box";
+import Card from "@mui/material/Card";
+import Modal from "@mui/material/Modal";
+import Divider from "@mui/material/Divider";
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -21,36 +24,64 @@ import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import MDBadge from "components/MDBadge";
 import MDSnackbar from "components/MDSnackbar";
+import PropTypes from 'prop-types';
 
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
+import Autocomplete from "@mui/material/Autocomplete";
+import TextField from "@mui/material/TextField";
+import CircularProgress from "@mui/material/CircularProgress";
 
 // --- NOVOS COMPONENTES FILHOS ---
 import HistoryTable from "./components/HistoryTable";
 import ImportCard from "./components/ImportCard";
 
+
 // --- Componentes auxiliares para os modais ---
+
+// Modal de Template (Reformatado)
 const ColumnDetail = ({ name, description, example }) => (
-    <Box component="li" sx={{ "&::marker": { color: "info.main" }, mb: 1.5 }}>
-        <MDTypography variant="body2" color="text">
-            <Box component="strong" sx={{ fontWeight: 'bold' }}>{name}:</Box> {description}
-        </MDTypography>
-        <MDTypography variant="caption" color="text" sx={{ fontFamily: 'monospace' }}>
-            Exemplo: {example}
-        </MDTypography>
-    </Box>
+  <MDBox mb={2}>
+    <MDTypography variant="button" fontWeight="bold" color="info" textGradient sx={{ fontFamily: 'monospace' }}>
+      {name}
+    </MDTypography>
+    <MDTypography variant="body2" color="text" display="block" sx={{ mt: 0.5 }}>
+      {description}
+    </MDTypography>
+    <MDTypography variant="caption" color="text" display="block" sx={{ fontFamily: 'monospace', mt: 0.5 }}>
+      Exemplo: {example}
+    </MDTypography>
+  </MDBox>
 );
 
-const DetailItem = ({ icon, label, children }) => (
-    <Grid item xs={12} sm={6}>
-        <MDBox display="flex" alignItems="center" py={1}>
-            <Icon color="secondary" sx={{ mr: 1.5 }}>{icon}</Icon>
-            <MDTypography variant="button" fontWeight="bold">{label}:&nbsp;</MDTypography>
-            <MDTypography variant="body2" color="text">{children}</MDTypography>
-        </MDBox>
-    </Grid>
-);
+ColumnDetail.propTypes = {
+  name: PropTypes.string.isRequired,
+  description: PropTypes.string.isRequired,
+  example: PropTypes.string.isRequired,
+};
+
+// Componente Helper Padronizado
+function DetailItem({ icon, label, value, children, darkMode }) {
+  const valueColor = darkMode ? "white" : "text.secondary";
+  return (
+    <MDBox display="flex" alignItems="center" mb={1.5} lineHeight={1}>
+      <Icon color="secondary" fontSize="small" sx={{ mr: 1.5 }}>{icon}</Icon>
+      <MDTypography variant="button" fontWeight="bold" color="text">{label}:&nbsp;</MDTypography>
+      {value != null && value !== '' && (<MDTypography variant="button" fontWeight="regular" color={valueColor}>{value}</MDTypography>)}
+      {!value && value !== false && !children && (<MDTypography variant="button" fontWeight="regular" color={valueColor}>N/A</MDTypography>)}
+      {children}
+    </MDBox>
+  );
+}
+
+DetailItem.propTypes = {
+  icon: PropTypes.string.isRequired,
+  label: PropTypes.string.isRequired,
+  value: PropTypes.any,
+  children: PropTypes.node,
+  darkMode: PropTypes.bool,
+};
 
 const statusMap = {
     SUCCESS: { text: "SUCESSO", color: "success" },
@@ -62,7 +93,7 @@ const statusMap = {
 // --- Componente Principal (Pai/Orquestrador) ---
 function ImportManagement() {
     const [controller] = useMaterialUIController();
-    const { token } = controller;
+    const { token, darkMode } = controller;
 
     const [history, setHistory] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -72,24 +103,33 @@ function ImportManagement() {
     
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [logToDelete, setLogToDelete] = useState(null);
-    const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+    const [detailsModalOpen, setDetailsModalOpen] = useState(false);
     const [selectedLogDetails, setSelectedLogDetails] = useState(null);
     const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
     const [confirmPayload, setConfirmPayload] = useState(null);
     const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
+    // ======================= INÍCIO DA CORREÇÃO =======================
     const fetchSystems = async () => {
         if (!token) return;
         try {
+            // Busca TODOS os sistemas (agora o backend retorna 'type' e 'databaseType')
             const response = await axios.get('/systems', { headers: { "Authorization": `Bearer ${token}` } });
-            const systemNames = response.data.map(system => system.name);
-            setSystemOptions(["RH", ...systemNames]);
+            
+            // Filtra APENAS os sistemas do tipo "CSV"
+            const csvSystems = response.data.filter(system => system.type === "CSV"); 
+            const systemNames = csvSystems.map(system => system.name);
+            
+            // Adiciona "RH" e atualiza o estado
+            setSystemOptions(["RH", ...systemNames]); 
+
         } catch (error) {
             console.error("Erro ao buscar a lista de sistemas:", error);
-            setSystemOptions(["RH"]);
-            setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível carregar a lista de sistemas." });
+            setSystemOptions(["RH"]); // Mantém RH como opção mínima
+            setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível carregar a lista de sistemas para importação." });
         }
     };
+    // ======================== FIM DA CORREÇÃO =========================
     
     const fetchHistory = async () => {
         if (!token) return;
@@ -108,7 +148,7 @@ function ImportManagement() {
     useEffect(() => {
         if (token) { 
             fetchHistory(); 
-            fetchSystems();
+            fetchSystems(); // Chama a versão CORRIGIDA
         }
     }, [token]);
 
@@ -173,8 +213,10 @@ function ImportManagement() {
             handleCloseDeleteDialog();
         }
     };
-    const handleOpenDetailsDialog = (log) => { setSelectedLogDetails(log); setDetailsDialogOpen(true); };
-    const handleCloseDetailsDialog = () => { setSelectedLogDetails(null); setDetailsDialogOpen(false); };
+    
+    const handleOpenDetailsModal = (log) => { setSelectedLogDetails(log); setDetailsModalOpen(true); };
+    const handleCloseDetailsModal = () => { setSelectedLogDetails(null); setDetailsModalOpen(false); };
+    
     const closeNotification = () => setNotification({ ...notification, open: false });
     const handleOpenTemplateModal = () => setTemplateModalOpen(true);
     const handleCloseTemplateModal = () => setTemplateModalOpen(false);
@@ -197,10 +239,10 @@ function ImportManagement() {
             <DashboardNavbar />
             <MDBox pt={6} pb={3}>
                 <Grid container spacing={3}>
-                    <Grid item xs={12}>
+                   <Grid item xs={12}>
                         <ImportCard 
                             onUpload={handleUpload}
-                            systemOptions={systemOptions}
+                            systemOptions={systemOptions} // Passa a lista JÁ FILTRADA
                             isLoading={isUploading}
                             onOpenTemplate={handleOpenTemplateModal}
                         />
@@ -209,7 +251,7 @@ function ImportManagement() {
                     <HistoryTable
                         history={history}
                         isLoading={isLoading}
-                        onOpenDetails={handleOpenDetailsDialog}
+                        onOpenDetails={handleOpenDetailsModal}
                         onOpenDelete={handleOpenDeleteDialog}
                     />
                 </Grid>
@@ -217,50 +259,56 @@ function ImportManagement() {
 
             {/* Seção de Modais */}
             <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
-                <DialogTitle>Confirmar Exclusão</DialogTitle>
-                <DialogContent><DialogContentText>Você tem certeza que deseja excluir este registro de importação? Esta ação não pode ser desfeita.</DialogContentText></DialogContent>
-                <DialogActions>
-                    <MDButton onClick={handleCloseDeleteDialog} color="secondary">Cancelar</MDButton>
-                    <MDButton onClick={handleConfirmDelete} color="error" autoFocus>Excluir</MDButton>
-                </DialogActions>
+              <DialogTitle>Confirmar Exclusão</DialogTitle>
+              <DialogContent><DialogContentText>Você tem certeza que deseja excluir este registro de importação? Esta ação não pode ser desfeita.</DialogContentText></DialogContent>
+              <DialogActions>
+                  <MDButton onClick={handleCloseDeleteDialog} color="secondary">Cancelar</MDButton>
+                  <MDButton onClick={handleConfirmDelete} color="error" autoFocus>Excluir</MDButton>
+              </DialogActions>
             </Dialog>
             
             <Dialog open={confirmDialogOpen} onClose={handleCloseConfirmDialog}>
-                <DialogTitle>Confirmar Substituição</DialogTitle>
-                <DialogContent>
-                    <DialogContentText>
-                        Essa plataforma já possui um CSV processado. Você deseja fazer a substituição dos dados?
-                    </DialogContentText>
-                </DialogContent>
-                <DialogActions>
-                    <MDButton onClick={handleCloseConfirmDialog} color="secondary">Não</MDButton>
-                    <MDButton onClick={handleConfirmAndUpload} color="info" autoFocus>Sim</MDButton>
-                </DialogActions>
+              <DialogTitle>Confirmar Substituição</DialogTitle>
+              <DialogContent>
+                  <DialogContentText>
+                      Essa plataforma já possui um CSV processado. Você deseja fazer a substituição dos dados?
+                  </DialogContentText>
+              </DialogContent>
+              <DialogActions>
+                  <MDButton onClick={handleCloseConfirmDialog} color="secondary">Não</MDButton>
+                  <MDButton onClick={handleConfirmAndUpload} color="info" autoFocus>Sim</MDButton>
+              </DialogActions>
             </Dialog>
             
             <Dialog open={templateModalOpen} onClose={handleCloseTemplateModal} fullWidth maxWidth="md">
-                <DialogTitle>Template do Arquivo CSV</DialogTitle>
-                <DialogContent dividers>
+                <DialogTitle sx={{ p: 2 }}>
+                  <MDTypography variant="h5">Template do Arquivo CSV</MDTypography>
+                </DialogTitle>
+                <DialogContent dividers sx={{ p: 3, borderTop: "none" }}>
                     <MDTypography variant="h6" gutterBottom> Estrutura do Arquivo CSV </MDTypography>
-                    <DialogContentText sx={{ mb: 2 }}> Para garantir a importação, o cabeçalho do seu arquivo CSV deve conter as seguintes colunas, na ordem exata: </DialogContentText>
-                    <Box component="ul" sx={{ pl: 2, listStyle: 'disc' }}>
-                         <ColumnDetail name="id_user" description="Identificador único do usuário no sistema de origem." example="1023A" />
-                         <ColumnDetail name="nome_completo" description="Nome completo do colaborador." example="Ana Carolina de Souza" />
-                         <ColumnDetail name="email" description="Endereço de e-mail principal do usuário." example="ana.souza@empresa.com" />
-                         <ColumnDetail name="status" description="Situação atual da conta (ex: Ativo, Inativo)." example="Ativo" />
-                         <ColumnDetail name="cpf" description="CPF do usuário (apenas números, sem pontos ou traços)." example="11122233344" />
-                         <ColumnDetail name="userType" description="Define o tipo de vínculo do usuário (ex: Funcionário, Terceirizado)." example="Funcionário" />
-                         <ColumnDetail name="last_login" description="Data do último acesso no formato AAAA-MM-DD." example="2025-09-15" />
-                         <ColumnDetail name="perfil" description="Define o perfil de acesso do usuário (ex: Admin, Usuário)." example="Admin" />
-                    </Box>
+                    <DialogContentText component="div" sx={{ mb: 3 }}>
+                      <MDTypography variant="body2" color="text">
+                        Para garantir a importação, o cabeçalho do seu arquivo CSV deve conter as seguintes colunas, na ordem exata:
+                      </MDTypography>
+                    </DialogContentText>
+                    <MDBox>
+                        <ColumnDetail name="id_user" description="Identificador único do usuário no sistema de origem." example="1023A" />
+                        <ColumnDetail name="nome_completo" description="Nome completo do colaborador." example="Ana Carolina de Souza" />
+                        <ColumnDetail name="email" description="Endereço de e-mail principal do usuário." example="ana.souza@empresa.com" />
+                        <ColumnDetail name="status" description="Situação atual da conta (ex: Ativo, Inativo)." example="Ativo" />
+                        <ColumnDetail name="cpf" description="CPF do usuário (apenas números, sem pontos ou traços)." example="11122233344" />
+                        <ColumnDetail name="userType" description="Define o tipo de vínculo do usuário (ex: Funcionário, Terceirizado)." example="Funcionário" />
+                        <ColumnDetail name="last_login" description="Data do último acesso no formato AAAA-MM-DD." example="2025-09-15" />
+                        <ColumnDetail name="perfil" description="Define o perfil de acesso do usuário (ex: Admin, Usuário)." example="Admin" />
+                    </MDBox>
                 </DialogContent>
-                <DialogActions sx={{ p: '16px 24px' }}>
-                    <MDButton onClick={handleDownloadTemplate} color="success" variant="contained" startIcon={<Icon>download</Icon>}> Baixar Template </MDButton>
-                    <Box sx={{ flex: '1 1 auto' }} />
-                    <MDButton onClick={handleCloseTemplateModal} color="dark"> Fechar </MDButton>
+                <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+                    <MDButton onClick={handleDownloadTemplate} color="success" variant="gradient" startIcon={<Icon>download</Icon>}> Baixar Template </MDButton>
+                    <MDButton onClick={handleCloseTemplateModal} color="info"> Fechar </MDButton>
                 </DialogActions>
             </Dialog>
 
+            {/* Modal de Detalhes da Importação (Padronizado) */}
             {selectedLogDetails && (() => {
                 const startTime = new Date(selectedLogDetails.createdAt);
                 const endTime = selectedLogDetails.completedAt ? new Date(selectedLogDetails.completedAt) : null;
@@ -269,44 +317,64 @@ function ImportManagement() {
                     const diffSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
                     duration = `${diffSeconds.toFixed(2)} segundos`;
                 }
+                const statusInfo = statusMap[selectedLogDetails.status] || { text: selectedLogDetails.status, color: "secondary" };
+
                 return (
-                    <Dialog open={detailsDialogOpen} onClose={handleCloseDetailsDialog} fullWidth maxWidth="md">
-                        {/* <<< INÍCIO DA ALTERAÇÃO FINAL >>> */}
-                        <DialogTitle>
-                            <MDBox display="flex" alignItems="center">
-                                <MDTypography variant="h6" color="text">
-                                    <Icon>visibility</Icon>
-                                </MDTypography>
-                                <MDTypography variant="h6" color="text" sx={{ ml: 1 }}>
-                                    Detalhes da Importação #{selectedLogDetails.id}
-                                </MDTypography>
-                            </MDBox>
-                        </DialogTitle>
-                        {/* <<< FIM DA ALTERAÇÃO FINAL >>> */}
-                        <DialogContent dividers>
-                            <Grid container spacing={1}>
-                                <DetailItem icon="badge" label="Usuário">{selectedLogDetails.user?.name || "N/A"}</DetailItem>
-                                <DetailItem icon="storage" label="Sistema">{selectedLogDetails.targetSystem}</DetailItem>
-                                <DetailItem icon="description" label="Arquivo">{selectedLogDetails.fileName}</DetailItem>
-                                <DetailItem icon="numbers" label="Registros">{`${selectedLogDetails.processedRows} / ${selectedLogDetails.totalRows}`}</DetailItem>
-                                <DetailItem icon="play_arrow" label="Início">{startTime.toLocaleString('pt-BR')}</DetailItem>
-                                <DetailItem icon="check_circle" label="Término">{endTime ? endTime.toLocaleString('pt-BR') : "N/A"}</DetailItem>
-                                <DetailItem icon="timer" label="Duração">{duration}</DetailItem>
-                                <DetailItem icon="task_alt" label="Status">
-                                    <MDBadge badgeContent={statusMap[selectedLogDetails.status]?.text || selectedLogDetails.status} color={statusMap[selectedLogDetails.status]?.color || "secondary"} size="md" container />
-                                </DetailItem>
-                            </Grid>
-                            {selectedLogDetails.status === "FAILED" && selectedLogDetails.errorDetails && (
-                                <MDBox mt={3}>
-                                    <MDAlert color="error"><MDTypography variant="body2" color="white" sx={{ whiteSpace: "pre-wrap" }}><strong>Detalhes do Erro:</strong><br/>{selectedLogDetails.errorDetails}</MDTypography></MDAlert>
-                                </MDBox>
-                            )}
-                        </DialogContent>
-                        <DialogActions>
-                            <MDButton onClick={handleCloseDetailsDialog} color="info">Fechar</MDButton>
-                        </DialogActions>
-                    </Dialog>
-                )
+                    <Modal open={detailsModalOpen} onClose={handleCloseDetailsModal} sx={{ display: "grid", placeItems: "center" }}>
+                      <Card sx={{ width: "90%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
+                          <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
+                              <MDTypography variant="h5">Detalhes da Importação #{selectedLogDetails.id}</MDTypography>
+                              <Icon
+                                  sx={({ typography: { size }, palette: { dark, white } }) => ({
+                                      fontSize: `${size.lg} !important`,
+                                      color: darkMode ? white.main : dark.main,
+                                      stroke: "currentColor",
+                                      strokeWidth: "2px",
+                                      cursor: "pointer",
+                                  })}
+                                  onClick={handleCloseDetailsModal}
+                              >
+                                  close
+                              </Icon>
+                          </MDBox>
+                          
+                          <MDBox p={3} pt={1}>
+                              <Grid container spacing={3}>
+                                  {/* Coluna da Esquerda */}
+                                  <Grid item xs={12} md={6}>
+                                      <DetailItem icon="badge" label="Usuário" value={selectedLogDetails.user?.name} darkMode={darkMode} />
+                                      <DetailItem icon="storage" label="Sistema" value={selectedLogDetails.targetSystem} darkMode={darkMode} />
+                                      <DetailItem icon="description" label="Arquivo" value={selectedLogDetails.fileName} darkMode={darkMode} />
+                                      <DetailItem icon="numbers" label="Registros" value={`${selectedLogDetails.processedRows} / ${selectedLogDetails.totalRows}`} darkMode={darkMode} />
+                                  </Grid>
+                                  {/* Coluna da Direita */}
+                                  <Grid item xs={12} md={6}>
+                                      <DetailItem icon="play_arrow" label="Início" value={startTime.toLocaleString('pt-BR')} darkMode={darkMode} />
+                                      <DetailItem icon="check_circle" label="Término" value={endTime ? endTime.toLocaleString('pt-BR') : ""} darkMode={darkMode} />
+                                      <DetailItem icon="timer" label="Duração" value={duration} darkMode={darkMode} />
+                                      <DetailItem icon="task_alt" label="Status" darkMode={darkMode}>
+                                          <MDBadge badgeContent={statusInfo.text} color={statusInfo.color} size="sm" variant="gradient" container sx={{ ml: 1 }}/>
+                                      </DetailItem>
+                                  </Grid>
+                              </Grid>
+
+                              {selectedLogDetails.status === "FAILED" && selectedLogDetails.errorDetails && (
+                                  <>
+                                      <Divider sx={{ my: 2 }} />
+                                      <MDAlert color="error" sx={{ mt: 1 }}>
+                                          <MDTypography variant="button" color="white" sx={{ whiteSpace: "pre-wrap" }}>
+                                              <strong>Detalhes do Erro:</strong><br/>{selectedLogDetails.errorDetails}
+                                          </MDTypography>
+                                      </MDAlert>
+                                  </>
+                              )}
+                          </MDBox>
+                          <MDBox p={2} pt={0} display="flex" justifyContent="flex-end">
+                            <MDButton onClick={handleCloseDetailsModal} color="info">Fechar</MDButton>
+                          </MDBox>
+                      </Card>
+                    </Modal>
+                );
             })()}
 
             <MDSnackbar
@@ -322,5 +390,13 @@ function ImportManagement() {
         </DashboardLayout>
     );
 }
+
+// Adicionando PropTypes faltantes
+DetailItem.defaultProps = {
+  darkMode: false,
+  value: null,
+  children: null,
+};
+
 
 export default ImportManagement;
