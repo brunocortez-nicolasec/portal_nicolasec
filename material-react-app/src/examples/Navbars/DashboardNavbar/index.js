@@ -10,9 +10,12 @@ import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import Icon from "@mui/material/Icon";
 import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
 import NotificationItem from "examples/Items/NotificationItem";
 import AuthService from "services/auth-service";
+// ======================= INÍCIO DA ALTERAÇÃO 1 =======================
+import brandLogoLight from "assets/images/mtg_azul_sem_fundo.png"; // Logo para modo claro
+import brandLogoDark from "assets/images/mtg_branco_sem_fundo.png"; // Logo para modo escuro
+// ======================== FIM DA ALTERAÇÃO 1 =========================
 import {
   navbar,
   navbarContainer,
@@ -32,7 +35,7 @@ import {
 function DashboardNavbar({ absolute, light, isMini }) {
   const [navbarType, setNavbarType] = useState();
   const [controller, dispatch] = useMaterialUIController();
-  const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller;
+  const { miniSidenav, transparentNavbar, fixedNavbar, openConfigurator, darkMode } = controller; // darkMode já está aqui
   const [openMenu, setOpenMenu] = useState(false);
   const [userMenu, setUserMenu] = useState(null);
   const navigate = useNavigate();
@@ -73,11 +76,8 @@ function DashboardNavbar({ absolute, light, isMini }) {
     </Menu>
   );
 
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   const defaultIconStyle = ({ palette: { dark, white }}) => ({
     color: () => {
-      // Simplificado: Se for modo escuro OU a prop 'light' estiver ativa, a cor será branca.
-      // Caso contrário (modo claro padrão), será escura.
       if (darkMode || light) {
         return white.main;
       }
@@ -88,7 +88,6 @@ function DashboardNavbar({ absolute, light, isMini }) {
       transform: 'scale(1.1)',
     },
   });
-  // ======================== FIM DA ALTERAÇÃO =========================
 
   const userIconStyle = ({ palette: { white, info } }) => ({
     color: () => (light ? white.main : info.main),
@@ -118,9 +117,17 @@ function DashboardNavbar({ absolute, light, isMini }) {
     >
       <Toolbar sx={(theme) => navbarContainer(theme)}>
         <MDBox color="inherit" mb={{ xs: 1, md: 0 }} sx={(theme) => navbarRow(theme, { isMini })}>
-          <MDTypography variant="h4" fontWeight="bold" color="dark">
-            Mind The Gap
-          </MDTypography>
+          <MDBox
+            component="img"
+            // ======================= INÍCIO DA ALTERAÇÃO 2 =======================
+            src={darkMode ? brandLogoDark : brandLogoLight} // Escolhe o src baseado no darkMode
+            // ======================== FIM DA ALTERAÇÃO 2 =========================
+            alt="Mind The Gap Logo"
+            sx={{
+              maxHeight: "3.5rem",
+              verticalAlign: "middle",
+            }}
+          />
         </MDBox>
         {isMini ? null : (
           <MDBox sx={(theme) => navbarRow(theme, { isMini })}>

@@ -16,8 +16,10 @@ import createCache from "@emotion/cache";
 import routes from "routes";
 import { useMaterialUIController, setMiniSidenav, setOpenConfigurator, logout } from "context";
 import { DashboardProvider } from "context/DashboardContext";
-import brandWhite from "assets/images/logo-ct.png";
-import brandDark from "assets/images/logo-ct-dark.png";
+// ======================= INÍCIO DA ALTERAÇÃO =======================
+import brandWhite from "assets/images/mtg_icon_branco.png"; // Ícone para Sidenav escura/padrão
+import brandDark from "assets/images/mtg_icon_azul.png";   // Ícone para Sidenav clara
+// ======================== FIM DA ALTERAÇÃO =========================
 import { setupAxiosInterceptors } from "./services/interceptor";
 import ProtectedRoute from "examples/ProtectedRoute";
 import ForgotPassword from "auth/forgot-password";
@@ -114,7 +116,7 @@ export default function App() {
 
   return direction === "rtl" ? (
     <CacheProvider value={rtlCache}>
-      {/* ... (o resto do seu JSX continua exatamente igual, pois a lógica de proteção foi abstraída) ... */}
+      {/* ... */}
     </CacheProvider>
   ) : (
     <ThemeProvider theme={darkMode ? themeDark : theme}>
@@ -124,9 +126,6 @@ export default function App() {
           <Sidenav
             color={sidenavColor}
             brand={(transparentSidenav && !darkMode) || whiteSidenav ? brandDark : brandWhite}
-            // ======================= INÍCIO DA ALTERAÇÃO =======================
-            // A linha 'brandName' foi removida daqui
-            // ======================== FIM DA ALTERAÇÃO =========================
             routes={routes}
           />
           <Configurator />
