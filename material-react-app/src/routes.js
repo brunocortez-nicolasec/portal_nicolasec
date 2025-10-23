@@ -20,6 +20,7 @@ import VisaoGeral from "layouts/observabilidade/geral";
 import ImportManagement from "layouts/observabilidade/importManagement";
 import GerenciarSistemas from "layouts/observabilidade/sistemas";
 import GerenciarExcecoes from "layouts/observabilidade/excecoes";
+import GerenciarPoliticas from "layouts/observabilidade/politicas"; // <<< ADICIONADO
 
 // @mui icons
 import Icon from "@mui/material/Icon";
@@ -73,18 +74,18 @@ const routes = [
         icon: <Icon fontSize="small">monitoring</Icon>,
         collapse: [
             {
-                name: "Importações",
-                key: "gerenciar-importacoes",
-                route: "/observabilidade/import-management",
-                component: <ImportManagement />,
-                icon: <Icon fontSize="small">upload_file</Icon>,
-            },
-            {
                 name: "Sistemas",
                 key: "sistemas",
                 route: "/observabilidade/sistemas",
                 component: <GerenciarSistemas />,
                 icon: <Icon fontSize="small">storage</Icon>,
+            },
+            {
+                name: "Importações",
+                key: "gerenciar-importacoes",
+                route: "/observabilidade/import-management",
+                component: <ImportManagement />,
+                icon: <Icon fontSize="small">upload_file</Icon>,
             },
             {
                 name: "Exceções",
@@ -93,6 +94,15 @@ const routes = [
                 component: <GerenciarExcecoes />,
                 icon: <Icon fontSize="small">gavel</Icon>,
             },
+            // <<< INÍCIO DA ADIÇÃO
+            {
+                name: "Políticas",
+                key: "politicas",
+                route: "/observabilidade/politicas",
+                component: <GerenciarPoliticas />,
+                icon: <Icon fontSize="small">policy</Icon>,
+            },
+            // <<< FIM DA ADIÇÃO
             {
                 name: "TruIM",
                 key: "truim-obs",
@@ -123,37 +133,36 @@ const routes = [
         icon: <Icon fontSize="small">admin_panel_settings</Icon>,
         role: "Admin",
         collapse: [
-        {
-            name: "Usuários",
-            key: "usuarios",
-            route: "/administrar/usuarios",
-            component: <GerenciarUsuarios />,
-            icon: <Icon fontSize="small">group</Icon>, 
-        },
-        {
-            name: "Grupos",
-            key: "grupos",
-            route: "/administrar/grupos",
-            component: <GerenciarGrupos />,
-            icon: <Icon fontSize="small">groups</Icon>,
-        },
-        {
-            name: "Funções",
-            key: "funcoes",
-            route: "/administrar/funcoes",
-            component: <GerenciarFuncoes />,
-            icon: <Icon fontSize="small">security</Icon>,
-        },
-        {
-            name: "Pacotes",
-            key: "pacotes",
-            route: "/administrar/pacotes",
-            component: <GerenciarPacotes />,
-            icon: <Icon fontSize="small">inventory_2</Icon>,
-        },
-    ],
+            {
+                name: "Usuários",
+                key: "usuarios",
+                route: "/administrar/usuarios",
+                component: <GerenciarUsuarios />,
+                icon: <Icon fontSize="small">group</Icon>,
+            },
+            {
+                name: "Grupos",
+                key: "grupos",
+                route: "/administrar/grupos",
+                component: <GerenciarGrupos />,
+                icon: <Icon fontSize="small">groups</Icon>,
+            },
+            {
+                name: "Funções",
+                key: "funcoes",
+                route: "/administrar/funcoes",
+                component: <GerenciarFuncoes />,
+                icon: <Icon fontSize="small">security</Icon>,
+            },
+            {
+                name: "Pacotes",
+                key: "pacotes",
+                route: "/administrar/pacotes",
+                component: <GerenciarPacotes />,
+                icon: <Icon fontSize="small">inventory_2</Icon>,
+            },
+        ],
     },
-    // <<< O BLOCO "TAS" FOI REMOVIDO DAQUI >>>
 ];
 
 export default routes;

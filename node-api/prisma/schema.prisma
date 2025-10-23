@@ -33,6 +33,8 @@ model User {
   importLogs           ImportLog[]
   systems              System[]
   divergenceExceptions DivergenceException[]
+  sodRules             SodRule[]
+  rbacRules            RbacRule[] // <<< ADICIONADO: Relação com RbacRule
 
   @@map("users")
 }
@@ -99,23 +101,19 @@ model Package {
   @@map("packages")
 }
 
-// ======================= INÍCIO DA ALTERAÇÃO =======================
 model System {
-  id          Int      @id @default(autoincrement())
-  name        String   @unique
-  description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  userId      Int
-  user        User     @relation(fields: [userId], references: [id])
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  description       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  userId            Int
+  user              User     @relation(fields: [userId], references: [id])
+  type              String   @default("CSV")
+  connectionDetails Json?
 
-  // Campos para a nova arquitetura de Fontes de Dados
-  type        String   @default("CSV") // "CSV", "PostgreSQL", "Oracle", etc.
-  connectionDetails Json?  // Armazena todos os detalhes de conexão (user, port, server, etc.)
-  
   @@map("systems")
 }
-// ======================== FIM DA ALTERAÇÃO =========================
 
 model ImportLog {
   id            Int          @id @default(autoincrement())
@@ -134,11 +132,13 @@ model ImportLog {
 }
 
 model Profile {
-  id         Int        @id @default(autoincrement())
-  name       String     @unique
-  identities Identity[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id                 Int        @id @default(autoincrement())
+  name               String     @unique
+  identities         Identity[]
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  rbacRulesGranted   RbacRule[] @relation("GrantedProfile")   // <<< ADICIONADO: Relação como perfil concedido
+  rbacRulesRequired  RbacRule[] @relation("RequiredProfile")  // <<< ADICIONADO: Relação como perfil requerido (Condição 1)
 
   @@map("profiles")
 }
@@ -177,4 +177,76 @@ model DivergenceException {
 
   @@unique([identityId, divergenceCode, targetSystem])
   @@map("divergence_exceptions")
+}
+
+model SodRule {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  areaNegocio     String?
+  processoNegocio String?
+  owner           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id])
+  ruleType        String
+  valueAType      String
+  valueAId        String
+  valueBType      String
+  valueBId        String
+
+  @@unique([userId, valueAType, valueAId, valueBType, valueBId])
+  @@map("sod_rules")
+}
+
+model RbacRule {
+  id                   Int      @id @default(autoincrement())
+  name                 String
+  description          String?
+  areaNegocio          String?
+  processoNegocio      String?
+  owner                String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  // Usuário que criou a regra
+  userId               Int
+  user                 User     @relation(fields: [userId], references: [id])
+
+  // Tipo de condição que concede o perfil
+  conditionType        String   // "BY_PROFILE", "BY_SINGLE_ATTRIBUTE", "BY_MULTIPLE_ATTRIBUTES"
+
+  // Perfil que é concedido por esta regra
+  grantedProfileId     Int
+  grantedProfile       Profile  @relation("GrantedProfile", fields: [grantedProfileId], references: [id], onDelete: Cascade)
+
+  // ---- Campos condicionais (só um conjunto será preenchido por regra) ----
+
+  // Para conditionType = "BY_PROFILE"
+  requiredProfileId    Int?
+  requiredProfile      Profile? @relation("RequiredProfile", fields: [requiredProfileId], references: [id], onDelete: SetNull) // SetNull para não deletar regra se perfil for deletado
+
+  // Para conditionType = "BY_SINGLE_ATTRIBUTE"
+  requiredAttributeId  String? // ID/Nome do atributo (ex: "userType")
+  requiredAttributeValue String? // Valor esperado (ex: "Terceiro")
+
+  // Para conditionType = "BY_MULTIPLE_ATTRIBUTES"
+  attributeConditions RbacAttributeCondition[] // Relação com a tabela auxiliar
+
+  @@map("rbac_rules")
+}
+
+model RbacAttributeCondition {
+  id             Int      @id @default(autoincrement())
+
+  // Regra RBAC à qual esta condição pertence
+  rbacRuleId     Int
+  rbacRule       RbacRule @relation(fields: [rbacRuleId], references: [id], onDelete: Cascade) // Deleta condições se a regra for deletada
+
+  // Atributo específico desta condição
+  attributeId    String   // ID/Nome do atributo (ex: "status")
+  attributeValue String   // Valor esperado (ex: "Ativo")
+
+  @@map("rbac_attribute_conditions")
 }
