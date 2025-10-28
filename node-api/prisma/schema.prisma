@@ -1,5 +1,3 @@
-// node-api/prisma/schema.prisma
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
@@ -34,7 +32,7 @@ model User {
   systems              System[]
   divergenceExceptions DivergenceException[]
   sodRules             SodRule[]
-  rbacRules            RbacRule[] // <<< ADICIONADO: Relação com RbacRule
+  rbacRules            RbacRule[]
 
   @@map("users")
 }
@@ -132,13 +130,13 @@ model ImportLog {
 }
 
 model Profile {
-  id                 Int        @id @default(autoincrement())
-  name               String     @unique
-  identities         Identity[]
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-  rbacRulesGranted   RbacRule[] @relation("GrantedProfile")   // <<< ADICIONADO: Relação como perfil concedido
-  rbacRulesRequired  RbacRule[] @relation("RequiredProfile")  // <<< ADICIONADO: Relação como perfil requerido (Condição 1)
+  id                Int        @id @default(autoincrement())
+  name              String     @unique
+  identities        Identity[]
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  rbacRulesGranted  RbacRule[] @relation("GrantedProfile")
+  rbacRulesRequired RbacRule[] @relation("RequiredProfile")
 
   @@map("profiles")
 }
@@ -190,63 +188,56 @@ model SodRule {
   updatedAt       DateTime @updatedAt
   userId          Int
   user            User     @relation(fields: [userId], references: [id])
-  ruleType        String
-  valueAType      String
-  valueAId        String
-  valueBType      String
-  valueBId        String
+  ruleType        String   // Ex: ROLE_X_ROLE, ATTR_X_ROLE, ATTR_X_SYSTEM
 
-  @@unique([userId, valueAType, valueAId, valueBType, valueBId])
+  // --- Campos para Valor A ---
+  valueAType      String   // PROFILE ou ATTRIBUTE
+  valueAId        String   // ID do Perfil (Int como String) ou ID/Nome do Atributo (String)
+
+  // --- NOVOS CAMPOS PARA valueA QUANDO valueAType = "ATTRIBUTE" ---
+  valueAOperator  String? // Operador (ex: "equals", "contains") - Opcional (?) pois só se aplica a ATTR
+  valueAValue     String? // Valor específico do atributo (ex: "Ativo") - Opcional (?) pois só se aplica a ATTR
+
+  // --- Campos para Valor B ---
+  valueBType      String   // PROFILE ou SYSTEM (ou ATTRIBUTE no futuro?)
+  valueBId        String   // ID do Perfil (Int como String) ou ID do Sistema (Int como String)
+
+  @@unique([userId, valueAType, valueAId, valueBType, valueBId]) // Unique constraint pode precisar ser revisada se valueAValue/Operator forem incluídos
   @@map("sod_rules")
 }
 
 model RbacRule {
-  id                   Int      @id @default(autoincrement())
-  name                 String
-  description          String?
-  areaNegocio          String?
-  processoNegocio      String?
-  owner                String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-
-  // Usuário que criou a regra
-  userId               Int
-  user                 User     @relation(fields: [userId], references: [id])
-
-  // Tipo de condição que concede o perfil
-  conditionType        String   // "BY_PROFILE", "BY_SINGLE_ATTRIBUTE", "BY_MULTIPLE_ATTRIBUTES"
-
-  // Perfil que é concedido por esta regra
-  grantedProfileId     Int
-  grantedProfile       Profile  @relation("GrantedProfile", fields: [grantedProfileId], references: [id], onDelete: Cascade)
-
-  // ---- Campos condicionais (só um conjunto será preenchido por regra) ----
-
-  // Para conditionType = "BY_PROFILE"
-  requiredProfileId    Int?
-  requiredProfile      Profile? @relation("RequiredProfile", fields: [requiredProfileId], references: [id], onDelete: SetNull) // SetNull para não deletar regra se perfil for deletado
-
-  // Para conditionType = "BY_SINGLE_ATTRIBUTE"
-  requiredAttributeId  String? // ID/Nome do atributo (ex: "userType")
-  requiredAttributeValue String? // Valor esperado (ex: "Terceiro")
-
-  // Para conditionType = "BY_MULTIPLE_ATTRIBUTES"
-  attributeConditions RbacAttributeCondition[] // Relação com a tabela auxiliar
+  id                      Int      @id @default(autoincrement())
+  name                    String
+  description             String?
+  areaNegocio             String?
+  processoNegocio         String?
+  owner                   String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  userId                  Int
+  user                    User     @relation(fields: [userId], references: [id])
+  conditionType           String
+  grantedProfileId        Int
+  grantedProfile          Profile  @relation("GrantedProfile", fields: [grantedProfileId], references: [id], onDelete: Cascade)
+  requiredProfileId       Int?
+  requiredProfile         Profile? @relation("RequiredProfile", fields: [requiredProfileId], references: [id], onDelete: SetNull)
+  requiredAttributeId     String?
+  requiredAttributeValue  String?
+  requiredAttributeOperator String?
+  logicalOperator         String?
+  attributeConditions     RbacAttributeCondition[]
 
   @@map("rbac_rules")
 }
 
 model RbacAttributeCondition {
   id             Int      @id @default(autoincrement())
-
-  // Regra RBAC à qual esta condição pertence
   rbacRuleId     Int
-  rbacRule       RbacRule @relation(fields: [rbacRuleId], references: [id], onDelete: Cascade) // Deleta condições se a regra for deletada
-
-  // Atributo específico desta condição
-  attributeId    String   // ID/Nome do atributo (ex: "status")
-  attributeValue String   // Valor esperado (ex: "Ativo")
+  rbacRule       RbacRule @relation(fields: [rbacRuleId], references: [id], onDelete: Cascade)
+  attributeId    String
+  operator       String
+  attributeValue String
 
   @@map("rbac_attribute_conditions")
 }

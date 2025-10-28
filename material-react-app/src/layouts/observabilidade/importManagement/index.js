@@ -13,7 +13,7 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import MDAlert from "components/MDAlert";
-import Box from "@mui/material/Box";
+import Box from "@mui/material/Box"; // Importação mantida caso seja usada implicitamente por outros componentes
 import Card from "@mui/material/Card";
 import Modal from "@mui/material/Modal";
 import Divider from "@mui/material/Divider";
@@ -29,8 +29,8 @@ import PropTypes from 'prop-types';
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import Autocomplete from "@mui/material/Autocomplete";
-import TextField from "@mui/material/TextField";
+// import Autocomplete from "@mui/material/Autocomplete"; // Removido se não usado diretamente aqui
+// import TextField from "@mui/material/TextField"; // Removido se não usado diretamente aqui
 import CircularProgress from "@mui/material/CircularProgress";
 
 // --- NOVOS COMPONENTES FILHOS ---
@@ -96,11 +96,17 @@ function ImportManagement() {
     const { token, darkMode } = controller;
 
     const [history, setHistory] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true); // Renomeado para clareza
     const [isUploading, setIsUploading] = useState(false);
-    const [systemOptions, setSystemOptions] = useState([]);
+    const [allCsvSystemNames, setAllCsvSystemNames] = useState([]); // Armazena todos os nomes de sistemas CSV
     const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
-    
+
+    // --- 1. Adicionar Estados de Controle ---
+    const [isRhDataPresent, setIsRhDataPresent] = useState(false);
+    const [checkingRhData, setCheckingRhData] = useState(true); // Começa true para verificar no início
+    // --- Fim da Adição ---
+
+    // Estados dos Modais
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [logToDelete, setLogToDelete] = useState(null);
     const [detailsModalOpen, setDetailsModalOpen] = useState(false);
@@ -109,31 +115,31 @@ function ImportManagement() {
     const [confirmPayload, setConfirmPayload] = useState(null);
     const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
-    // ======================= INÍCIO DA CORREÇÃO =======================
+    // Função para buscar sistemas CSV (Separada para clareza)
     const fetchSystems = async () => {
-        if (!token) return;
+        if (!token) {
+           setAllCsvSystemNames([]);
+           return;
+        }
         try {
-            // Busca TODOS os sistemas (agora o backend retorna 'type' e 'databaseType')
             const response = await axios.get('/systems', { headers: { "Authorization": `Bearer ${token}` } });
-            
-            // Filtra APENAS os sistemas do tipo "CSV"
-            const csvSystems = response.data.filter(system => system.type === "CSV"); 
+            const csvSystems = response.data.filter(system => system.type === "CSV");
             const systemNames = csvSystems.map(system => system.name);
-            
-            // Adiciona "RH" e atualiza o estado
-            setSystemOptions(["RH", ...systemNames]); 
-
+            setAllCsvSystemNames(systemNames);
         } catch (error) {
             console.error("Erro ao buscar a lista de sistemas:", error);
-            setSystemOptions(["RH"]); // Mantém RH como opção mínima
+            setAllCsvSystemNames([]);
             setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível carregar a lista de sistemas para importação." });
         }
     };
-    // ======================== FIM DA CORREÇÃO =========================
-    
+
+    // Função para buscar histórico (Separada)
     const fetchHistory = async () => {
-        if (!token) return;
-        setIsLoading(true);
+        if (!token) {
+           setIsLoadingHistory(false);
+           return;
+        }
+        setIsLoadingHistory(true);
         try {
             const response = await axios.get('/imports', { headers: { "Authorization": `Bearer ${token}` } });
             setHistory(response.data);
@@ -141,17 +147,66 @@ function ImportManagement() {
             console.error("Fetch History Error:", error);
             setNotification({ open: true, color: "error", icon: "error", title: "Erro de Rede", content: "Falha ao buscar o histórico." });
         } finally {
-            setIsLoading(false);
+            setIsLoadingHistory(false);
         }
     };
 
+    // --- 2. Função para Verificar Dados do RH ---
+    const checkRhDataPresence = async () => {
+        if (!token) {
+            setIsRhDataPresent(false);
+            setCheckingRhData(false);
+            return;
+        };
+        setCheckingRhData(true);
+        try {
+            const response = await axios.get(`/imports/check/RH`, { // Chama o endpoint específico para RH
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            setIsRhDataPresent(response.data.exists); // Define o estado com base na resposta
+        } catch (error) {
+            console.error("Erro ao verificar dados do RH:", error);
+            setIsRhDataPresent(false);
+            setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível verificar os dados do RH." });
+        } finally {
+            setCheckingRhData(false);
+        }
+    };
+    // --- Fim da Adição ---
+
+    // useEffect principal para buscar dados iniciais
     useEffect(() => {
-        if (token) { 
-            fetchHistory(); 
-            fetchSystems(); // Chama a versão CORRIGIDA
+        if (token) {
+            setIsLoadingHistory(true);
+            setCheckingRhData(true);
+            Promise.all([
+                fetchHistory(),
+                fetchSystems(),
+                checkRhDataPresence() // << Chama a nova função de verificação
+            ]);
+        } else {
+             setIsLoadingHistory(false);
+             setCheckingRhData(false);
+             setIsRhDataPresent(false);
+             setAllCsvSystemNames([]);
+             setHistory([]);
         }
     }, [token]);
 
+    // --- 3. Calcular Opções de Sistema Disponíveis ---
+    const availableSystemOptions = useMemo(() => {
+        if (checkingRhData) {
+            return ["RH"]; // Mostra só RH enquanto verifica
+        }
+        if (!isRhDataPresent) {
+            return ["RH"]; // Mostra só RH se os dados não existirem
+        }
+        return ["RH", ...allCsvSystemNames]; // Mostra todos se os dados do RH existirem
+    }, [isRhDataPresent, checkingRhData, allCsvSystemNames]);
+    // --- Fim do Cálculo ---
+
+
+    // Função genérica de upload (Modificada para atualizar isRhDataPresent)
     const genericUpload = async (file, system, callback) => {
         setIsUploading(true);
         const formData = new FormData();
@@ -159,13 +214,22 @@ function ImportManagement() {
         formData.append("targetSystem", system);
 
         try {
-            await axios.post('/imports', formData, { headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` } });
+            const response = await axios.post('/imports', formData, { headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` } });
+
+             // --- 5. Atualização Pós-Upload do RH ---
+             const importLog = response.data;
+             if (system === "RH" && (importLog?.status === "PROCESSING" || importLog?.status === "SUCCESS")) {
+                // Atualiza o estado para liberar outros sistemas
+                setIsRhDataPresent(true);
+             }
+             // --- Fim da Atualização ---
+
             setNotification({ open: true, color: "success", icon: "check", title: "Sucesso", content: "Arquivo enviado para processamento!" });
             if (callback) callback();
             fetchHistory();
         } catch (error) {
             console.error("Upload Error:", error);
-            fetchHistory(); 
+            fetchHistory();
             const errorMessage = error.response?.data?.message || "Falha no upload do arquivo.";
             setNotification({ open: true, color: "error", icon: "error", title: "Erro no Upload", content: errorMessage });
         } finally {
@@ -173,14 +237,24 @@ function ImportManagement() {
         }
     };
 
+    // Handler de Upload (com verificação "RH Primeiro")
     const handleUpload = async (file, system, callback) => {
         if (!file || !system) return;
+
+        // Verifica se o sistema selecionado é permitido
+        if (!isRhDataPresent && system !== "RH") {
+            setNotification({ open: true, color: "warning", icon: "warning", title: "Ação Bloqueada", content: "Importe os dados do RH antes de importar outros sistemas." });
+            return; // Impede o upload
+        }
+
         try {
             const checkResponse = await axios.get(`/imports/check/${system}`, { headers: { "Authorization": `Bearer ${token}` } });
-            if (checkResponse.data.exists) {
+            // Mostra confirmação apenas se *não* for RH e dados existirem
+            if (checkResponse.data.exists && system !== 'RH') {
                 setConfirmPayload({ file, system, callback });
                 setConfirmDialogOpen(true);
             } else {
+                // Se for RH ou se dados não existirem para outros sistemas, faz upload direto
                 await genericUpload(file, system, callback);
             }
         } catch (error) {
@@ -188,7 +262,8 @@ function ImportManagement() {
             setNotification({ open: true, color: "error", icon: "error", title: "Erro", content: "Não foi possível verificar a plataforma." });
         }
     };
-    
+
+
     const handleConfirmAndUpload = async () => {
         if (confirmPayload) {
             await genericUpload(confirmPayload.file, confirmPayload.system, confirmPayload.callback);
@@ -199,7 +274,7 @@ function ImportManagement() {
 
     const handleOpenDeleteDialog = (id) => { setLogToDelete(id); setDeleteDialogOpen(true); };
     const handleCloseDeleteDialog = () => { setLogToDelete(null); setDeleteDialogOpen(false); };
-    const handleConfirmDelete = async () => {
+    const handleConfirmDelete = async () => { // Esta função deleta APENAS o LOG (back-end foi ajustado)
         if (!logToDelete) return;
         try {
             await axios.delete(`/imports/${logToDelete}`, { headers: { "Authorization": `Bearer ${token}` } });
@@ -213,10 +288,10 @@ function ImportManagement() {
             handleCloseDeleteDialog();
         }
     };
-    
+
     const handleOpenDetailsModal = (log) => { setSelectedLogDetails(log); setDetailsModalOpen(true); };
     const handleCloseDetailsModal = () => { setSelectedLogDetails(null); setDetailsModalOpen(false); };
-    
+
     const closeNotification = () => setNotification({ ...notification, open: false });
     const handleOpenTemplateModal = () => setTemplateModalOpen(true);
     const handleCloseTemplateModal = () => setTemplateModalOpen(false);
@@ -240,24 +315,37 @@ function ImportManagement() {
             <MDBox pt={6} pb={3}>
                 <Grid container spacing={3}>
                    <Grid item xs={12}>
-                        <ImportCard 
+                        {/* --- 4. Adicionar Alerta Condicional --- */}
+                        {!checkingRhData && !isRhDataPresent && (
+                            <MDAlert color="warning" sx={{ mb: 2 }}>
+                                <MDTypography variant="body2" color="white">
+                                    A importação para outros sistemas só será liberada após o processamento bem-sucedido dos dados do **RH**.
+                                </MDTypography>
+                            </MDAlert>
+                        )}
+                        {/* --- Fim do Alerta --- */}
+
+                        {/* Passa as opções de sistema disponíveis calculadas */}
+                        <ImportCard
                             onUpload={handleUpload}
-                            systemOptions={systemOptions} // Passa a lista JÁ FILTRADA
-                            isLoading={isUploading}
+                            systemOptions={availableSystemOptions} // <<< Passa as opções filtradas
+                            isLoading={isUploading || checkingRhData} // Fica loading durante o check inicial também
                             onOpenTemplate={handleOpenTemplateModal}
+                            // Adiciona prop para desabilitar seleção se necessário
+                            disableSystemSelect={checkingRhData || !isRhDataPresent}
                         />
                     </Grid>
-                    
+
                     <HistoryTable
                         history={history}
-                        isLoading={isLoading}
+                        isLoading={isLoadingHistory} // Usa o estado correto
                         onOpenDetails={handleOpenDetailsModal}
                         onOpenDelete={handleOpenDeleteDialog}
                     />
                 </Grid>
             </MDBox>
 
-            {/* Seção de Modais */}
+            {/* --- Seção de Modais --- */}
             <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
               <DialogTitle>Confirmar Exclusão</DialogTitle>
               <DialogContent><DialogContentText>Você tem certeza que deseja excluir este registro de importação? Esta ação não pode ser desfeita.</DialogContentText></DialogContent>
@@ -266,7 +354,7 @@ function ImportManagement() {
                   <MDButton onClick={handleConfirmDelete} color="error" autoFocus>Excluir</MDButton>
               </DialogActions>
             </Dialog>
-            
+
             <Dialog open={confirmDialogOpen} onClose={handleCloseConfirmDialog}>
               <DialogTitle>Confirmar Substituição</DialogTitle>
               <DialogContent>
@@ -279,7 +367,7 @@ function ImportManagement() {
                   <MDButton onClick={handleConfirmAndUpload} color="info" autoFocus>Sim</MDButton>
               </DialogActions>
             </Dialog>
-            
+
             <Dialog open={templateModalOpen} onClose={handleCloseTemplateModal} fullWidth maxWidth="md">
                 <DialogTitle sx={{ p: 2 }}>
                   <MDTypography variant="h5">Template do Arquivo CSV</MDTypography>
@@ -337,7 +425,7 @@ function ImportManagement() {
                                   close
                               </Icon>
                           </MDBox>
-                          
+
                           <MDBox p={3} pt={1}>
                               <Grid container spacing={3}>
                                   {/* Coluna da Esquerda */}
@@ -388,7 +476,7 @@ function ImportManagement() {
     );
 }
 
-// Adicionando PropTypes faltantes
+// PropTypes
 DetailItem.defaultProps = {
   darkMode: false,
   value: null,
