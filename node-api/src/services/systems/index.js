@@ -1,8 +1,7 @@
-// node-api/src/services/systems/index.js
-
 import express from "express";
 import passport from "passport";
-import { PrismaClient } from '@prisma/client';
+// Adiciona Prisma para tratamento de erro
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -36,10 +35,11 @@ const packSystemData = (body) => {
  * Helper: Pega os dados do banco e os "desempacota" para o modal do front-end.
  */
 const unpackSystemData = (system) => {
+  // Se 'profiles' não foi incluído, a variável será undefined e não afetará o spread
   const { connectionDetails, type, ...restOfSystem } = system;
   return {
-    ...restOfSystem,     // id, name, description, createdAt, etc.
-    type: type,         // Mantém 'type' para a tabela
+    ...restOfSystem,      // id, name, description, createdAt, profiles (se incluído), etc.
+    type: type,           // Mantém 'type' para a tabela
     databaseType: type, // Adiciona 'databaseType' para o modal
     ...(connectionDetails || {}), // "Desempacota" os campos do JSON (username, port, etc.)
   };
@@ -89,13 +89,36 @@ const validateDataSource = (data) => {
  * @route   GET /systems
  * @desc    Busca todos os sistemas (fontes de dados) e os "desempacota"
  * @access  Private
+ * @query   ?includeProfiles=true (Opcional) Inclui perfis associados
  */
 const getSystems = async (req, res) => {
+  // --- INÍCIO DA MODIFICAÇÃO: Garantir userId Int e adicionar 'include' opcional ---
+  const userIdInt = parseInt(req.user.id, 10);
+  if (isNaN(userIdInt)) {
+      return res.status(400).json({ message: "ID de usuário inválido." });
+  }
+
+  const { includeProfiles } = req.query;
+  const includeClause = {};
+
+  // Se o frontend pedir, inclui os perfis associados ao sistema
+  if (includeProfiles === 'true') {
+      includeClause.profiles = {
+          select: {
+              id: true,
+              name: true
+          }
+      };
+  }
+  // --- FIM DA MODIFICAÇÃO ---
+
   try {
     const systemsFromDb = await prisma.system.findMany({
-      where: { userId: req.user.id },
+      where: { userId: userIdInt }, // Usa Int
       orderBy: { createdAt: 'desc' },
+      include: includeClause, // <<< ADICIONADO includeClause
     });
+    // O unpackSystemData já lida com a inclusão opcional de 'profiles'
     const systems = systemsFromDb.map(unpackSystemData);
     res.status(200).json(systems);
   } catch (error) {
@@ -110,18 +133,23 @@ const getSystems = async (req, res) => {
  * @access  Private
  */
 const createSystem = async (req, res) => {
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   const validationError = validateDataSource(req.body);
   if (validationError) {
     return res.status(400).json({ message: validationError });
   }
 
   const { name } = req.body;
-  // ======================== FIM DA ALTERAÇÃO =========================
+  
+  // --- INÍCIO DA MODIFICAÇÃO: Garantir userId Int ---
+  const userIdInt = parseInt(req.user.id, 10);
+  if (isNaN(userIdInt)) {
+      return res.status(400).json({ message: "ID de usuário inválido." });
+  }
+  // --- FIM DA MODIFICAÇÃO ---
 
   try {
     const existingSystem = await prisma.system.findFirst({
-      where: { name: { equals: name, mode: 'insensitive' }, userId: req.user.id },
+      where: { name: { equals: name, mode: 'insensitive' }, userId: userIdInt }, // Usa Int
     });
 
     if (existingSystem) {
@@ -133,7 +161,7 @@ const createSystem = async (req, res) => {
     const newSystem = await prisma.system.create({
       data: {
         ...dataToSave,
-        userId: req.user.id,
+        userId: userIdInt, // Usa Int
       },
     });
     res.status(201).json(unpackSystemData(newSystem));
@@ -154,18 +182,23 @@ const updateSystem = async (req, res) => {
     return res.status(400).json({ message: "ID de sistema inválido." });
   }
 
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   const validationError = validateDataSource(req.body);
   if (validationError) {
     return res.status(400).json({ message: validationError });
   }
 
   const { name } = req.body;
-  // ======================== FIM DA ALTERAÇÃO =========================
+
+  // --- INÍCIO DA MODIFICAÇÃO: Garantir userId Int ---
+  const userIdInt = parseInt(req.user.id, 10);
+  if (isNaN(userIdInt)) {
+      return res.status(400).json({ message: "ID de usuário inválido." });
+  }
+  // --- FIM DA MODIFICAÇÃO ---
 
   try {
     const system = await prisma.system.findFirst({
-      where: { id: systemId, userId: req.user.id },
+      where: { id: systemId, userId: userIdInt }, // Usa Int
     });
 
     if (!system) {
@@ -175,7 +208,7 @@ const updateSystem = async (req, res) => {
     const existingSystemWithNewName = await prisma.system.findFirst({
       where: {
         name: { equals: name, mode: 'insensitive' },
-        userId: req.user.id,
+        userId: userIdInt, // Usa Int
         id: { not: systemId },
       },
     });
@@ -194,6 +227,12 @@ const updateSystem = async (req, res) => {
     res.status(200).json(unpackSystemData(updatedSystem));
   } catch (error) {
     console.error("Erro ao atualizar sistema:", error);
+    // --- INÍCIO DA MODIFICAÇÃO: Tratar erro P2002 (Nome duplicado) ---
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        // Pode acontecer se a verificação acima falhar por condição de corrida
+         return res.status(409).json({ message: `O nome "${name}" já está em uso.` });
+    }
+    // --- FIM DA MODIFICAÇÃO ---
     res.status(500).json({ message: "Erro interno do servidor." });
   }
 };
@@ -206,20 +245,28 @@ const updateSystem = async (req, res) => {
  */
 const deleteSystem = async (req, res) => {
   const systemId = parseInt(req.params.id, 10);
-
   if (isNaN(systemId)) {
     return res.status(400).json({ message: "ID de sistema inválido." });
   }
+
+  // --- INÍCIO DA MODIFICAÇÃO: Garantir userId Int ---
+  const userIdInt = parseInt(req.user.id, 10);
+  if (isNaN(userIdInt)) {
+      return res.status(400).json({ message: "ID de usuário inválido." });
+  }
+  // --- FIM DA MODIFICAÇÃO ---
   
   try {
+    // Busca e verifica posse antes de deletar
     const system = await prisma.system.findFirst({
-      where: { id: systemId, userId: req.user.id },
+      where: { id: systemId, userId: userIdInt }, // Usa Int
     });
 
     if (!system) {
       return res.status(404).json({ message: "Sistema não encontrado ou não pertence a este usuário." });
     }
 
+    // Tenta deletar. O cascade delete deve lidar com Accounts, Profiles, RbacRules, SodRules.
     await prisma.system.delete({
       where: { id: systemId },
     });
@@ -227,6 +274,12 @@ const deleteSystem = async (req, res) => {
     res.status(204).send();
   } catch (error) {
     console.error("Erro ao deletar sistema:", error);
+    // --- INÍCIO DA MODIFICAÇÃO: Tratar erro P2003 (FK Constraint) ---
+    // Caso o onDelete: Cascade falhe ou algo mais referencie o sistema
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+         return res.status(409).json({ message: "Não é possível excluir este sistema pois ele ainda está sendo referenciado." });
+    }
+    // --- FIM DA MODIFICAÇÃO ---
     res.status(500).json({ message: "Erro interno do servidor." });
   }
 };

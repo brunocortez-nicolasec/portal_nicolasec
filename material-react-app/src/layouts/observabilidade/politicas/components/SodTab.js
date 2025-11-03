@@ -1,7 +1,6 @@
-// src/layouts/observabilidade/politicas/components/SodTab.js
-
 import { useState, useEffect } from "react";
 import axios from "axios";
+import PropTypes from 'prop-types'; // <<< ADICIONADO: Para validar as novas props
 
 // @mui material components
 import Icon from "@mui/material/Icon";
@@ -20,20 +19,21 @@ import SodTable from "./sod/SodTable";
 import SodModal from "./sod/SodModal";
 
 // --- Componente Principal SodTab ---
-function SodTab() {
+// <<< 1. Aceitar as props do GerenciarPoliticas (pai) >>>
+function SodTab({ allSystems, allProfiles, allAttributes }) {
   const [controller] = useMaterialUIController();
   const { token } = controller;
 
-  // Estados dos Dados
+  // <<< 2. Simplificar estados (loadingData agora é só para as regras) >>>
   const [loadingData, setLoadingData] = useState(true);
   const [sodRules, setSodRules] = useState([]);
-  const [allProfiles, setAllProfiles] = useState([]);
-  const [allSystems, setAllSystems] = useState([]);
-  const [allAttributes, setAllAttributes] = useState([]);
+  // const [allProfiles, setAllProfiles] = useState([]); // <<< REMOVIDO (Vem das props)
+  // const [allSystems, setAllSystems] = useState([]); // <<< REMOVIDO (Vem das props)
+  // const [allAttributes, setAllAttributes] = useState([]); // <<< REMOVIDO (Vem das props)
 
   // Estados do Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState(null); // Armazena a regra para edição
+  const [editingRule, setEditingRule] = useState(null);
 
   // Estado do Snackbar
   const [snackbar, setSnackbar] = useState({ open: false, color: "info", title: "", message: "" });
@@ -41,27 +41,21 @@ function SodTab() {
   const closeSnackbar = () => setSnackbar({ ...snackbar, open: false });
   const showSnackbar = (color, title, message) => setSnackbar({ open: true, color, title, message });
 
-  // Busca de Dados Iniciais
+  // <<< 3. Simplificar fetchInitialData para buscar APENAS sod-rules >>>
   const fetchInitialData = async () => {
     if (!token) return;
     setLoadingData(true);
     try {
-      const rulesPromise = axios.get("/sod-rules", { headers: { Authorization: `Bearer ${token}` } });
-      const profilesPromise = axios.get("/profiles", { headers: { Authorization: `Bearer ${token}` } });
-      const systemsPromise = axios.get("/systems", { headers: { Authorization: `Bearer ${token}` } });
-      const attributesPromise = axios.get("/identity-attributes", { headers: { Authorization: `Bearer ${token}` } });
-
-      const [rulesResponse, profilesResponse, systemsResponse, attributesResponse] = await Promise.all([
-        rulesPromise, profilesPromise, systemsPromise, attributesPromise,
-      ]);
-
+      // Busca apenas as regras de SoD. O restante vem das props.
+      const rulesResponse = await axios.get("/sod-rules", { headers: { Authorization: `Bearer ${token}` } });
       setSodRules(rulesResponse.data);
-      setAllProfiles(profilesResponse.data);
-      setAllSystems(systemsResponse.data);
-      setAllAttributes(attributesResponse.data);
+
+      // REMOVIDO: profilesPromise, systemsPromise, attributesPromise e Promise.all
+      // REMOVIDO: setAllProfiles, setAllSystems, setAllAttributes
+
     } catch (error) {
       console.error("Erro ao buscar dados iniciais de SOD:", error);
-      showSnackbar("error", "Erro de Rede", "Não foi possível carregar os dados necessários. Verifique a API.");
+      showSnackbar("error", "Erro de Rede", "Não foi possível carregar as regras de SOD.");
     } finally {
       setLoadingData(false);
     }
@@ -71,7 +65,7 @@ function SodTab() {
     if (token) fetchInitialData();
   }, [token]);
 
-  // Handlers do Modal
+  // Handlers do Modal (sem alterações)
   const handleOpenModal = (rule = null) => {
     setEditingRule(rule);
     setIsModalOpen(true);
@@ -82,13 +76,13 @@ function SodTab() {
     setEditingRule(null);
   };
 
-  // Handler de Deleção
+  // Handler de Deleção (sem alterações, fetchInitialData agora está correto)
   const handleDelete = async (ruleId) => {
     if (window.confirm("Tem certeza que deseja deletar esta regra SOD?")) {
       try {
         await axios.delete(`/sod-rules/${ruleId}`, { headers: { Authorization: `Bearer ${token}` } });
         showSnackbar("success", "Sucesso", "Regra de SOD deletada.");
-        fetchInitialData(); // Recarrega
+        fetchInitialData(); // Recarrega (apenas as regras)
       } catch (error) {
         console.error("Erro ao deletar regra SOD:", error);
         showSnackbar("error", "Erro ao Deletar", error.response?.data?.message || "Erro inesperado.");
@@ -98,7 +92,7 @@ function SodTab() {
 
   return (
     <>
-      {/* Botão Adicionar e Título */}
+      {/* Botão Adicionar e Título (sem alterações) */}
       <MDBox display="flex" justifyContent="space-between" alignItems="center" mb={2}>
         <MDTypography variant="h5">Gerenciar Regras de SOD</MDTypography>
         <MDButton variant="gradient" color="info" onClick={() => handleOpenModal(null)}>
@@ -108,32 +102,33 @@ function SodTab() {
       </MDBox>
 
       {/* Tabela SOD */}
+      {/* <<< 4. Passar props recebidas para a Tabela >>> */}
       <SodTable
         loading={loadingData}
         rules={sodRules}
-        profiles={allProfiles}
-        systems={allSystems}
-        attributes={allAttributes}
-        onEdit={handleOpenModal} // Passa a função para abrir o modal
+        profiles={allProfiles}     // Passa a prop recebida
+        systems={allSystems}       // Passa a prop recebida
+        attributes={allAttributes} // Passa a prop recebida
+        onEdit={handleOpenModal}
         onDelete={handleDelete}
       />
 
       {/* Modal SOD */}
-      {/* Renderiza o modal condicionalmente ou sempre, controlando apenas com 'open' */}
+      {/* <<< 5. Passar props recebidas para o Modal >>> */}
       <SodModal
         open={isModalOpen}
         onClose={handleCloseModal}
-        onRefresh={fetchInitialData} // Para recarregar após salvar
-        showSnackbar={showSnackbar} // Para exibir notificações do modal
+        onRefresh={fetchInitialData} // onRefresh agora só busca regras
+        showSnackbar={showSnackbar}
         token={token}
-        ruleToEdit={editingRule} // Passa a regra em edição (ou null)
+        ruleToEdit={editingRule}
         // Passa todas as listas necessárias para os Autocompletes
         profiles={allProfiles}
         systems={allSystems}
         attributes={allAttributes}
       />
 
-      {/* Snackbar */}
+      {/* Snackbar (sem alterações) */}
       <MDSnackbar
         color={snackbar.color}
         icon={snackbar.color === "success" ? "check" : "warning"}
@@ -147,5 +142,13 @@ function SodTab() {
     </>
   );
 }
+
+// --- 6. Adicionar PropTypes para as novas props ---
+SodTab.propTypes = {
+  allSystems: PropTypes.arrayOf(PropTypes.object).isRequired,
+  allProfiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  allAttributes: PropTypes.arrayOf(PropTypes.object).isRequired,
+};
+// --- Fim da Adição ---
 
 export default SodTab;

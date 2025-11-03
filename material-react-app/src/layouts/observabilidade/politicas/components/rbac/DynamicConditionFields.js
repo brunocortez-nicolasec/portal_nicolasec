@@ -1,18 +1,13 @@
-// src/layouts/observabilidade/politicas/components/rbac/DynamicConditionFields.js
-
 import React from "react";
+import PropTypes from 'prop-types'; // <<< Adicionado
 // @mui material components
 import TextField from "@mui/material/TextField";
-import Autocomplete from "@mui/material/Autocomplete"; // <- O componente correto
+import Autocomplete from "@mui/material/Autocomplete";
 import Grid from "@mui/material/Grid";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import Button from "@mui/material/Button";
-import MenuItem from "@mui/material/MenuItem";
-// Removendo imports desnecessários
-// import Select from "@mui/material/Select";
-// import FormControl from "@mui/material/FormControl";
-// import InputLabel from "@mui/material/InputLabel";
+// import MenuItem from "@mui/material/MenuItem"; // Não é mais usado
 import Tooltip from "@mui/material/Tooltip";
 import IconButton from "@mui/material/IconButton";
 import Icon from "@mui/material/Icon";
@@ -34,18 +29,20 @@ function DynamicConditionFields({
   onListChange,
   onAddCondition,
   onRemoveCondition,
+  isDisabled, // <<< 1. Recebe a nova prop
 }) {
   switch (conditionType?.id) {
     case "BY_PROFILE":
       return (
         <Grid item xs={12}>
           <Autocomplete
-            options={profiles}
+            options={profiles} // Recebe os perfis JÁ FILTRADOS
             getOptionLabel={(option) => option.name || ""}
             value={values.requiredProfile}
             onChange={(event, newValue) => onChange(event, "requiredProfile", newValue)}
             isOptionEqualToValue={(option, value) => option?.id === value?.id}
             renderInput={(params) => <TextField {...params} label="Perfil Requerido *" required />}
+            disabled={isDisabled} // <<< 2. Aplica a prop
           />
         </Grid>
       );
@@ -54,7 +51,7 @@ function DynamicConditionFields({
         <>
           <Grid item xs={12} sm={5}>
             <Autocomplete
-              options={attributes}
+              options={attributes} // Atributos da Identity (não filtrados por sistema)
               getOptionLabel={(option) => option.name || ""}
               value={values.singleAttributeCondition.attribute}
               onChange={(event, newValue) => onSingleAttrChange("attribute", newValue)}
@@ -62,11 +59,10 @@ function DynamicConditionFields({
               renderInput={(params) => (
                 <TextField {...params} label="Atributo Requerido *" required />
               )}
+              disabled={isDisabled} // <<< 2. Aplica a prop
             />
           </Grid>
 
-          {/* --- CORREÇÃO APLICADA AQUI --- */}
-          {/* Trocado para Autocomplete para padronização visual */}
           <Grid item xs={12} sm={3}>
             <Autocomplete
               options={comparisonOperators}
@@ -75,10 +71,10 @@ function DynamicConditionFields({
               onChange={(event, newValue) => onSingleAttrChange("operator", newValue)}
               isOptionEqualToValue={(option, value) => option?.id === value?.id}
               renderInput={(params) => <TextField {...params} label="Operador *" required />}
-              disableClearable // Garante que nunca fique vazio
+              disableClearable
+              disabled={isDisabled} // <<< 2. Aplica a prop
             />
           </Grid>
-          {/* --- FIM DA CORREÇÃO --- */}
 
           <Grid item xs={12} sm={4}>
             <TextField
@@ -87,6 +83,7 @@ function DynamicConditionFields({
               onChange={(e) => onSingleAttrChange("value", e.target.value)}
               fullWidth
               required
+              disabled={isDisabled} // <<< 2. Aplica a prop
             />
           </Grid>
         </>
@@ -103,6 +100,7 @@ function DynamicConditionFields({
               isOptionEqualToValue={(option, value) => option?.id === value?.id}
               renderInput={(params) => <TextField {...params} label="Lógica das Condições *" required />}
               disableClearable
+              disabled={isDisabled} // <<< 2. Aplica a prop
             />
           </Grid>
           <MDTypography variant="subtitle2" gutterBottom>
@@ -116,7 +114,7 @@ function DynamicConditionFields({
                 sx={{ display: "flex", flexWrap: "wrap", gap: 1, mb: 1.5 }}
               >
                 <Autocomplete
-                  options={attributes}
+                  options={attributes} // Atributos da Identity
                   getOptionLabel={(option) => option.name || ""}
                   value={condition.attribute}
                   onChange={(event, newValue) => onListChange(index, "attribute", newValue)}
@@ -125,10 +123,9 @@ function DynamicConditionFields({
                     <TextField {...params} label={`Atributo ${index + 1} *`} required />
                   )}
                   sx={{ width: { xs: "100%", sm: "calc(35% - 8px)" } }}
+                  disabled={isDisabled} // <<< 2. Aplica a prop
                 />
 
-                {/* --- CORREÇÃO APLICADA AQUI --- */}
-                {/* Trocado para Autocomplete para padronização visual */}
                 <Autocomplete
                   options={comparisonOperators}
                   getOptionLabel={(option) => option.label || ""}
@@ -136,10 +133,10 @@ function DynamicConditionFields({
                   onChange={(event, newValue) => onListChange(index, "operator", newValue)}
                   isOptionEqualToValue={(option, value) => option?.id === value?.id}
                   renderInput={(params) => <TextField {...params} label="Operador *" required />}
-                  disableClearable // Garante que nunca fique vazio
+                  disableClearable
                   sx={{ width: { xs: "100%", sm: "calc(25% - 8px)" } }}
+                  disabled={isDisabled} // <<< 2. Aplica a prop
                 />
-                {/* --- FIM DA CORREÇÃO --- */}
 
                 <TextField
                   label={`Valor ${index + 1} *`}
@@ -147,13 +144,14 @@ function DynamicConditionFields({
                   onChange={(e) => onListChange(index, "value", e.target.value)}
                   required
                   sx={{ width: { xs: "calc(100% - 40px)", sm: "calc(40% - 12px)" } }}
+                  disabled={isDisabled} // <<< 2. Aplica a prop
                 />
                 <Tooltip title="Remover Condição">
                   <IconButton
                     onClick={() => onRemoveCondition(index)}
                     color="error"
                     size="small"
-                    disabled={values.attributeConditions.length <= 1}
+                    disabled={values.attributeConditions.length <= 1 || isDisabled} // <<< 2. Aplica a prop
                     sx={{ width: "40px" }}
                   >
                     <Icon>remove_circle_outline</Icon>
@@ -162,9 +160,8 @@ function DynamicConditionFields({
               </ListItem>
             ))}
           </List>
-          <Button startIcon={<Icon>add</Icon>} onClick={onAddCondition} size="small">
-            {" "}
-            Adicionar Condição{" "}
+          <Button startIcon={<Icon>add</Icon>} onClick={onAddCondition} size="small" disabled={isDisabled}> {/* <<< 2. Aplica a prop */}
+            Adicionar Condição
           </Button>
         </Grid>
       );
@@ -172,12 +169,32 @@ function DynamicConditionFields({
       return (
         <Grid item xs={12}>
           <MDTypography variant="caption" color="text">
-            {" "}
-            Selecione um Tipo...
+            {/* Mensagem atualizada para refletir a necessidade do sistema */}
+            Selecione um Sistema e um Tipo de Condição...
           </MDTypography>
         </Grid>
       );
   }
 }
+
+// --- 3. Adicionar PropTypes ---
+DynamicConditionFields.propTypes = {
+  conditionType: PropTypes.object,
+  profiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  attributes: PropTypes.arrayOf(PropTypes.object).isRequired,
+  values: PropTypes.object.isRequired,
+  onChange: PropTypes.func.isRequired,
+  onSingleAttrChange: PropTypes.func.isRequired,
+  onListChange: PropTypes.func.isRequired,
+  onAddCondition: PropTypes.func.isRequired,
+  onRemoveCondition: PropTypes.func.isRequired,
+  isDisabled: PropTypes.bool, // Nova prop
+};
+
+DynamicConditionFields.defaultProps = {
+  isDisabled: false, // Valor padrão
+  conditionType: null,
+};
+// --- Fim da Adição ---
 
 export default DynamicConditionFields;

@@ -1,5 +1,3 @@
-// material-react-app/src/auth/register/index.js
-
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Card from "@mui/material/Card";
@@ -71,14 +69,24 @@ function Register() {
       return;
     }
 
-    // A lógica de formatação de 'myData' foi removida pois o backend foi ajustado
-    const newUser = { name: inputs.name, email: inputs.email, password: inputs.password };
+    // --- INÍCIO DA CORREÇÃO: Formatar dados para o backend ---
+    // Envolve os dados em data.attributes
+    const registrationData = {
+      data: {
+        attributes: {
+          name: inputs.name,
+          email: inputs.email,
+          password: inputs.password,
+        }
+      }
+    };
+    // --- FIM DA CORREÇÃO ---
 
     try {
       // 4. Lógica de registro e login corrigida
-      // A API de registro agora deve retornar o token e o usuário
-      const response = await AuthService.register(newUser);
-      
+      // Passa os dados formatados para AuthService.register
+      const response = await AuthService.register(registrationData); // <<< USA registrationData
+
       const token = response.token; // Assumindo que a API retorna um token
       const userResponse = await axios.get("/me", {
         headers: { Authorization: `Bearer ${token}` },
@@ -103,7 +111,7 @@ function Register() {
           variant="gradient"
           bgColor="info"
           borderRadius="lg"
-          coloredShadow="success"
+          coloredShadow="success" // Mantido como 'success' no original
           mx={2}
           mt={-3}
           p={3}
@@ -172,12 +180,11 @@ function Register() {
             </MDBox>
             <MDBox display="flex" alignItems="center" ml={-1}>
               <Checkbox name="agree" checked={inputs.agree} onChange={changeHandler} />
-              <InputLabel
+              <InputLabel // Usando InputLabel padrão, estilos aplicados via sx
                 variant="standard"
-                fontWeight="regular"
-                color="text"
-                sx={{ lineHeight: "1.5", cursor: "pointer" }}
-                htmlFor="agree"
+                // Removidas props não padrão: fontWeight, color (usar sx)
+                sx={{ lineHeight: "1.5", cursor: "pointer", color: 'text.secondary' }} // Estilo padrão aproximado
+                htmlFor="agree" // Renomeado de 'for' para 'htmlFor' em React
               >
                 &nbsp;&nbsp;Eu concordo com os&nbsp;
               </InputLabel>
@@ -212,7 +219,7 @@ function Register() {
                 Já possui uma conta?{" "}
                 <MDTypography
                   component={Link}
-                  to="/auth/login"
+                  to="/auth/login" // Corrigido para caminho de login
                   variant="button"
                   color="info"
                   fontWeight="medium"

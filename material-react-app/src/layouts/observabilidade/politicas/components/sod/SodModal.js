@@ -1,7 +1,6 @@
-// src/layouts/observabilidade/politicas/components/sod/SodModal.js
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
+import PropTypes from 'prop-types';
 
 // @mui material components
 import Dialog from "@mui/material/Dialog";
@@ -11,6 +10,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import TextField from "@mui/material/TextField";
 import Autocomplete from "@mui/material/Autocomplete";
 import Grid from "@mui/material/Grid";
+import FormHelperText from "@mui/material/FormHelperText"; // Import for helper text
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -20,35 +20,84 @@ import MDButton from "components/MDButton";
 import DynamicRuleFields from "./DynamicRuleFields";
 import { initialState, ruleTypes, comparisonOperators } from "./sodConfig";
 
-function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit, profiles, systems, attributes }) {
-  const [currentRule, setCurrentRule] = useState(initialState);
-  const [isEditing, setIsEditing] = useState(false);
+// Objeto especial para "Todos"
+const ALL_SYSTEMS_OPTION = { id: null, name: "Global (Todos os Sistemas)" };
 
-  // useEffect (sem alterações aqui, já carrega os dados)
+// Estado Inicial agora usa null como padrão para system
+const newInitialState = {
+  ...initialState,
+  system: null,
+};
+
+
+function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
+  profiles: allProfiles,
+  systems: allSystems,
+  attributes: allAttributes
+}) {
+  
+  const [currentRule, setCurrentRule] = useState(newInitialState);
+  const [isEditing, setIsEditing] = useState(false);
+  const [filteredProfiles, setFilteredProfiles] = useState([]);
+
+  const systemOptions = useMemo(() => [ALL_SYSTEMS_OPTION, ...allSystems], [allSystems]);
+
+  // --- INÍCIO DA CORREÇÃO 1: Lógica do availableRuleTypes ---
+  const availableRuleTypes = useMemo(() => {
+    // Se system for "Global" (id é null), filtra regras que usam Perfil
+    if (currentRule.system?.id === null) {
+      return ruleTypes.filter(type => !type.id.includes('ROLE'));
+    }
+    // Se system for null (nenhum selecionado) ou um sistema específico, mostra todos os tipos
+    // (O DynamicRuleFields ficará desabilitado se system for null)
+    return ruleTypes;
+  }, [currentRule.system]);
+  // --- FIM DA CORREÇÃO 1 ---
+
+
+  // --- INÍCIO DA CORREÇÃO 2: Dependências do useEffect ---
   useEffect(() => {
     if (open) {
       if (ruleToEdit) {
         setIsEditing(true);
-        const type = ruleTypes.find(t => t.id === ruleToEdit.ruleType) || ruleTypes[0];
+
+        const system = ruleToEdit.systemId === null
+          ? ALL_SYSTEMS_OPTION
+          : allSystems.find(s => s.id === ruleToEdit.systemId) || null;
+
+        // Filtra perfis ANTES de definir o estado
+        const profilesForThisSystem = system?.id !== null
+            ? allProfiles.filter(p => p.systemId === system.id)
+            : [];
+        setFilteredProfiles(profilesForThisSystem);
+        
+        // Define os tipos de regra disponíveis para a regra carregada
+        const currentAvailableRuleTypes = system?.id === null
+            ? ruleTypes.filter(type => !type.id.includes('ROLE'))
+            : ruleTypes;
+
+        let type = currentAvailableRuleTypes.find(t => t.id === ruleToEdit.ruleType);
+        if (!type) {
+            type = currentAvailableRuleTypes[0] || ruleTypes[0];
+        }
+
         let loadedValueA = null;
         let loadedOperatorA = comparisonOperators[0];
         let loadedValueValueA = "";
         let loadedValueB = null;
 
-        if (ruleToEdit.valueAType === 'PROFILE' && profiles) {
-          loadedValueA = profiles.find(p => p.id === parseInt(ruleToEdit.valueAId, 10));
-        } else if (ruleToEdit.valueAType === 'ATTRIBUTE' && attributes) {
-          loadedValueA = attributes.find(a => a.id === ruleToEdit.valueAId);
+        if (ruleToEdit.valueAType === 'PROFILE' && profilesForThisSystem.length > 0) {
+          loadedValueA = profilesForThisSystem.find(p => p.id === parseInt(ruleToEdit.valueAId, 10));
+        } else if (ruleToEdit.valueAType === 'ATTRIBUTE') {
+          loadedValueA = allAttributes.find(a => a.id === ruleToEdit.valueAId);
           loadedOperatorA = comparisonOperators.find(op => op.id === ruleToEdit.valueAOperator) || comparisonOperators[0];
           loadedValueValueA = ruleToEdit.valueAValue || "";
         }
 
-        if (ruleToEdit.valueBType === 'PROFILE' && profiles) {
-          loadedValueB = profiles.find(p => p.id === parseInt(ruleToEdit.valueBId, 10));
-        } else if (ruleToEdit.valueBType === 'SYSTEM' && systems) {
-          loadedValueB = systems.find(s => s.id === parseInt(ruleToEdit.valueBId, 10));
-        } else if (ruleToEdit.valueBType === 'ATTRIBUTE' && attributes) {
-          loadedValueB = attributes.find(a => a.id === ruleToEdit.valueBId);
+        if (ruleToEdit.valueBType === 'PROFILE' && profilesForThisSystem.length > 0) {
+          loadedValueB = profilesForThisSystem.find(p => p.id === parseInt(ruleToEdit.valueBId, 10));
+        } else if (ruleToEdit.valueBType === 'SYSTEM') {
+          loadedValueB = allSystems.find(s => s.id === parseInt(ruleToEdit.valueBId, 10));
         }
 
         setCurrentRule({
@@ -58,6 +107,7 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit, p
           areaNegocio: ruleToEdit.areaNegocio || "",
           processoNegocio: ruleToEdit.processoNegocio || "",
           owner: ruleToEdit.owner || "",
+          system: system,
           ruleType: type,
           valueASelection: loadedValueA || null,
           valueAOperator: loadedOperatorA,
@@ -66,76 +116,103 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit, p
         });
       } else {
         setIsEditing(false);
-        setCurrentRule(initialState);
+        setCurrentRule(newInitialState);
+        setFilteredProfiles([]);
       }
     }
-  }, [open, ruleToEdit, profiles, systems, attributes]);
+  // Lista de dependências reduzida para evitar re-execução indesejada
+  }, [open, ruleToEdit, allProfiles, allSystems, allAttributes]); 
+  // --- FIM DA CORREÇÃO 2 ---
+
 
   const handleClose = () => {
-    setCurrentRule(initialState);
+    setCurrentRule(newInitialState);
+    setFilteredProfiles([]);
     onClose();
   };
 
-  // Handler unificado (sem alterações)
+
   const handleFormChange = (fieldName, newValue) => {
     setCurrentRule((prev) => {
       const newState = { ...prev, [fieldName]: newValue };
+
+      if (fieldName === 'system') {
+        const isGlobal = newValue?.id === null; // True para "Todos"
+        
+        const profilesForThisSystem = (newValue && !isGlobal)
+          ? allProfiles.filter(p => p.systemId === newValue.id)
+          : [];
+        setFilteredProfiles(profilesForThisSystem);
+        
+        // A lógica do 'availableRuleTypes' (useMemo) vai rodar no re-render,
+        // mas precisamos definir o *novo* tipo de regra aqui.
+        const newAvailableRuleTypes = isGlobal
+          ? ruleTypes.filter(type => !type.id.includes('ROLE'))
+          : ruleTypes; // Se newValue for null (limpo) ou um sistema, mostra todos
+        
+        newState.ruleType = newAvailableRuleTypes[0] || null;
+
+        newState.valueASelection = null;
+        newState.valueAOperator = comparisonOperators[0];
+        newState.valueAValue = "";
+        newState.valueBSelection = null;
+      }
+
       if (fieldName === 'ruleType') {
         newState.valueASelection = null;
         newState.valueAOperator = comparisonOperators[0];
         newState.valueAValue = "";
         newState.valueBSelection = null;
       }
+      
       if (fieldName === 'valueASelection' && newState.ruleType?.id === 'ROLE_X_ROLE') {
          newState.valueAOperator = comparisonOperators[0];
          newState.valueAValue = "";
       }
+      
       return newState;
     });
   };
 
-  // --- Handler de Submit CORRIGIDO ---
   const handleSubmit = async () => {
     const { id, name, description, areaNegocio, processoNegocio, owner,
+            system,
             ruleType, valueASelection, valueAOperator, valueAValue, valueBSelection
           } = currentRule;
 
-    // Validação básica
-    if (!name || !ruleType || !valueASelection || !valueBSelection) {
-      showSnackbar("warning", "Campos Obrigatórios", "Nome, Tipo e as duas seleções principais são obrigatórios.");
+    if (!name || system === null || !ruleType || !valueASelection || !valueBSelection) {
+      showSnackbar("warning", "Campos Obrigatórios", "Nome, Sistema, Tipo e os dois campos de comparação são obrigatórios.");
       return;
     }
 
-    // Determina o tipo de Valor A com base no Tipo de Regra selecionado
-    let valueAType = '';
-    if (ruleType.id === 'ROLE_X_ROLE') valueAType = 'PROFILE';
-    else if (ruleType.id === 'ATTR_X_ROLE' || ruleType.id === 'ATTR_X_SYSTEM') valueAType = 'ATTRIBUTE';
-    // Adicionar outros 'else if' se houver mais tipos de regra
+    if (system.id === null && (ruleType.id.includes('ROLE'))) {
+        showSnackbar("error", "Tipo de Regra Inválido", "Regras globais (Todos os Sistemas) não podem usar Perfil como critério. Use Atributos.");
+        return;
+    }
 
-    // Validação adicional se valueA for atributo
+    let valueAType = '';
+    if (ruleType.id.includes('ROLE')) valueAType = 'PROFILE';
+    if (ruleType.id.startsWith('ATTR')) valueAType = 'ATTRIBUTE';
+
     if (valueAType === 'ATTRIBUTE' && (!valueAOperator || !valueAValue.trim())) {
         showSnackbar("warning", "Campos Obrigatórios", "Para regras com Atributo A, o Operador e o Valor do Atributo são obrigatórios.");
         return;
     }
 
-    // --- PAYLOAD CORRIGIDO ---
-    // Constrói o payload base
     const payload = {
       name, description, areaNegocio, processoNegocio, owner,
+      systemId: system.id, // Envia null se for a opção "Todos"
       ruleTypeId: ruleType.id,
-      valueA: valueASelection, // Objeto {id, name}
-      valueB: valueBSelection, // Objeto {id, name}
-      // Inicializa os campos opcionais como null ou undefined (não serão enviados se não forem preenchidos)
+      valueA: valueASelection,
+      valueB: valueBSelection,
       valueAOperator: undefined,
       valueAValue: undefined,
     };
 
-    // Adiciona operador e valor SE valueAType for ATTRIBUTE
     if (valueAType === 'ATTRIBUTE') {
-        payload.valueAOperator = valueAOperator?.id; // Envia o ID do operador
-        payload.valueAValue = valueAValue;          // Envia o valor
+        payload.valueAOperator = valueAOperator?.id;
+        payload.valueAValue = valueAValue;
     }
-    // -------------------------
 
     try {
       if (isEditing) {
@@ -149,29 +226,32 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit, p
 
     } catch (error) {
       console.error("Erro ao salvar regra SOD:", error);
-      // O tratamento de erro já deve mostrar a mensagem correta do backend
-      const frontendErrorMessage = error.message.includes("obrigatório") || error.message.includes("inválido") || error.message.includes("Condição");
+      const backendMessage = error.response?.data?.message;
       let displayMessage = "Ocorreu um erro inesperado.";
-
-      if (frontendErrorMessage) {
-        displayMessage = error.message;
-      } else if (error.response?.data?.message) {
-        const backendMessage = error.response.data.message;
+      if (backendMessage) {
         displayMessage = typeof backendMessage === 'string' ? backendMessage : JSON.stringify(backendMessage);
+      } else if (error.message) {
+        displayMessage = error.message;
       }
-
       showSnackbar("error", "Erro ao Salvar", displayMessage);
     }
   };
 
-  // --- O RESTANTE DO MODAL (return) ---
+
+  const availableSystemsForValueB = useMemo(() => {
+     if (!currentRule.system || currentRule.system.id === null) {
+         return allSystems; 
+     }
+     return allSystems.filter(s => s.id !== currentRule.system.id); 
+  }, [currentRule.system, allSystems]);
+
   return (
     <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
       <DialogTitle>{isEditing ? "Editar Regra de SOD" : "Criar Nova Regra de SOD"}</DialogTitle>
       <DialogContent>
         <MDBox component="form" role="form" p={2}>
           <Grid container spacing={3}>
-            {/* Campos Estáticos */}
+            {/* Campos Estáticos - SEM size="small" */}
             <Grid item xs={12}>
               <TextField label="Nome da Regra *" name="name" value={currentRule.name} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth required />
             </Grid>
@@ -188,32 +268,53 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit, p
               <TextField label="Descrição" name="description" value={currentRule.description} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth multiline rows={2} />
             </Grid>
 
+            {/* Seletor de Sistema com "Todos" */}
+            <Grid item xs={12}>
+              <Autocomplete
+                options={systemOptions}
+                getOptionLabel={(option) => option.name || ""}
+                value={currentRule.system}
+                onChange={(event, newValue) => handleFormChange("system", newValue)}
+                isOptionEqualToValue={(option, value) => option.id === value?.id}
+                renderInput={(params) => <TextField {...params} label="Sistema Alvo *" required />}
+                disabled={isEditing}
+              />
+              {isEditing && currentRule.system && (
+                 <FormHelperText>O sistema não pode ser alterado ao editar uma regra.</FormHelperText>
+              )}
+            </Grid>
+
             {/* Seletor de Tipo */}
             <Grid item xs={12}>
               <Autocomplete
-                options={ruleTypes}
+                options={availableRuleTypes}
                 getOptionLabel={(option) => option.label || ""}
                 value={currentRule.ruleType}
                 onChange={(event, newValue) => handleFormChange("ruleType", newValue)}
                 isOptionEqualToValue={(option, value) => option.id === value?.id}
                 renderInput={(params) => <TextField {...params} label="Tipo de Regra *" required />}
                 disableClearable
+                disabled={!currentRule.system}
               />
+               {currentRule.system?.id === null && (
+                 <FormHelperText>Regras globais não podem usar Perfil como critério.</FormHelperText>
+               )}
             </Grid>
 
-            {/* Campos Dinâmicos Renderizados */}
+            {/* Campos Dinâmicos */}
             <DynamicRuleFields
               ruleType={currentRule.ruleType}
-              profiles={profiles}
-              systems={systems}
-              attributes={attributes}
+              profiles={filteredProfiles} 
+              systems={availableSystemsForValueB} 
+              attributes={allAttributes} 
               values={{
                   valueASelection: currentRule.valueASelection,
                   valueAOperator: currentRule.valueAOperator,
                   valueAValue: currentRule.valueAValue,
                   valueBSelection: currentRule.valueBSelection,
-               }}
+                }}
               onChange={handleFormChange}
+              isDisabled={!currentRule.system || !currentRule.ruleType} 
             />
 
           </Grid>
@@ -228,5 +329,17 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit, p
     </Dialog>
   );
 }
+
+SodModal.propTypes = {
+  open: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  onRefresh: PropTypes.func.isRequired,
+  showSnackbar: PropTypes.func.isRequired,
+  token: PropTypes.string,
+  ruleToEdit: PropTypes.object,
+  systems: PropTypes.arrayOf(PropTypes.object).isRequired,
+  profiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  attributes: PropTypes.arrayOf(PropTypes.object).isRequired,
+};
 
 export default SodModal;

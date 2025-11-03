@@ -1,4 +1,3 @@
-// node-api\src\index.js
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
@@ -20,7 +19,8 @@ import systemsRoutes from "./services/systems/index.js";
 import sodRoutes from "./services/sod/index.js";
 import profilesRoutes from "./services/profiles/index.js"; // This is the Identity Profile
 import attributesRoutes from "./services/attributes/index.js";
-import rbacRoutes from "./services/rbac/index.js"; // <<< ADICIONADO
+import rbacRoutes from "./services/rbac/index.js";
+import accountsRoutes from "./services/accounts/index.js"; // <<< 1. ADICIONADO IMPORT
 import path from "path";
 import * as fs from "fs";
 
@@ -51,9 +51,9 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-const jsonParser = bodyParser.json();
-
-app.use(express.json());
+// bodyParser.json() é geralmente substituído por express.json()
+// const jsonParser = bodyParser.json(); // <<< Pode ser removido se não usado em outro lugar
+app.use(express.json()); // <<< Garante que o body parser JSON está ativo
 
 app.get("/", function (req, res) {
   const __dirname = fs.realpathSync(".");
@@ -78,6 +78,7 @@ app.use("/sod-rules", sodRoutes);
 app.use("/profiles", profilesRoutes);
 app.use("/identity-attributes", attributesRoutes);
 app.use("/rbac-rules", rbacRoutes);
+app.use("/accounts", accountsRoutes); // <<< 2. ADICIONADO USO DA ROTA
 
 
 app.listen(PORT, () => console.log(`Server listening to port ${PORT}`));

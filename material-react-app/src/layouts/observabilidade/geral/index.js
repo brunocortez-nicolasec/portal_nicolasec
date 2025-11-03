@@ -1,6 +1,6 @@
 // material-react-app/src/layouts/observabilidade/geral/index.js
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
@@ -14,6 +14,13 @@ import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import TextField from "@mui/material/TextField";
 import CircularProgress from "@mui/material/CircularProgress";
+// --- INÍCIO DA ADIÇÃO DE IMPORTS ---
+import Menu from "@mui/material/Menu";
+import MenuItem from "@mui/material/MenuItem";
+import MDSnackbar from "components/MDSnackbar";
+import MDBadge from "components/MDBadge";
+import PropTypes from 'prop-types';
+// --- FIM DA ADIÇÃO DE IMPORTS ---
 
 // Componentes do Template
 import MDBox from "components/MDBox";
@@ -61,21 +68,63 @@ const ModalContent = React.forwardRef(({ title, data, onClose, darkMode }, ref) 
         </Card>
     </Box>
 ));
+// --- Adição de PropTypes e displayName ---
+ModalContent.propTypes = {
+  title: PropTypes.string.isRequired,
+  data: PropTypes.object.isRequired,
+  onClose: PropTypes.func.isRequired,
+  darkMode: PropTypes.bool,
+};
+ModalContent.defaultProps = { darkMode: false };
+ModalContent.displayName = 'ModalContent';
+// --- Fim da Adição ---
 
-const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onIgnoreAll, onClose, darkMode }, ref) => {
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
-    const columns = [
-        { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
-        { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
-        { Header: "Sistema", accessor: "sourceSystem", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
-        { Header: "Perfil", accessor: "profile.name", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> },
-        { Header: "Ações", accessor: "id", align: "center", disableGlobalFilter: true,
+
+// --- INÍCIO DA MODIFICAÇÃO: DrillDownModal ---
+const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onIgnoreAll, onClose, darkMode, divergenceCode }, ref) => {
+    
+    // Colunas agora são dinâmicas baseadas no 'divergenceCode'
+    const columns = useMemo(() => {
+        let cols = [
+            { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
+            { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
+            { Header: "Sistema", accessor: "sourceSystem", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
+        ];
+
+        if (divergenceCode === 'ACCESS_NOT_GRANTED') {
+            // Dados da 'Identity'
+            cols.push({ Header: "Tipo (RH)", accessor: "userType", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> });
+            cols.push({ Header: "Status (RH)", accessor: "status", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> });
+        } else {
+            // Dados da 'Account' (Zumbi, Órfã, Mismatch, etc.)
+            // 'profile' vem como string formatada do backend /by-code/
+            cols.push({ Header: "Perfil (App)", accessor: "profile", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> });
+            cols.push({ 
+                Header: "Status (App)", 
+                accessor: "status", 
+                align: "center", 
+                Cell: ({ value }) => (
+                    value ? 
+                    <MDBadge 
+                        badgeContent={value} 
+                        color={value.toLowerCase() === 'ativo' ? 'success' : 'error'} 
+                        variant="gradient" 
+                        size="sm" 
+                    /> : 
+                    <MDTypography variant="caption">-</MDTypography>
+                )
+             });
+        }
+        
+        cols.push({ Header: "Ações", accessor: "id", align: "center", disableGlobalFilter: true,
             Cell: ({ row }) => (
+                // Passa o objeto 'row.original' (Account ou Identity)
                 <MDButton variant="gradient" color="success" size="small" onClick={() => onIgnore(row.original)}>Ignorar</MDButton>
             )
-        },
-    ];
-    // ======================== FIM DA ALTERAÇÃO =========================
+        });
+        
+        return cols;
+    }, [data, divergenceCode, onIgnore]); // Depende dos dados e do código
 
     return (
         <Box ref={ref} tabIndex={-1}>
@@ -106,13 +155,32 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
                     {isLoading ? (
                         <MDBox display="flex" justifyContent="center" alignItems="center" sx={{ minHeight: '200px' }}><CircularProgress color="info" /></MDBox>
                     ) : (
-                        <DataTable table={{ columns, rows: data }} isSorted entriesPerPage={{ defaultValue: 5 }} showTotalEntries canSearch />
+                        <DataTable table={{ columns, rows: data }} isSorted={false} entriesPerPage={{ defaultValue: 5 }} showTotalEntries canSearch />
                     )}
                 </MDBox>
             </Card>
         </Box>
     );
 });
+
+// Adicionando PropTypes e displayName
+DrillDownModal.propTypes = {
+  title: PropTypes.string.isRequired,
+  data: PropTypes.array.isRequired,
+  isLoading: PropTypes.bool.isRequired,
+  onIgnore: PropTypes.func.isRequired,
+  onIgnoreAll: PropTypes.func.isRequired,
+  onClose: PropTypes.func.isRequired,
+  darkMode: PropTypes.bool,
+  divergenceCode: PropTypes.string,
+};
+DrillDownModal.defaultProps = {
+  darkMode: false,
+  divergenceCode: '',
+};
+DrillDownModal.displayName = 'DrillDownModal';
+// --- FIM DA MODIFICAÇÃO ---
+
 
 const JustificationModal = ({ open, onClose, onSubmit }) => {
     const [justification, setJustification] = useState("");
@@ -134,6 +202,13 @@ const JustificationModal = ({ open, onClose, onSubmit }) => {
         </Dialog>
     );
 };
+// --- Adição de PropTypes ---
+JustificationModal.propTypes = {
+  open: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  onSubmit: PropTypes.func.isRequired,
+};
+// --- Fim da Adição ---
 
 
 function VisaoGeral() {
@@ -146,10 +221,13 @@ function VisaoGeral() {
     const [liveFeedData, setLiveFeedData] = useState([]);
     
     const [drillDownState, setDrillDownState] = useState({ isOpen: false, isLoading: false, title: "", data: [], code: "" });
-    const [exceptionState, setExceptionState] = useState({ isOpen: false, identity: null, isBulk: false });
+    const [exceptionState, setExceptionState] = useState({ isOpen: false, item: null, isBulk: false });
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [modalContent, setModalContent] = useState({ title: "", data: { columns: [], rows: [] } });
     const [isBulkConfirmOpen, setIsBulkConfirmOpen] = useState(false);
+    
+    const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
+    const closeNotification = () => setNotification({ ...notification, open: false });
 
     const fetchDashboardData = async () => {
         if (!token) return;
@@ -165,6 +243,7 @@ function VisaoGeral() {
             console.error("Erro ao buscar dados do dashboard:", error);
             setMetrics(null);
             setLiveFeedData([]);
+            setNotification({ open: true, color: "error", title: "Erro de Rede", content: "Não foi possível carregar os dados do painel." });
         } finally {
             setIsLoading(false);
         }
@@ -197,109 +276,111 @@ function VisaoGeral() {
 
     const handleCloseDrillDownModal = () => setDrillDownState({ isOpen: false, isLoading: false, title: "", data: [], code: "" });
     
-    const handleOpenExceptionModal = (identity) => {
-        setExceptionState({ isOpen: true, identity, isBulk: false });
+    const handleOpenExceptionModal = (item) => {
+        setExceptionState({ isOpen: true, item, isBulk: false });
     };
     
-    const handleCloseExceptionModal = () => setExceptionState({ isOpen: false, identity: null, isBulk: false });
+    const handleCloseExceptionModal = () => setExceptionState({ isOpen: false, item: null, isBulk: false });
 
     const handleOpenBulkConfirm = () => setIsBulkConfirmOpen(true);
     const handleCloseBulkConfirm = () => setIsBulkConfirmOpen(false);
     
     const handleConfirmBulkIgnore = () => {
         handleCloseBulkConfirm();
-        setExceptionState({ isOpen: true, identity: null, isBulk: true });
+        setExceptionState({ isOpen: true, item: null, isBulk: true });
     };
     
     const handleConfirmException = async (justification) => {
-        const { identity, isBulk } = exceptionState;
+        const { item, isBulk } = exceptionState;
         const { code, data } = drillDownState;
     
         if (!code || !justification) return;
     
         try {
             if (isBulk) {
+                const payload = {
+                    divergenceCode: code,
+                    justification,
+                };
+                
                 if (code === 'ACCESS_NOT_GRANTED') {
                     const groupedBySystem = data.reduce((acc, item) => {
                         const system = item.sourceSystem;
-                        if (!acc[system]) {
-                            acc[system] = [];
-                        }
+                        if (!acc[system]) acc[system] = [];
+                        
                         const originalId = parseInt(String(item.id).split('-')[0], 10);
+
                         if (!isNaN(originalId)) {
                             acc[system].push(originalId);
                         }
                         return acc;
                     }, {});
-    
+
                     const promises = Object.entries(groupedBySystem).map(([system, ids]) => {
                         if (ids.length === 0) return Promise.resolve();
-                        const payload = {
-                            identityIds: ids,
-                            divergenceCode: code,
-                            justification,
-                            targetSystem: system,
-                        };
-                        return axios.post('/divergences/exceptions/bulk', payload, { headers: { "Authorization": `Bearer ${token}` } });
+                        return axios.post('/divergences/exceptions/bulk', 
+                            { ...payload, identityIds: ids, targetSystem: system },
+                            { headers: { "Authorization": `Bearer ${token}` } }
+                        );
                     });
-    
                     await Promise.all(promises);
-    
-                } else {
-                    const identityIds = data.map(item => item.id);
-                    if (identityIds.length === 0) return;
                     
-                    const payload = {
-                        identityIds,
-                        divergenceCode: code,
-                        justification,
-                    };
+                } else {
+                    const accountIds = data.map(item => item.id);
+                    if (accountIds.length === 0) return;
+                    
+                    payload.accountIds = accountIds;
                     await axios.post('/divergences/exceptions/bulk', payload, { headers: { "Authorization": `Bearer ${token}` } });
                 }
+
             } else {
-                if (!identity) return;
-                
-                const identityId = code === 'ACCESS_NOT_GRANTED' 
-                    ? parseInt(String(identity.id).split('-')[0], 10)
-                    : identity.id;
-    
-                if (isNaN(identityId)) {
-                    throw new Error("ID da identidade é inválido.");
-                }
-    
+                if (!item) return;
+
                 const payload = {
-                    identityId: identityId,
                     divergenceCode: code,
                     justification,
                 };
-    
+
                 if (code === 'ACCESS_NOT_GRANTED') {
-                    payload.targetSystem = identity.sourceSystem;
+                    const identityId = parseInt(String(item.id).split('-')[0], 10);
+                    if (isNaN(identityId)) throw new Error("ID da identidade inválido.");
+                    
+                    payload.identityId = identityId;
+                    payload.targetSystem = item.sourceSystem;
+                } else {
+                    payload.accountId = item.id;
                 }
+                
                 await axios.post('/divergences/exceptions', payload, { headers: { "Authorization": `Bearer ${token}` } });
             }
             
+            setNotification({ open: true, color: "success", title: "Sucesso", content: "Exceção(ões) registrada(s)." });
             handleCloseExceptionModal();
             handleCloseDrillDownModal();
             fetchDashboardData();
     
         } catch (error) {
             console.error("Erro ao criar exceção(ões):", error);
+            const message = error.response?.data?.message || error.message || "Não foi possível registrar a exceção.";
+            setNotification({ open: true, color: "error", title: "Erro", content: message });
         }
     };
-    
+
     const handleFinancialCardClick = (cardType) => {
         const breakdownData = metrics?.riscos?.prejuizoBreakdown;
         if (!breakdownData) { return; }
         const title = cardType === 'prejuizo' ? "Detalhes do Cálculo de Prejuízo Potencial" : "Detalhes do Cálculo de Valor Mitigado";
-        const columns = [ { Header: "Tipo de Risco", accessor: "label" }, { Header: "Quantidade", accessor: "count" }, { Header: "Custo Unitário", accessor: "costPerUnit" }, { Header: "Subtotal", accessor: "subTotal" } ];
+        
+        const columns = [ { Header: "Tipo de Risco", accessor: "label" }, { Header: "Quantidade", accessor: "count", align: "center" }, { Header: "Custo Unitário", accessor: "costPerUnit", align: "right" }, { Header: "Subtotal", accessor: "subTotal", align: "right" } ];
         const multiplier = cardType === 'mitigado' ? 0.95 : 1;
+        
         const rows = breakdownData.filter(item => item.count > 0).map(item => ({
-            label: item.label,
-            count: item.count,
-            costPerUnit: `R$ ${item.costPerUnit.toLocaleString('pt-BR')}`,
-            subTotal: `R$ ${(item.subTotal * multiplier).toLocaleString('pt-BR')}`,
+            label: <MDTypography variant="caption">{item.label}</MDTypography>,
+            count: <MDTypography variant="caption" fontWeight="medium" sx={{textAlign: "center"}}>{item.count}</MDTypography>,
+            costPerUnit: <MDTypography variant="caption" color="text" sx={{textAlign: "right"}}>{`R$ ${item.costPerUnit.toLocaleString('pt-BR')}`}</MDTypography>,
+            subTotal: <MDTypography variant="caption" fontWeight="medium" color="error" sx={{textAlign: "right"}}>{`R$ ${(item.subTotal * multiplier).toLocaleString('pt-BR')}`}</MDTypography>,
         }));
+        
         setModalContent({ title: title, data: { columns, rows } });
         handleOpenModal();
     };
@@ -310,20 +391,22 @@ function VisaoGeral() {
         const clickedLabel = displayData.imDisplay.tiposChart.labels[index];
         if (!clickedLabel) return;
     
-        const usersOfType = liveFeedData.filter(user => 
-            user.userType === clickedLabel && user.app_status !== 'Não encontrado'
+        const usersOfType = liveFeedData.filter(item => 
+            (item.userType || 'Não categorizado') === clickedLabel && 
+            (item.app_status !== 'Não encontrado' || item.divergenceCode === 'ACCESS_NOT_GRANTED')
         );
     
         setModalContent({
             title: `Detalhes: Tipo de Usuário "${clickedLabel}"`,
             data: {
                 columns: [
-                    { Header: "ID", accessor: "identityId" },
+                    { Header: "ID no Sistema/RH", accessor: "id_user" },
                     { Header: "Nome", accessor: "name" },
                     { Header: "Email", accessor: "email" },
                     { Header: "Sistema", accessor: "sourceSystem" },
                     { Header: "Perfil", accessor: "perfil" },
                     { Header: "Status App", accessor: "app_status" },
+                    { Header: "Status RH", accessor: "rh_status" },
                 ],
                 rows: usersOfType,
             },
@@ -331,39 +414,162 @@ function VisaoGeral() {
         handleOpenModal();
     };
 
+    // --- INÍCIO DA CORREÇÃO (handleBarChartClick - Etapa 4) ---
     const handleBarChartClick = async (event, elements) => {
         if (!elements || elements.length === 0 || !token) return;
         const { index } = elements[0];
+        // As labels vêm do hook (Etapa 2), que já está atualizado
         const clickedLabel = displayData.riscosConsolidadosChart.labels[index];
         if (!clickedLabel) return;
+        
         let columns = [];
         const modalTitle = `Detalhes: ${clickedLabel}`;
         let rowsToShow = [];
+        
         try {
+            const requestParams = { 
+                system: plataformaSelecionada === "Geral" ? undefined : plataformaSelecionada 
+            };
+            
+            let endpointCode = "";
+
             switch (index) {
-                case 0:
-                    rowsToShow = liveFeedData.filter(user => user.perfil === 'Admin' && user.divergence);
-                    columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Status App", accessor: "app_status" }, { Header: "Status RH", accessor: "rh_status" } ];
+                case 0: // Contas Admin com Risco
+                    // Este é especial, filtra o liveFeedData local
+                    rowsToShow = liveFeedData.filter(item => 
+                        item.perfil.toLowerCase().includes('admin') && item.divergence
+                    );
+                    columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID no Sistema", accessor: "id_user" }, { Header: "Nome", accessor: "name" }, { Header: "Status App", accessor: "app_status" }, { Header: "Status RH", accessor: "rh_status" } ];
                     break;
-                case 1:
-                    const endpoint = '/divergences/by-code/ZOMBIE_ACCOUNT';
-                    const requestParams = { system: plataformaSelecionada === "Geral" ? undefined : plataformaSelecionada };
-                    columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" } ];
-                    const response = await axios.get(endpoint, { headers: { "Authorization": `Bearer ${token}` }, params: requestParams });
-                    rowsToShow = response.data;
+                
+                case 1: // Acessos Ativos Indevidos (Zumbi)
+                    endpointCode = 'ZOMBIE_ACCOUNT';
                     break;
-                case 2:
-                    rowsToShow = liveFeedData.filter(user => user.rh_status === 'Não encontrado');
-                    columns = [ { Header: "Sistema", accessor: "sourceSystem" }, { Header: "ID", accessor: "identityId" }, { Header: "Nome", accessor: "name" }, { Header: "Email", accessor: "email" }, { Header: "Perfil", accessor: "perfil" } ];
+                
+                case 2: // Contas Órfãs
+                    endpointCode = 'ORPHAN_ACCOUNT';
                     break;
-                default: return;
+                
+                // --- INÍCIO DA ADIÇÃO (Etapa 4) ---
+                case 3: // Violações de SOD
+                    endpointCode = 'SOD_VIOLATION';
+                    break;
+                // --- FIM DA ADIÇÃO (Etapa 4) ---
+
+                default: 
+                    return;
             }
+
+            // Se não for o 'case 0', busca os dados do endpoint
+            if (endpointCode) {
+                 const response = await axios.get(`/divergences/by-code/${endpointCode}`, { 
+                     headers: { "Authorization": `Bearer ${token}` }, 
+                     params: requestParams 
+                 });
+                 rowsToShow = response.data;
+                 
+                 // Define colunas com base no endpoint (o backend já formatou)
+                 columns = [
+                    { Header: "Sistema", accessor: "sourceSystem" },
+                    { Header: "ID no Sistema", accessor: "accountIdInSystem" }, 
+                    { Header: "Nome", accessor: "name" }, 
+                    { Header: "Email", accessor: "email" },
+                    { Header: "Perfis", accessor: "profile" } 
+                 ];
+
+                 // Se for SOD, muda o label da última coluna
+                 if (endpointCode === 'SOD_VIOLATION') {
+                     columns[4].Header = "Perfis (Conflitantes)";
+                 }
+            }
+            // --- FIM DA CORREÇÃO (Etapa 4) ---
+            
             setModalContent({ title: modalTitle, data: { columns, rows: rowsToShow } });
             handleOpenModal();
         } catch (error) {
             console.error(`Erro ao buscar detalhes para '${clickedLabel}':`, error);
         }
     };
+    // --- FIM DA MODIFICAÇÃO ---
+
+    const convertToCSV = (objArray) => {
+      const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
+      let str = '';
+ 
+      const headers = [
+        { id: "id_user", title: "ID no Sistema/RH" },
+        { id: "name", title: "Nome" },
+        { id: "email", title: "Email" },
+        { id: "sourceSystem", title: "Sistema" },
+        { id: "perfil", title: "Perfil" },
+        { id: "app_status", title: "Status App" },
+        { id: "rh_status", title: "Status RH" },
+        { id: "userType", title: "Tipo (RH)" },
+        { id: "divergence", title: "Divergência" },
+      ];
+      
+      str += headers.map(h => `"${h.title}"`).join(',') + '\r\n';
+ 
+      for (let i = 0; i < array.length; i++) {
+        let line = '';
+        for (let j = 0; j < headers.length; j++) {
+          if (line !== '') line += ',';
+          
+          let value = array[i][headers[j].id];
+          
+          if (value === null || value === undefined) {
+            value = "";
+          }
+          
+          line += `"${String(value).replace(/"/g, '""')}"`;
+        }
+        str += line + '\r\n';
+      }
+      return str;
+    };
+ 
+    const handleExportCsv = () => {
+      closeExportMenu();
+      
+      if (!liveFeedData || liveFeedData.length === 0) {
+        setNotification({ open: true, color: "warning", title: "Exportação", content: "Não há dados para exportar." });
+        return;
+      }
+ 
+      try {
+        const csvData = convertToCSV(liveFeedData);
+        const blob = new Blob([`\uFEFF${csvData}`], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        
+        link.setAttribute("href", url);
+        link.setAttribute("download", "visão_geral_export.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+ 
+        setNotification({ open: true, color: "success", title: "Exportação", content: "Download do CSV iniciado." });
+ 
+      } catch (error) {
+        console.error("Erro ao gerar CSV:", error);
+        setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível gerar o arquivo CSV." });
+      }
+    };
+ 
+    const handleExportPdf = () => {
+      closeExportMenu();
+      
+      setNotification({ open: true, color: "info", title: "Exportar PDF", content: "Use a opção 'Salvar como PDF' da janela de impressão." });
+      
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    };
+ 
+    const [exportMenu, setExportMenu] = useState(null);
+    const openExportMenu = (event) => setExportMenu(event.currentTarget);
+    const closeExportMenu = () => setExportMenu(null);
 
     return (
         <DashboardLayout>
@@ -378,6 +584,7 @@ function VisaoGeral() {
                     onIgnore={handleOpenExceptionModal}
                     onIgnoreAll={handleOpenBulkConfirm}
                     darkMode={darkMode}
+                    divergenceCode={drillDownState.code}
                 />
             </Modal>
     
@@ -476,11 +683,11 @@ function VisaoGeral() {
                         />
                     </Grid>
                     <Grid item xs={12} sm={6} md={2}>
-                          <KpiStack 
-                              title="Chamados" 
-                              defaultColor="info" 
-                              items={[ {label: "Fechados", value: 49}, {label: "Cancelados", value: 59}, {label: "Em espera", value: 2}, {label: "Em progresso", value: 2} ]}
-                          />
+                         <KpiStack 
+                            title="Chamados" 
+                            defaultColor="info" 
+                            items={[ {label: "Fechados", value: 49}, {label: "Cancelados", value: 59}, {label: "Em espera", value: 2}, {label: "Em progresso", value: 2} ]}
+                        />
                     </Grid>
                     
                     <Grid item xs={12} sm={6} md={6}>
@@ -497,6 +704,30 @@ function VisaoGeral() {
                     </Grid>
                 </Grid>
             </MDBox>
+
+            <MDSnackbar
+                color={notification.color}
+                icon="notifications"
+                title={notification.title}
+                content={notification.content}
+                dateTime="agora"
+                open={notification.open}
+                onClose={closeNotification}
+                close={closeNotification}
+            />
+
+            <Menu
+                anchorEl={exportMenu}
+                open={Boolean(exportMenu)}
+                onClose={closeExportMenu}
+            >
+                <MenuItem onClick={handleExportCsv}>
+                    <Icon>description</Icon>&nbsp; Exportar como CSV
+                </MenuItem>
+                <MenuItem onClick={handleExportPdf}>
+                    <Icon>picture_as_pdf</Icon>&nbsp; Exportar como PDF
+                </MenuItem>
+            </Menu>
         </DashboardLayout>
     );
 }

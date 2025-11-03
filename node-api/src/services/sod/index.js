@@ -1,14 +1,14 @@
-// node-api/src/services/sod/index.js
+// node-api/src/services/sod-rules/index.js
 
 import express from "express";
 import passport from "passport";
-import { PrismaClient } from "@prisma/client";
+// Importar 'Prisma' para checagem de erros
+import { PrismaClient, Prisma } from "@prisma/client";
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
 // --- Constantes ---
-// Reutiliza os operadores de comparação (mesmos IDs do frontend/RBAC)
 const validComparisonOperators = [
   "equals", "not_equals", "contains", "starts_with", "ends_with"
 ];
@@ -18,24 +18,61 @@ const typeMapping = {
   ROLE_X_ROLE:   { a: "PROFILE",   b: "PROFILE"   },
   ATTR_X_ROLE:   { a: "ATTRIBUTE", b: "PROFILE"   },
   ATTR_X_SYSTEM: { a: "ATTRIBUTE", b: "SYSTEM"    },
-  // Adicionar outros mapeamentos se houver mais ruleTypes
+  // ATTR_X_ATTR (Se adicionado futuramente)
+  // PROFILE_X_SYSTEM (Se adicionado futuramente)
 };
 
 /**
  * Helper para validar e extrair os dados dinâmicos do request body.
- * Inclui validação para valueAOperator e valueAValue quando aplicável.
+ * (Atualizado para validar systemId e perfis contra o sistema)
  */
-const extractDynamicValues = (ruleTypeId, valueA, valueB, valueAOperator, valueAValue) => { // <<< Adiciona valueAOperator, valueAValue
+// Agora é async para validar perfis no DB
+const validateAndPrepareSodData = async (body, isUpdate = false) => {
+  const {
+    name, description, areaNegocio, processoNegocio, owner,
+    systemId, // <<< VEM COMO 'null' PARA GLOBAL
+    ruleTypeId,
+    valueA,
+    valueB,
+    valueAOperator,
+    valueAValue
+  } = body;
+
+  // 1. Validação básica (inclui systemId)
+  if (!name || !ruleTypeId) {
+    throw new Error("Nome da Regra e Tipo de Regra são obrigatórios.");
+  }
+
+  // --- INÍCIO DA CORREÇÃO ---
+  let finalSystemId = null; // Default para null (Global)
+
+  // Se systemId não for nulo, valida se é um número
+  if (systemId !== null && systemId !== undefined) {
+      const parsedId = parseInt(systemId, 10);
+      if (isNaN(parsedId)) {
+          throw new Error("ID do Sistema (systemId) é inválido. Deve ser um número ou nulo (para Global).");
+      }
+      finalSystemId = parsedId;
+  }
+  
+  // Verifica se o sistema existe (APENAS se não for Global)
+  if (finalSystemId !== null) {
+      const systemExists = await prisma.system.findUnique({ where: { id: finalSystemId } });
+      if (!systemExists) {
+          throw new Error(`Sistema com ID ${finalSystemId} não encontrado.`);
+      }
+  }
+  // --- FIM DA CORREÇÃO ---
+
+  // 2. Extrai e valida valores dinâmicos
   const mapping = typeMapping[ruleTypeId];
   if (!mapping) {
     throw new Error("Tipo de regra inválido.");
   }
-
   if (!valueA || !valueB) {
     throw new Error("Valores de comparação A e B são obrigatórios.");
   }
 
-  // Extrai IDs (vem como objeto {id: ...} do frontend)
   const valueAIdRaw = valueA?.id;
   const valueBIdRaw = valueB?.id;
 
@@ -43,288 +80,321 @@ const extractDynamicValues = (ruleTypeId, valueA, valueB, valueAOperator, valueA
     throw new Error("IDs dos valores de comparação A ou B estão faltando.");
   }
 
-  // Converte IDs para String (como definido no schema)
-  const valueAId = String(valueAIdRaw);
-  const valueBId = String(valueBIdRaw);
-
-  // Campos específicos para Atributo A
+  let valueAId = String(valueAIdRaw);
+  let valueBId = String(valueBIdRaw);
   let finalValueAOperator = null;
   let finalValueAValue = null;
 
-  // Valida operador e valor APENAS se o tipo A for Atributo
-  if (mapping.a === "ATTRIBUTE") {
-    if (!valueAOperator || !validComparisonOperators.includes(valueAOperator)) {
-      throw new Error("Operador inválido ou ausente para o Atributo A.");
-    }
-    if (valueAValue === null || valueAValue === undefined || String(valueAValue).trim() === '') {
-      throw new Error("Valor ausente ou inválido para o Atributo A.");
-    }
-    finalValueAOperator = valueAOperator;
-    finalValueAValue = String(valueAValue);
-  } else {
-     // Garante que operador/valor sejam nulos se não for atributo
-     if (valueAOperator || valueAValue) {
-       console.warn("Operador/Valor A fornecidos para um tipo não-atributo, serão ignorados.");
-     }
+  // 3. Validações baseadas nos tipos
+  // Validar Valor A
+  if (mapping.a === "PROFILE") {
+      // --- INÍCIO DA CORREÇÃO: Proíbe Perfil em Regra Global ---
+      if (finalSystemId === null) {
+        throw new Error("Não é permitido usar Perfil (PROFILE) como critério em uma regra Global.");
+      }
+      // --- FIM DA CORREÇÃO ---
+      const profileA = await prisma.profile.findFirst({
+          where: { id: parseInt(valueAId, 10), systemId: finalSystemId } // Usa finalSystemId
+      });
+      if (!profileA) {
+          throw new Error(`Perfil A (ID: ${valueAId}) não encontrado ou não pertence ao Sistema (ID: ${finalSystemId}).`);
+      }
+      valueAId = String(profileA.id);
+  }
+  else if (mapping.a === "ATTRIBUTE") {
+      if (!valueAOperator || !validComparisonOperators.includes(valueAOperator)) {
+        throw new Error("Operador inválido ou ausente para o Atributo A.");
+      }
+      if (valueAValue === null || valueAValue === undefined || String(valueAValue).trim() === '') {
+        throw new Error("Valor ausente ou inválido para o Atributo A.");
+      }
+      finalValueAOperator = valueAOperator;
+      finalValueAValue = String(valueAValue);
   }
 
-
-  // Impede que as *seleções* sejam idênticas se forem do mesmo tipo
-  // (Ex: Perfil Admin vs Perfil Admin)
-  // NOTA: Para atributos, isso só compara o ID do atributo (ex: 'status' vs 'status'),
-  // não o operador/valor. A verificação de duplicata exata será feita depois.
+  // Validar Valor B
+  if (mapping.b === "PROFILE") {
+      // --- INÍCIO DA CORREÇÃO: Proíbe Perfil em Regra Global ---
+      if (finalSystemId === null) {
+        throw new Error("Não é permitido usar Perfil (PROFILE) como critério em uma regra Global.");
+      }
+      // --- FIM DA CORREÇÃO ---
+      const profileB = await prisma.profile.findFirst({
+          where: { id: parseInt(valueBId, 10), systemId: finalSystemId } // Usa finalSystemId
+      });
+      if (!profileB) {
+          throw new Error(`Perfil B (ID: ${valueBId}) não encontrado ou não pertence ao Sistema (ID: ${finalSystemId}).`);
+      }
+      valueBId = String(profileB.id);
+  }
+  else if (mapping.b === "SYSTEM") {
+      valueBId = String(valueBIdRaw);
+  }
+  
+  // 4. Normalização
   if (mapping.a === mapping.b && valueAId === valueBId) {
     throw new Error("As seleções de comparação não podem ser iguais quando são do mesmo tipo.");
   }
-
-  // Normaliza a ordem se ambos os tipos forem iguais (ex: ROLE_X_ROLE)
-  // Isso NÃO se aplica se for ATTR_X_ATTR, pois operador/valor podem diferenciar
-  if (mapping.a === mapping.b && mapping.a !== "ATTRIBUTE") { // <<-- NÃO normaliza se for Atributo
+  if (mapping.a === mapping.b && mapping.a !== "ATTRIBUTE") {
     if (valueAId.localeCompare(valueBId) > 0) {
-      // Inverte A e B para consistência (ex: sempre salva Perfil1 vs Perfil2, nunca Perfil2 vs Perfil1)
-      return {
+        // Inverte A e B
+        return {
+          name, description, areaNegocio, processoNegocio, owner, systemId: finalSystemId, ruleType: ruleTypeId, // <<< CORRIGIDO
           valueAType: mapping.b, valueAId: valueBId,
-          valueAOperator: null, valueAValue: null, // Zera campos de A (que agora é B)
+          valueAOperator: null, valueAValue: null,
           valueBType: mapping.a, valueBId: valueAId,
-      };
+        };
     }
   }
 
-  // Retorna os tipos, IDs e os novos campos de Atributo A
+  // 5. Retorna dados validados
   return {
+    name, description, areaNegocio, processoNegocio, owner, systemId: finalSystemId, ruleType: ruleTypeId, // <<< CORRIGIDO
     valueAType: mapping.a, valueAId: valueAId,
-    valueAOperator: finalValueAOperator, // <<-- Retorna operador validado
-    valueAValue: finalValueAValue,       // <<-- Retorna valor validado
+    valueAOperator: finalValueAOperator,
+    valueAValue: finalValueAValue,
     valueBType: mapping.b, valueBId: valueBId,
   };
 };
 
-/**
- * Helper para buscar regra duplicada, considerando operador e valor.
- */
+// Helper para buscar regra duplicada (agora usa a constraint única nomeada)
 const findExistingRule = async (prismaArgs) => {
-    // A query base já inclui userId, valueAType, valueAId, valueBType, valueBId
-    const query = { ...prismaArgs };
-
-    // Se valueAType for ATTRIBUTE, adiciona operador e valor à busca
-    if (prismaArgs.valueAType === "ATTRIBUTE") {
-      query.valueAOperator = prismaArgs.valueAOperator;
-      query.valueAValue = prismaArgs.valueAValue;
-    } else {
-       // Garante que não busque por operador/valor se não for atributo
-       query.valueAOperator = null;
-       query.valueAValue = null;
-    }
-
-    // Remove os campos que não fazem parte direta da query where única
-    // (eles foram usados para construir a query acima)
-    // delete query.valueAOperator;
-    // delete query.valueAValue;
-
-    return await prisma.sodRule.findFirst({ where: query });
+    // A constraint é @@unique([userId, systemId, valueAType, valueAId, valueAOperator, valueAValue, valueBType, valueBId], name: "UniqueSodRuleByUserSystem")
+    // O schema foi alterado para remover a constraint unique, mas a lógica de verificação manual ainda é útil.
+    return await prisma.sodRule.findFirst({
+         where: {
+             userId: prismaArgs.userId,
+             systemId: prismaArgs.systemId, // <<< CORREÇÃO: Isso agora busca 'null' corretamente
+             valueAType: prismaArgs.valueAType,
+             valueAId: prismaArgs.valueAId,
+             valueAOperator: prismaArgs.valueAOperator || null, // Garante null se undefined
+             valueAValue: prismaArgs.valueAValue || null,       // Garante null se undefined
+             valueBType: prismaArgs.valueBType,
+             valueBId: prismaArgs.valueBId,
+             id: prismaArgs.id // Usado para checagem de atualização (ex: id: { not: ruleId })
+         }
+       });
 };
 
 
 /**
  * @route    GET /sod-rules
- * @desc     Busca todas as regras de SOD criadas pelo usuário
+ * @desc     Busca todas as regras de SOD (agora inclui info do sistema)
  * @access   Private
+ * @query    ?systemId=<ID> (Opcional)
  */
 const getSodRules = async (req, res) => {
  try {
-   // Garante que userId seja Int
-   const userIdInt = parseInt(req.user.id, 10);
-   if (isNaN(userIdInt)) {
-       return res.status(400).json({ message: "ID de usuário inválido." });
-   }
+    const userIdInt = parseInt(req.user.id, 10);
+    if (isNaN(userIdInt)) {
+        return res.status(400).json({ message: "ID de usuário inválido." });
+    }
 
-   const rules = await prisma.sodRule.findMany({
-     where: { userId: userIdInt },
-     // SELECT inclui os novos campos valueAOperator e valueAValue
-     select: {
-         id: true,
-         name: true,
-         description: true,
-         areaNegocio: true,
-         processoNegocio: true,
-         owner: true,
-         ruleType: true,
-         valueAType: true,
-         valueAId: true,
-         valueAOperator: true, // <<< Incluído
-         valueAValue: true,    // <<< Incluído
-         valueBType: true,
-         valueBId: true,
-         createdAt: true,
-         updatedAt: true,
-         userId: true,
-     },
-     orderBy: { createdAt: "desc" },
-   });
-   res.status(200).json(rules);
+    const { systemId } = req.query;
+    const whereClause = { userId: userIdInt };
+
+    // Adiciona filtro por systemId se fornecido
+    if (systemId) {
+         const systemIdInt = parseInt(systemId, 10);
+         if (!isNaN(systemIdInt)) {
+             // --- INÍCIO DA CORREÇÃO: Permite buscar regras globais (null) E específicas ---
+             whereClause.OR = [
+                { systemId: systemIdInt },
+                { systemId: null }
+             ];
+             // --- FIM DA CORREÇÃO ---
+         } else {
+              return res.status(400).json({ message: "systemId inválido." });
+         }
+     }
+     // Se 'systemId' não for fornecido (Visão Geral), 'whereClause' só tem 'userId',
+     // buscando todas as regras (globais e específicas), o que está correto.
+
+    const rules = await prisma.sodRule.findMany({
+       where: whereClause,
+       select: { // Seleciona campos, incluindo o sistema
+           id: true,
+           name: true,
+           description: true,
+           areaNegocio: true,
+           processoNegocio: true,
+           owner: true,
+           ruleType: true,
+           valueAType: true,
+           valueAId: true,
+           valueAOperator: true,
+           valueAValue: true,
+           valueBType: true,
+           valueBId: true,
+           createdAt: true,
+           updatedAt: true,
+           userId: true,
+           systemId: true, // <<< ADICIONADO para debug e lógica
+           system: { // <<< INCLUÍDO
+               select: {
+                   id: true,
+                   name: true
+               }
+           }
+       },
+       orderBy: { createdAt: "desc" },
+    });
+    res.status(200).json(rules);
  } catch (error) {
-   console.error("Erro ao buscar regras de SOD:", error);
-   res.status(500).json({ message: "Erro interno do servidor." });
+    console.error("Erro ao buscar regras de SOD:", error);
+    res.status(500).json({ message: "Erro interno do servidor." });
  }
 };
 
 /**
  * @route    POST /sod-rules
- * @desc     Cria uma nova regra de SOD (com campos dinâmicos e operador/valor)
+ * @desc     Cria uma nova regra de SOD (agora requer systemId)
  * @access   Private
  */
 const createSodRule = async (req, res) => {
- // Extrai os novos campos do body
- const { name, description, areaNegocio, processoNegocio, owner,
-         ruleTypeId, valueA, valueB, valueAOperator, valueAValue // <<< Novos campos aqui
-        } = req.body;
+  // O body agora deve conter systemId (pode ser null)
+  // valueA/valueB são objetos {id: ...}
+  const { name, ruleTypeId } = req.body;
 
- if (!name || !ruleTypeId) {
-   return res.status(400).json({ message: "Nome e Tipo de Regra são obrigatórios." });
- }
-
-  // Garante que userId seja Int
-  const userIdInt = parseInt(req.user.id, 10);
-  if (isNaN(userIdInt)) {
-       // Não retorna direto, lança erro para ser pego pelo catch e retornar 500 ou 400
-       return res.status(400).json({ message: "ID de usuário inválido para criação."});
+  if (!name || !ruleTypeId) {
+    return res.status(400).json({ message: "Nome e Tipo de Regra são obrigatórios." });
   }
 
+  const userIdInt = parseInt(req.user.id, 10);
+  if (isNaN(userIdInt)) {
+      return res.status(400).json({ message: "ID de usuário inválido para criação."});
+  }
 
- try {
-   // Passa os novos campos para a validação/extração
-   const dynamicValues = extractDynamicValues(ruleTypeId, valueA, valueB, valueAOperator, valueAValue);
+  try {
+    // 1. Validar e preparar dados (agora é async e valida systemId/perfis)
+    const validatedData = await validateAndPrepareSodData(req.body);
 
-   // Prepara argumentos para buscar duplicata (inclui operador/valor)
-   const duplicateCheckArgs = {
-       userId: userIdInt,
-       valueAType: dynamicValues.valueAType,
-       valueAId: dynamicValues.valueAId,
-       valueAOperator: dynamicValues.valueAOperator, // Pode ser null
-       valueAValue: dynamicValues.valueAValue,       // Pode ser null
-       valueBType: dynamicValues.valueBType,
-       valueBId: dynamicValues.valueBId,
-   };
+    // 2. Prepara argumentos para buscar duplicata
+    const duplicateCheckArgs = {
+        userId: userIdInt,
+        systemId: validatedData.systemId, // <<< Agora pode ser null
+        valueAType: validatedData.valueAType,
+        valueAId: validatedData.valueAId,
+        valueAOperator: validatedData.valueAOperator,
+        valueAValue: validatedData.valueAValue,
+        valueBType: validatedData.valueBType,
+        valueBId: validatedData.valueBId,
+    };
 
-   const existingRule = await findExistingRule(duplicateCheckArgs);
+    const existingRule = await findExistingRule(duplicateCheckArgs);
 
-   if (existingRule) {
-     return res.status(409).json({ message: "Uma regra de conflito idêntica (incluindo operador/valor do atributo) já existe." });
-   }
+    if (existingRule) {
+      return res.status(409).json({ message: "Uma regra de conflito idêntica (mesmo sistema, valores e atributos) já existe." });
+    }
 
-   // Cria a regra no banco (inclui operador/valor)
-   const newRule = await prisma.sodRule.create({
-     data: {
-       name,
-       description: description || null,
-       areaNegocio: areaNegocio || null,
-       processoNegocio: processoNegocio || null,
-       owner: owner || null,
-       userId: userIdInt,
-       ruleType: ruleTypeId,
-       // dynamicValues agora contém valueAOperator e valueAValue validados (ou null)
-       ...dynamicValues,
-     },
-   });
+    // 3. Cria a regra no banco (validatedData contém todos os campos)
+    const newRule = await prisma.sodRule.create({
+      data: {
+        ...validatedData, // Contém name, desc, owner, systemId (Int? ou null), ruleType, values...
+        userId: userIdInt, // Adiciona o userId
+      },
+    });
 
-   res.status(201).json(newRule);
- } catch (error) {
-   console.error("Erro ao criar regra de SOD:", error);
-   // Mensagem de erro mais específica para validação
-   const isValidationError = error.message.includes("Tipo de regra inválido") ||
-                             error.message.includes("Valores de comparação") ||
-                             error.message.includes("IDs dos valores") ||
-                             error.message.includes("Operador inválido") ||
-                             error.message.includes("Valor ausente");
-   res.status(isValidationError ? 400 : 500)
-      .json({ message: error.message || "Erro interno do servidor." });
- }
+    res.status(201).json(newRule);
+  } catch (error) {
+    console.error("Erro ao criar regra de SOD:", error);
+    const isValidationError = error.message.includes("obrigatório") ||
+                              error.message.includes("inválido") ||
+                              error.message.includes("Não é permitido") || // <<< Adicionado
+                              error.message.includes("não encontrado ou não pertence");
+    res.status(isValidationError ? 400 : 500)
+       .json({ message: error.message || "Erro interno do servidor." });
+  }
 };
 
 /**
  * @route    PATCH /sod-rules/:id
- * @desc     Atualiza uma regra de SOD (com campos dinâmicos e operador/valor)
+ * @desc     Atualiza uma regra de SOD
  * @access   Private
  */
 const updateSodRule = async (req, res) => {
- const ruleId = parseInt(req.params.id, 10);
- // Extrai os novos campos do body
- const { name, description, areaNegocio, processoNegocio, owner,
-         ruleTypeId, valueA, valueB, valueAOperator, valueAValue // <<< Novos campos aqui
-        } = req.body;
+  const ruleId = parseInt(req.params.id, 10);
+  const { name, ruleTypeId } = req.body; // Pega campos básicos para validação
 
- // Garante que userId seja Int
- const userIdInt = parseInt(req.user.id, 10);
- if (isNaN(userIdInt)) {
-     return res.status(400).json({ message: "ID de usuário inválido." });
- }
+  const userIdInt = parseInt(req.user.id, 10);
+  if (isNaN(userIdInt)) {
+      return res.status(400).json({ message: "ID de usuário inválido." });
+  }
+  if (isNaN(ruleId)) {
+      return res.status(400).json({ message: "ID de regra inválido." });
+  }
+  if (!name || !ruleTypeId) {
+      return res.status(400).json({ message: "Nome e Tipo de Regra são obrigatórios." });
+  }
 
+  try {
+    // 1. Validar e preparar dados (agora é async e valida systemId/perfis)
+    const validatedData = await validateAndPrepareSodData(req.body, true);
 
- if (isNaN(ruleId)) {
-   return res.status(400).json({ message: "ID de regra inválido." });
- }
- if (!name || !ruleTypeId) {
-   return res.status(400).json({ message: "Nome e Tipo de Regra são obrigatórios." });
- }
+    // 2. Verifica se a regra a ser atualizada existe e pertence ao usuário
+    const rule = await prisma.sodRule.findFirst({
+      where: { id: ruleId, userId: userIdInt },
+      select: { systemId: true } // Pega o systemId existente
+    });
+    if (!rule) {
+      return res.status(404).json({ message: "Regra não encontrada ou não pertence a este usuário." });
+    }
+    
+    // 3. Segurança: Não permite alterar o sistema de uma regra
+    // (A lógica de 'validateAndPrepareSodData' já garante que 'validatedData.systemId' é Int? ou null)
+    if (validatedData.systemId !== rule.systemId) {
+         throw new Error("Não é permitido alterar o Sistema de uma regra SoD existente.");
+    }
 
- try {
-   // Passa os novos campos para a validação/extração
-   const dynamicValues = extractDynamicValues(ruleTypeId, valueA, valueB, valueAOperator, valueAValue);
+    // 4. Prepara argumentos para buscar duplicata
+    const duplicateCheckArgs = {
+        userId: userIdInt,
+        systemId: validatedData.systemId,
+        valueAType: validatedData.valueAType,
+        valueAId: validatedData.valueAId,
+        valueAOperator: validatedData.valueAOperator,
+        valueAValue: validatedData.valueAValue,
+        valueBType: validatedData.valueBType,
+        valueBId: validatedData.valueBId,
+        id: { not: ruleId }, // Exclui a regra atual
+    };
 
-   // Verifica se a regra a ser atualizada existe e pertence ao usuário
-   const rule = await prisma.sodRule.findFirst({
-     where: { id: ruleId, userId: userIdInt },
-   });
+    const existingRule = await findExistingRule(duplicateCheckArgs);
 
-   if (!rule) {
-     return res.status(404).json({ message: "Regra não encontrada ou não pertence a este usuário." });
-   }
+    if (existingRule) {
+      return res.status(409).json({ message: "Uma regra de conflito idêntica (mesmo sistema, valores e atributos) já existe." });
+    }
 
-   // Prepara argumentos para buscar duplicata (excluindo a própria regra sendo editada)
-   const duplicateCheckArgs = {
-       userId: userIdInt,
-       valueAType: dynamicValues.valueAType,
-       valueAId: dynamicValues.valueAId,
-       valueAOperator: dynamicValues.valueAOperator, // Pode ser null
-       valueAValue: dynamicValues.valueAValue,       // Pode ser null
-       valueBType: dynamicValues.valueBType,
-       valueBId: dynamicValues.valueBId,
-       id: { not: ruleId }, // Exclui a regra atual da verificação
-   };
+    // 5. Atualiza a regra
+    const updatedRule = await prisma.sodRule.update({
+      where: { id: ruleId },
+      data: {
+        name: validatedData.name,
+        description: validatedData.description,
+        areaNegocio: validatedData.areaNegocio,
+        processoNegocio: validatedData.processoNegocio,
+        owner: validatedData.owner,
+        ruleType: validatedData.ruleType,
+        valueAType: validatedData.valueAType,
+        valueAId: validatedData.valueAId,
+        valueAOperator: validatedData.valueAOperator,
+        valueAValue: validatedData.valueAValue,
+        valueBType: validatedData.valueBType,
+        valueBId: validatedData.valueBId,
+        // systemId e userId não mudam
+      },
+    });
 
-   const existingRule = await findExistingRule(duplicateCheckArgs);
-
-   if (existingRule) {
-     return res.status(409).json({ message: "Uma regra de conflito idêntica (incluindo operador/valor do atributo) já existe." });
-   }
-
-   // Atualiza a regra no banco (inclui operador/valor)
-   const updatedRule = await prisma.sodRule.update({
-     where: { id: ruleId },
-     data: {
-       name,
-       description: description || null,
-       areaNegocio: areaNegocio || null,
-       processoNegocio: processoNegocio || null,
-       owner: owner || null,
-       ruleType: ruleTypeId,
-       // dynamicValues agora contém valueAOperator e valueAValue validados (ou null)
-       ...dynamicValues,
-     },
-   });
-
-   res.status(200).json(updatedRule);
- } catch (error) {
-   console.error("Erro ao atualizar regra de SOD:", error);
-   // Mensagem de erro mais específica para validação
-   const isValidationError = error.message.includes("Tipo de regra inválido") ||
-                             error.message.includes("Valores de comparação") ||
-                             error.message.includes("IDs dos valores") ||
-                             error.message.includes("Operador inválido") ||
-                             error.message.includes("Valor ausente");
-   res.status(isValidationError ? 400 : 500)
-      .json({ message: error.message || "Erro interno do servidor." });
- }
+    res.status(200).json(updatedRule);
+  } catch (error) {
+    console.error("Erro ao atualizar regra de SOD:", error);
+    const isValidationError = error.message.includes("obrigatório") ||
+                              error.message.includes("inválido") ||
+                              error.message.includes("não encontrado ou não pertence") ||
+                              error.message.includes("Não é permitido"); // <<< Corrigido
+    res.status(isValidationError ? 400 : 500)
+       .json({ message: error.message || "Erro interno do servidor." });
+  }
 };
 
 /**
@@ -333,34 +403,37 @@ const updateSodRule = async (req, res) => {
  * @access   Private
  */
 const deleteSodRule = async (req, res) => {
-   const ruleId = parseInt(req.params.id, 10);
-   // Garante que userId seja Int
-   const userIdInt = parseInt(req.user.id, 10);
+    const ruleId = parseInt(req.params.id, 10);
+    const userIdInt = parseInt(req.user.id, 10);
 
-   if (isNaN(ruleId)) {
-       return res.status(400).json({ message: "ID de regra inválido." });
-   }
-   if (isNaN(userIdInt)) {
-       return res.status(400).json({ message: "ID de usuário inválido." });
-   }
+    if (isNaN(ruleId)) {
+        return res.status(400).json({ message: "ID de regra inválido." });
+    }
+    if (isNaN(userIdInt)) {
+        return res.status(400).json({ message: "ID de usuário inválido." });
+    }
 
-   try {
-       const deleteResult = await prisma.sodRule.deleteMany({
-           where: {
-               id: ruleId,
-               userId: userIdInt, // Usa Int
-           },
-       });
+    try {
+        const deleteResult = await prisma.sodRule.deleteMany({
+            where: {
+                id: ruleId,
+                userId: userIdInt,
+            },
+        });
 
-       if (deleteResult.count === 0) {
-           return res.status(404).json({ message: "Regra não encontrada ou não pertence a este usuário." });
-       }
+        if (deleteResult.count === 0) {
+            return res.status(404).json({ message: "Regra não encontrada ou não pertence a este usuário." });
+        }
 
-       res.status(204).send();
-   } catch (error) {
-       console.error("Erro ao deletar regra de SOD:", error);
-       res.status(500).json({ message: "Erro interno do servidor." });
-   }
+        res.status(204).send();
+    } catch (error) {
+         console.error(`Erro ao deletar regra de SOD #${ruleId}:`, error);
+         // Trata erro de constraint (P2003) - Pouco provável agora
+         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+             return res.status(409).json({ message: "Não é possível excluir esta regra pois ela está sendo referenciada." });
+         }
+        res.status(500).json({ message: "Erro interno do servidor." });
+    }
 };
 
 

@@ -18,18 +18,22 @@ function useDashboardData(metrics, isLoading) {
                 acessoPrevistoNaoConcedido: 0, 
                 nome: 0,
                 ativosNaoEncontradosRH: 0,
+                sodViolations: 0, // <<< ADICIONADO VALOR PADRÃO
             },
             kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0, adminsDormentes: 0 },
         },
         pamDisplay: { riscos: { acessosIndevidos: 0 } },
         riscosConsolidadosChart: { 
-            labels: ["Contas Admin com Risco", "Acessos Ativos Indevidos", "Contas Órfãs"], 
-            datasets: [{ label: "Total de Eventos de Risco", color: "error", data: [0, 0, 0] }] 
+            // --- INÍCIO DA CORREÇÃO (Etapa 2) ---
+            labels: ["Contas Admin com Risco", "Acessos Ativos Indevidos", "Contas Órfãs", "Violações de SOD"], 
+            datasets: [{ label: "Total de Eventos de Risco", color: "error", data: [0, 0, 0, 0] }] 
+            // --- FIM DA CORREÇÃO (Etapa 2) ---
         },
         prejuizoPotencial: "R$ 0,00",
         prejuizoMitigado: "R$ 0,00",
         indiceConformidade: isLoading ? "..." : "100.0",
         riscosEmContasPrivilegiadas: 0,
+        sodViolationCount: 0, // <<< ADICIONADO VALOR PADRÃO
     };
     // ======================== FIM DA ALTERAÇÃO =======================
 
@@ -53,7 +57,9 @@ function useDashboardData(metrics, isLoading) {
     };
 
     const riscosConsolidadosChart = {
-        labels: ["Contas Admin com Risco", "Acessos Ativos Indevidos", "Contas Órfãs"],
+        // --- INÍCIO DA CORREÇÃO (Etapa 2) ---
+        labels: ["Contas Admin com Risco", "Acessos Ativos Indevidos", "Contas Órfãs", "Violações de SOD"],
+        // --- FIM DA CORREÇÃO (Etapa 2) ---
         datasets: [{
             label: "Total de Eventos de Risco",
             color: "error",
@@ -61,6 +67,9 @@ function useDashboardData(metrics, isLoading) {
                 metrics.riscos?.riscosEmContasPrivilegiadas || 0,
                 metrics.divergencias?.inativosRHAtivosApp || 0,
                 metrics.divergencias?.ativosNaoEncontradosRH || 0,
+                // --- INÍCIO DA CORREÇÃO (Etapa 2) ---
+                metrics.riscos?.sodViolationCount || 0, // <<< ADICIONADO DADO DE SOD
+                // --- FIM DA CORREÇÃO (Etapa 2) ---
             ]
         }]
     };

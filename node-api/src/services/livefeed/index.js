@@ -7,205 +7,307 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = express.Router();
 
+// Funções auxiliares (movidas para o topo para melhor organização)
+const cleanText = (text) => text?.trim().toLowerCase();
+const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
+
 const getLiveFeedData = async (req, res) => {
-    const { system } = req.query;
+    const { system } = req.query; // Pega 'system' da query string
+    const isGeneral = !system || system.toLowerCase() === 'geral';
+    // let targetSystemName = system; // Removido
+
+    // Garante userId Int
+    const userIdInt = parseInt(req.user.id, 10);
+    if (isNaN(userIdInt)) {
+        return res.status(400).json({ message: "ID de usuário inválido." });
+    }
 
     try {
-        const isGeneral = !system || system.toLowerCase() === 'geral';
-        const whereClause = { sourceSystem: { not: 'RH' } };
+        // --- 1. Buscar Identidades (RH) e criar Mapas ---
+        const rhIdentities = await prisma.identity.findMany({
+            where: { sourceSystem: { equals: 'RH', mode: 'insensitive' } },
+        });
+        
+        const rhMapByCpf = new Map(rhIdentities.filter(i => i.cpf).map(i => [cleanCpf(i.cpf), i]));
+        const rhMapByEmail = new Map(rhIdentities.filter(i => i.email).map(i => [cleanText(i.email), i]));
+
+        // --- 2. Buscar Contas (Accounts) dos Sistemas ---
+        const whereAccounts = {};
+        let systemRecord = null;
+
         if (!isGeneral) {
-            whereClause.sourceSystem = { equals: system, mode: 'insensitive' };
+            if (system.toUpperCase() === 'RH') {
+                // Se for RH, não busca contas (whereAccounts fica vazio)
+            } else {
+                systemRecord = await prisma.system.findUnique({
+                    where: { name: system },
+                    select: { id: true }
+                });
+                if (!systemRecord) {
+                    console.warn(`LiveFeed: Sistema ${system} não encontrado.`);
+                    return res.status(404).json({ message: `Sistema "${system}" não encontrado.`});
+                }
+                whereAccounts.systemId = systemRecord.id;
+            }
         }
         
-        // Busca identidades do RH e dos sistemas de App em paralelo
-        const [rhIdentities, appIdentities] = await Promise.all([
-            prisma.identity.findMany({
-                where: { sourceSystem: { equals: 'RH', mode: 'insensitive' } },
-                include: { profile: { select: { name: true } } } // Inclui perfil para checar Admins no RH
-            }),
-            prisma.identity.findMany({
-                where: whereClause,
-                include: { profile: { select: { name: true } } } // Inclui perfil para checar Admins nos Apps
-            }),
-        ]);
-
-        // Cria um mapa para acesso rápido aos dados do RH pelo identityId
-        const rhMap = new Map(rhIdentities.map(i => [i.identityId, i]));
+        let systemAccounts = [];
         
+        // Verifica se devemos buscar contas (ou seja, se NÃO for o RH)
+        if (!system || system.toUpperCase() !== 'RH') { 
+            systemAccounts = await prisma.account.findMany({
+                where: whereAccounts, // Vazio se 'Geral', com systemId se 'Específico'
+                include: {
+                    profiles: {
+                        include: {
+                            profile: { select: { id: true, name: true } }
+                        }
+                    },
+                    system: { select: { id: true, name: true } }
+                },
+            });
+        }
+        
+        // Se a métrica for específica para o RH, formatamos as identidades
+        if (system && system.toUpperCase() === 'RH') {
+             systemAccounts = rhIdentities.map(id => ({
+                 id: id.id,
+                 accountIdInSystem: id.identityId,
+                 name: id.name,
+                 email: id.email,
+                 status: id.status,
+                 userType: id.userType,
+                 cpf: id.cpf,
+                 extraData: id.extraData,
+                 identityId: id.id,
+                 systemId: null,
+                 system: { name: 'RH' },
+                 profiles: [], // Identidade RH não tem perfis de app
+             }));
+        }
+        
+        // --- 3. Buscar Exceções do Usuário ---
+        const identityExceptions = await prisma.identityDivergenceException.findMany({
+            where: { userId: userIdInt },
+            select: { identityId: true, divergenceCode: true, targetSystem: true }
+        });
+        const identityExceptionsSet = new Set(
+            identityExceptions.map(ex => `${ex.identityId}_${ex.divergenceCode}_${ex.targetSystem}`)
+        );
+
+        const accountExceptions = await prisma.accountDivergenceException.findMany({
+            where: { userId: userIdInt },
+            select: { accountId: true, divergenceCode: true }
+        });
+        const accountExceptionsSet = new Set(
+            accountExceptions.map(ex => `${ex.accountId}_${ex.divergenceCode}`)
+        );
+
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-        const cleanText = (text) => text?.trim().toLowerCase();
-        const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
 
-        // --- Etapa 1: Processa as identidades que existem nos sistemas de destino ---
-        const finalData = appIdentities.map(appUser => {
-            const rhUser = rhMap.get(appUser.identityId);
-            const divergenceDetails = []; // Array para armazenar detalhes das divergências encontradas
-
-            const isOrphan = !rhUser;
-            if (isOrphan) {
-                // Para conta órfã, inclui apenas os dados da App
-                divergenceDetails.push({ 
-                    code: 'ORPHAN', 
-                    text: 'Conta Órfã: Usuário não foi encontrado no sistema de RH.',
-                    rhData: null,
-                    appData: appUser 
-                });
+        // --- 4. Processar Contas (Órfãs, Zumbis, Mismatch, Dormentes) ---
+        const finalData = systemAccounts.map(account => {
+            // Se for Identity (formatada como conta), retorna
+            if (account.system.name.toUpperCase() === 'RH') {
+                 // --- INÍCIO DA CORREÇÃO (Criticidade de Identidade) ---
+                 // Define se a identidade RH é admin
+                 const isAdmin = (account.userType || '').toLowerCase().includes('admin');
+                 // --- FIM DA CORREÇÃO ---
+                 return {
+                     id: account.id,
+                     identityId: account.identityId,
+                     name: account.name,
+                     email: account.email,
+                     userType: account.userType,
+                     perfil: 'N/A (Fonte Autoritativa)', // Perfil da *identidade* (Tipo)
+                     rh_status: account.status || 'N/A',
+                     app_status: 'N/A',
+                     sourceSystem: account.system.name,
+                     divergence: false, 
+                     isCritical: isAdmin, // <<< CORREÇÃO: Um admin no RH é "crítico" por natureza
+                     divergenceDetails: [],
+                     id_user: account.accountIdInSystem,
+                     cpf: account.cpf,
+                     last_login: account.extraData?.last_login || null,
+                     rhData: account, 
+                 };
             }
 
-            // Só checa outras divergências se o usuário existe no RH
+            // Para contas de APP, tenta encontrar a identidade RH correspondente
+            const rhUser = (account.cpf && rhMapByCpf.get(cleanCpf(account.cpf))) ||
+                           (account.email && rhMapByEmail.get(cleanText(account.email)));
+            
+            const divergenceDetails = [];
+            
+            // --- INÍCIO DA CORREÇÃO (Cálculo de Criticidade) ---
+            // 1. Calcula o perfil e se é admin ANTES de checar divergências
+            const perfilString = account.profiles.map(p => p.profile.name).join(', ') || 'N/A';
+            const isAdmin = perfilString.toLowerCase().includes('admin');
+            // --- FIM DA CORREÇÃO ---
+
+            const isOrphan = !rhUser; 
+
+            if (isOrphan) {
+                const code = 'ORPHAN_ACCOUNT';
+                const text = 'Conta Órfã: Não foi possível vincular a uma identidade do RH (sem CPF/Email correspondente).';
+                
+                if (!accountExceptionsSet.has(`${account.id}_${code}`)) {
+                    divergenceDetails.push({ 
+                        code: code, 
+                        text: text,
+                        rhData: null,
+                        appData: account
+                    });
+                }
+            }
+
             if(rhUser) { 
-                const isZombie = appUser.status === 'Ativo' && rhUser.status === 'Inativo';
-                if (isZombie) {
-                    divergenceDetails.push({ 
-                        code: 'ZOMBIE', 
-                        text: 'Acesso Ativo Indevido: Conta está ativa no sistema, mas inativa no RH.',
-                        rhData: rhUser, // Inclui dados do RH
-                        appData: appUser // Inclui dados da App
-                    });
+                const isZombie = account.status === 'Ativo' && rhUser.status === 'Inativo';
+                if (isZombie && !accountExceptionsSet.has(`${account.id}_ZOMBIE_ACCOUNT`)) {
+                    divergenceDetails.push({ code: 'ZOMBIE_ACCOUNT', text: 'Acesso Ativo Indevido: Conta ativa, mas identidade inativa no RH.', rhData: rhUser, appData: account });
                 }
-                const hasCpfDivergence = appUser.cpf && rhUser.cpf && cleanCpf(appUser.cpf) !== cleanCpf(rhUser.cpf);
-                if (hasCpfDivergence) {
-                    divergenceDetails.push({ 
-                        code: 'CPF_MISMATCH', 
-                        text: 'Divergência de CPF.',
-                        rhData: rhUser,
-                        appData: appUser
-                    });
+                const hasCpfDivergence = account.cpf && rhUser.cpf && cleanCpf(account.cpf) !== cleanCpf(rhUser.cpf);
+                if (hasCpfDivergence && !accountExceptionsSet.has(`${account.id}_CPF_MISMATCH`)) {
+                    divergenceDetails.push({ code: 'CPF_MISMATCH', text: 'Divergência de CPF.', rhData: rhUser, appData: account });
                 }
-                const hasNameDivergence = appUser.name && rhUser.name && cleanText(appUser.name) !== cleanText(rhUser.name);
-                if (hasNameDivergence) {
-                    divergenceDetails.push({ 
-                        code: 'NAME_MISMATCH', 
-                        text: 'Divergência de Nome.',
-                        rhData: rhUser,
-                        appData: appUser
-                    });
+                const hasNameDivergence = account.name && rhUser.name && cleanText(account.name) !== cleanText(rhUser.name);
+                if (hasNameDivergence && !accountExceptionsSet.has(`${account.id}_NAME_MISMATCH`)) {
+                    divergenceDetails.push({ code: 'NAME_MISMATCH', text: 'Divergência de Nome.', rhData: rhUser, appData: account });
                 }
-                const hasEmailDivergence = appUser.email && rhUser.email && cleanText(appUser.email) !== cleanText(rhUser.email);
-                if (hasEmailDivergence) {
-                    divergenceDetails.push({ 
-                        code: 'EMAIL_MISMATCH', 
-                        text: 'Divergência de E-mail.',
-                        rhData: rhUser,
-                        appData: appUser
-                    });
+                const hasEmailDivergence = account.email && rhUser.email && cleanText(account.email) !== cleanText(rhUser.email);
+                if (hasEmailDivergence && !accountExceptionsSet.has(`${account.id}_EMAIL_MISMATCH`)) {
+                    divergenceDetails.push({ code: 'EMAIL_MISMATCH', text: 'Divergência de E-mail.', rhData: rhUser, appData: account });
                 }
-                const hasUserTypeDivergence = appUser.userType && rhUser.userType && cleanText(appUser.userType) !== cleanText(rhUser.userType);
-                if (hasUserTypeDivergence) {
-                    divergenceDetails.push({ 
-                        code: 'USERTYPE_MISMATCH', 
-                        text: 'Divergência de Tipo de Usuário.',
-                        rhData: rhUser,
-                        appData: appUser
-                    });
+                const hasUserTypeDivergence = account.userType && rhUser.userType && cleanText(account.userType) !== cleanText(rhUser.userType);
+                if (hasUserTypeDivergence && !accountExceptionsSet.has(`${account.id}_USERTYPE_MISMATCH`)) {
+                    divergenceDetails.push({ code: 'USERTYPE_MISMATCH', text: 'Divergência de Tipo de Usuário.', rhData: rhUser, appData: account });
                 }
             }
 
             let hasAnyDivergence = divergenceDetails.length > 0;
-            let isCritical = false;
-            const isAdmin = appUser.profile?.name === 'Admin';
             
-            // Verifica Admin Dormente (apenas se for admin, ativo e com data de login válida)
-            const loginDateStr = typeof appUser.extraData === 'object' && appUser.extraData !== null ? appUser.extraData.last_login : null;
+            // Lógica de Dormência
+            const loginDateStr = typeof account.extraData === 'object' && account.extraData !== null ? account.extraData.last_login : null;
             const loginDate = loginDateStr ? new Date(loginDateStr) : null;
             const isDormant = loginDate && !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
-            const isAdminDormente = isAdmin && appUser.status === 'Ativo' && isDormant; // Verifica se está ativo também
+            const isAdminDormente = isAdmin && account.status === 'Ativo' && isDormant;
             
             if (isAdminDormente) {
-                divergenceDetails.push({ 
-                    code: 'DORMANT_ADMIN', 
-                    text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).',
-                    rhData: rhUser, // Inclui dados do RH se existirem
-                    appData: appUser // Inclui dados da App (contém last_login)
-                });
-                hasAnyDivergence = true; 
+                if (!accountExceptionsSet.has(`${account.id}_DORMANT_ADMIN`)) {
+                    divergenceDetails.push({ 
+                        code: 'DORMANT_ADMIN', 
+                        text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).',
+                        rhData: rhUser,
+                        appData: account
+                    });
+                    hasAnyDivergence = true; 
+                }
             }
             
-            // Define a criticidade da identidade
-            if (divergenceDetails.some(d => ['ZOMBIE', 'CPF_MISMATCH', 'DORMANT_ADMIN', 'ORPHAN'].includes(d.code)) || // Regras de criticidade
-                (isAdmin && hasAnyDivergence && !isAdminDormente)) { // Admin com *qualquer* outra divergência (exceto dormente já contada)
-                isCritical = true;
-            }
+            // --- INÍCIO DA CORREÇÃO (Lógica de Criticidade) ---
+            // A regra agora é simples: é crítico se tem *qualquer* divergência E é admin.
+            const isCritical = hasAnyDivergence && isAdmin;
+            // --- FIM DA CORREÇÃO ---
             
-            // Monta o objeto final para esta identidade da App
+            // Objeto final para contas de APP
             return {
-                id: appUser.id, // ID da tabela Identity (importante!)
-                identityId: appUser.identityId,
-                name: appUser.name,
-                email: appUser.email,
-                userType: appUser.userType,
-                perfil: appUser.profile?.name || 'N/A', // Nome do perfil
-                rh_status: rhUser?.status || 'Não encontrado',
-                app_status: appUser.status || 'N/A',
-                sourceSystem: appUser.sourceSystem,
+                id: account.id, 
+                identityId: account.identityId,
+                name: account.name,
+                email: account.email,
+                userType: account.userType,
+                perfil: perfilString, // <<< Usa a variável calculada
+                rh_status: rhUser?.status || (isOrphan ? 'Não encontrado' : 'N/A'),
+                app_status: account.status || 'N/A', 
+                sourceSystem: account.system.name,
                 divergence: hasAnyDivergence,
-                isCritical: isCritical,
-                divergenceDetails: divergenceDetails, // Agora contém rhData e appData
-                // Campos adicionais mantidos para compatibilidade com o modal
-                id_user: appUser.identityId, 
-                cpf: appUser.cpf,
-                last_login: loginDateStr, // String original do último login
+                isCritical: isCritical, // <<< Usa a nova lógica
+                divergenceDetails: divergenceDetails,
+                id_user: account.accountIdInSystem,
+                cpf: account.cpf,
+                last_login: loginDateStr,
+                rhData: rhUser || null,
             };
         });
         
-        // --- Etapa 2: Encontrar usuários ativos no RH que estão faltando nos sistemas (ACCESS_NOT_GRANTED) ---
+        // --- Etapa 5: (ACCESS_NOT_GRANTED) ---
         const missingAccessUsers = [];
         const activeRhIdentities = rhIdentities.filter(rhId => rhId.status === 'Ativo');
 
-        // Função auxiliar para criar a entrada de usuário faltante
         const createMissingUserEntry = (rhUser, missingSystem) => {
             const divergenceDetails = [{ 
                 code: 'ACCESS_NOT_GRANTED', 
                 text: `Acesso Previsto Não Concedido: Usuário ativo no RH, mas sem conta em ${missingSystem}.`,
-                rhData: rhUser,      // Inclui dados do RH
-                appData: null,       // Não há dados da App
-                targetSystem: missingSystem // Sistema onde o acesso está faltando
+                rhData: rhUser,
+                appData: null,
+                targetSystem: missingSystem
             }];
-            const isAdmin = rhUser.profile?.name === 'Admin'; // Verifica se o usuário do RH era Admin
             
-            // Monta o objeto final para esta divergência de acesso faltante
+            // --- INÍCIO DA CORREÇÃO (Criticidade de Identidade) ---
+            // A "identidade" é admin se seu 'userType' contiver "admin"
+            const isAdmin = (rhUser.userType || '').toLowerCase().includes('admin');
+            // A divergência é 'ACCESS_NOT_GRANTED', então hasAnyDivergence = true
+            const isCritical = isAdmin; // Se é admin e falta acesso, é crítico.
+            // --- FIM DA CORREÇÃO ---
+
             return {
-                id: `${rhUser.id}-${missingSystem}`, // Cria ID único composto
-                identityId: rhUser.identityId,
+                id: `${rhUser.id}-${missingSystem}`, 
+                identityId: rhUser.id,
                 name: rhUser.name,
                 email: rhUser.email,
                 userType: rhUser.userType,
-                perfil: 'N/A', // Perfil da App não aplicável
+                perfil: 'N/A', // Não tem perfil de app
                 rh_status: rhUser.status,
                 app_status: 'Não encontrado',
-                sourceSystem: missingSystem, // Indica onde o acesso está faltando
-                divergence: true,
-                isCritical: isAdmin, // Acesso não concedido para um admin é crítico
-                divergenceDetails: divergenceDetails, // Contém rhData e targetSystem
-                // Campos adicionais para compatibilidade com o modal
+                sourceSystem: missingSystem, 
+                divergence: true, 
+                isCritical: isCritical, // <<< Usa a nova lógica
+                divergenceDetails: divergenceDetails,
                 id_user: rhUser.identityId,
                 cpf: rhUser.cpf,
-                last_login: null, // Não aplicável
+                last_login: null,
+                rhData: rhUser, 
             };
         };
 
-        // Lógica para encontrar acessos faltantes (depende se é visão geral ou específica)
-        if (isGeneral) { // Se for a visão "Geral", checa todos os sistemas
-            const allAppSystems = [...new Set(appIdentities.map(i => i.sourceSystem))];
-            allAppSystems.forEach(systemName => {
-                const systemIdentityIds = new Set(appIdentities.filter(i => i.sourceSystem === systemName).map(i => i.identityId));
-                activeRhIdentities.forEach(rhUser => {
-                    if (!systemIdentityIds.has(rhUser.identityId)) {
-                        missingAccessUsers.push(createMissingUserEntry(rhUser, systemName));
-                    }
-                });
+        if (isGeneral) {
+            const allAppSystems = await prisma.system.findMany({ 
+                where: { name: { not: 'RH' } }, 
+                select: { id: true, name: true } 
+            }); 
+            const allAccounts = await prisma.account.findMany({ 
+                 where: { identityId: { not: null } },
+                 select: { identityId: true, systemId: true } 
             });
-        } else { // Se for um sistema específico, checa apenas nele
-            const appIdentityIds = new Set(appIdentities.map(i => i.identityId));
-            activeRhIdentities.forEach(rhUser => {
-                if (!appIdentityIds.has(rhUser.identityId)) {
-                    missingAccessUsers.push(createMissingUserEntry(rhUser, system)); // Usa o nome do sistema do query param
+            
+            const identitySystemMap = allAccounts.reduce((map, acc) => {
+                if (!map.has(acc.identityId)) {
+                    map.set(acc.identityId, new Set());
                 }
-            });
+                map.get(acc.identityId).add(acc.systemId);
+                return map;
+            }, new Map());
+            
+            for (const sys of allAppSystems) {
+                 activeRhIdentities.forEach(rhUser => {
+                     const hasAccountInSystem = identitySystemMap.get(rhUser.id)?.has(sys.id);
+                      if (!hasAccountInSystem && !identityExceptionsSet.has(`${rhUser.id}_ACCESS_NOT_GRANTED_${sys.name}`)) {
+                           missingAccessUsers.push(createMissingUserEntry(rhUser, sys.name));
+                       }
+                 });
+            }
+        } else if (system && system.toUpperCase() !== 'RH' && systemRecord) {
+             const identityIdsInThisSystem = new Set(systemAccounts.map(acc => acc.identityId).filter(id => id !== null));
+             
+             activeRhIdentities.forEach(rhUser => {
+                  if (!identityIdsInThisSystem.has(rhUser.id) && !identityExceptionsSet.has(`${rhUser.id}_ACCESS_NOT_GRANTED_${system}`)) {
+                       missingAccessUsers.push(createMissingUserEntry(rhUser, system));
+                   }
+             });
         }
         
-        // --- Etapa 3: Combinar os resultados ---
+        // --- Etapa 6: Combinar os resultados ---
         const combinedData = [...finalData, ...missingAccessUsers];
         
         return res.status(200).json(combinedData);

@@ -1,6 +1,8 @@
 // src/layouts/observabilidade/politicas/index.js
 
-import { useState } from "react";
+import { useState, useEffect } from "react"; // <<< Adicionado useEffect
+import axios from "axios"; // <<< Adicionado axios
+import { useMaterialUIController } from "context"; // <<< Adicionado context
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -8,10 +10,12 @@ import Card from "@mui/material/Card";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Icon from "@mui/material/Icon";
+import CircularProgress from "@mui/material/CircularProgress"; // <<< Adicionado CircularProgress
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
+import MDSnackbar from "components/MDSnackbar"; // <<< Adicionado MDSnackbar
 
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -32,9 +36,9 @@ function TabPanel(props) {
       aria-labelledby={`politicas-tab-${index}`}
       {...other}
     >
-      {/* Não renderiza o conteúdo da aba se ela não estiver ativa.
-        Isso garante que o useEffect() do SodTab/RbacTab só 
-        será disparado quando o usuário clicar na aba.
+      {/* Agora renderizamos o MDBox sempre, mas o children (RbacTab/SodTab) 
+        só será passado quando os dados estiverem prontos (ver abaixo).
+        A lógica de value === index ainda oculta o conteúdo.
       */}
       {value === index && <MDBox sx={{ p: 3 }}>{children}</MDBox>}
     </div>
@@ -42,11 +46,73 @@ function TabPanel(props) {
 }
 
 function GerenciarPoliticas() {
+  const [controller] = useMaterialUIController(); // <<< Adicionado
+  const { token } = controller; // <<< Adicionado
+
   const [activeTab, setActiveTab] = useState(0);
+
+  // --- 1. Estados para carregar dados compartilhados ---
+  const [isLoading, setIsLoading] = useState(true);
+  const [allSystems, setAllSystems] = useState([]);
+  const [allProfiles, setAllProfiles] = useState([]);
+  const [allAttributes, setAllAttributes] = useState([]);
+  const [snackbar, setSnackbar] = useState({ open: false, color: "info", title: "", message: "" });
+  // --- Fim da Adição ---
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
   };
+
+  // --- 2. Função para buscar dados compartilhados ---
+  const fetchSharedData = async () => {
+      if (!token) return;
+      setIsLoading(true);
+      try {
+          // Busca sistemas (e seus perfis associados)
+          const systemsPromise = axios.get('/systems?includeProfiles=true', { 
+              headers: { "Authorization": `Bearer ${token}` }
+          });
+          // Busca atributos da identidade (usados em RBAC e SoD)
+          const attributesPromise = axios.get('/identity-attributes', { 
+              headers: { "Authorization": `Bearer ${token}` }
+          });
+          // Busca TODOS os perfis (pode ser redundante se /systems?includeProfiles=true for suficiente)
+          // Vamos usar a rota /profiles que já retorna o systemId
+           const profilesPromise = axios.get('/profiles', { 
+              headers: { "Authorization": `Bearer ${token}` }
+          });
+
+
+          const [systemsRes, attributesRes, profilesRes] = await Promise.all([
+              systemsPromise,
+              attributesPromise,
+              profilesPromise
+          ]);
+
+          // Sistemas que NÃO SÃO RH (para dropdowns de regras)
+          setAllSystems(systemsRes.data.filter(s => s.id !== 'rh')); 
+          // Todos os perfis (já vêm com systemId)
+          setAllProfiles(profilesRes.data); 
+          // Todos os atributos da Identity
+          setAllAttributes(attributesRes.data); 
+          
+      } catch (error) {
+          console.error("Erro ao buscar dados compartilhados para Políticas:", error);
+          setSnackbar({ open: true, color: "error", title: "Erro de Rede", message: "Não foi possível carregar os dados necessários (Sistemas, Perfis, Atributos)." });
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  // --- 3. useEffect para chamar a busca ---
+  useEffect(() => {
+      if (token) {
+          fetchSharedData();
+      }
+  }, [token]);
+  // --- Fim da Adição ---
+
+  const closeSnackbar = () => setSnackbar({ ...snackbar, open: false });
 
   return (
     <DashboardLayout>
@@ -89,22 +155,58 @@ function GerenciarPoliticas() {
                 </Tabs>
               </MDBox>
 
-              {/* Conteúdo da Aba Selecionada */}
+              {/* --- 4. Renderização Condicional do Conteúdo --- */}
               <MDBox>
-                {/* Painel RBAC */}
-                <TabPanel value={activeTab} index={0}>
-                  <RbacTab />
-                </TabPanel>
+                {isLoading ? (
+                    // Mostra loading centralizado
+                    <MDBox p={5} display="flex" justifyContent="center" alignItems="center">
+                        <CircularProgress color="info" />
+                        <MDTypography variant="body2" color="text" sx={{ ml: 2 }}>
+                            Carregando dados (Sistemas, Perfis, Atributos)...
+                        </MDTypography>
+                    </MDBox>
+                ) : (
+                    // Renderiza as abas APENAS se os dados estiverem prontos
+                    <>
+                      {/* Painel RBAC */}
+                      <TabPanel value={activeTab} index={0}>
+                        <RbacTab 
+                          // Passa os dados compartilhados como props
+                          allSystems={allSystems}
+                          allProfiles={allProfiles}
+                          allAttributes={allAttributes}
+                        />
+                      </TabPanel>
 
-                {/* Painel SOD */}
-                <TabPanel value={activeTab} index={1}>
-                  <SodTab />
-                </TabPanel>
+                      {/* Painel SOD */}
+                      <TabPanel value={activeTab} index={1}>
+                        <SodTab 
+                          // Passa os dados compartilhados como props
+                          allSystems={allSystems}
+                          allProfiles={allProfiles}
+                          allAttributes={allAttributes}
+                        />
+                      </TabPanel>
+                    </>
+                )}
               </MDBox>
+              {/* --- Fim da Modificação --- */}
             </Card>
           </Grid>
         </Grid>
       </MDBox>
+
+      {/* Snackbar para erros de carregamento */}
+      <MDSnackbar
+        color={snackbar.color}
+        icon={snackbar.color === "error" ? "warning" : "notifications"}
+        title={snackbar.title}
+        content={snackbar.message}
+        dateTime="agora"
+        open={snackbar.open}
+        onClose={closeSnackbar}
+        close={closeSnackbar}
+      />
     </DashboardLayout>
   );
 }

@@ -16,7 +16,6 @@ const getIdentities = async (req, res) => {
   if (sourceSystem) {
     whereClause.sourceSystem = { equals: sourceSystem, mode: 'insensitive' };
   } else {
-    // A remoção do filtro 'not RH' pode ser feita aqui se a visão geral precisar incluir RH.
     // Se a visão geral NÃO deve incluir RH, mantenha como está.
     whereClause.sourceSystem = { not: 'RH' };
   }
@@ -34,22 +33,16 @@ const getIdentities = async (req, res) => {
   }
 
   try {
-    // --- RE-ADICIONANDO CORREÇÃO: Incluir ID do Perfil ---
+    // --- INÍCIO DA MODIFICAÇÃO: Remover 'include' de profile ---
     const identities = await prisma.identity.findMany({
       where: whereClause,
-      include: {
-        profile: {
-          select: {
-            id: true,   // <<< Re-adicionado para retornar o ID do perfil
-            name: true,
-          },
-        },
-      },
-      // --- FIM DA CORREÇÃO ---
+      // REMOVIDO: include: { profile: { select: { id: true, name: true } } }
+      // Agora busca apenas os dados da própria Identity
       orderBy: {
         createdAt: 'desc',
       },
     });
+    // --- FIM DA MODIFICAÇÃO ---
 
     return res.status(200).json(identities);
   } catch (error) {
@@ -58,47 +51,33 @@ const getIdentities = async (req, res) => {
   }
 };
 
-// --- INÍCIO DA ADIÇÃO: Função DELETE ---
 /**
  * @route   DELETE /identities?sourceSystem=NOMEDOSISTEMA
  * @desc    Deleta TODAS as identidades de um sistema específico (incluindo RH).
  * @access  Private
  */
 const deleteIdentitiesBySystem = async (req, res) => {
-    // 1. Extrai o sourceSystem da query string
     const { sourceSystem } = req.query;
 
-    // 2. Validação básica
     if (!sourceSystem) {
         return res.status(400).json({ message: "Parâmetro 'sourceSystem' é obrigatório." });
     }
 
-    // 3. (REMOVIDO) Proteção contra limpeza do RH foi removida conforme solicitado.
-
     try {
-        // 4. Executa a exclusão em massa
         const deleteResult = await prisma.identity.deleteMany({
             where: {
-                // Filtra pelo sourceSystem (case-insensitive)
                 sourceSystem: { equals: sourceSystem, mode: 'insensitive' }
             }
         });
 
         console.log(`Identidades deletadas para ${sourceSystem}: ${deleteResult.count}`);
-
-        // 5. Retorna sucesso
         return res.status(200).json({ message: `${deleteResult.count} identidades do sistema "${sourceSystem}" foram excluídas.` });
-        // Alternativa: return res.status(204).send();
 
     } catch (error) {
-        // 6. Tratamento de erro
         console.error(`Erro ao deletar identidades para o sistema ${sourceSystem}:`, error);
-        // Verificar se é um erro específico do Prisma (ex: P2025 - Registro não encontrado para deletar, embora deleteMany não deva dar esse erro)
         return res.status(500).json({ message: "Erro interno do servidor ao limpar identidades." });
     }
 };
-// --- FIM DA ADIÇÃO ---
-
 
 // --- Definição das Rotas ---
 router.get(
@@ -107,12 +86,10 @@ router.get(
   getIdentities
 );
 
-// --- INÍCIO DA ADIÇÃO: Rota DELETE ---
 router.delete(
   "/",
-  passport.authenticate("jwt", { session: false }), // Protege a rota
-  deleteIdentitiesBySystem // Associa a função à rota
+  passport.authenticate("jwt", { session: false }),
+  deleteIdentitiesBySystem
 );
-// --- FIM DA ADIÇÃO ---
 
 export default router;

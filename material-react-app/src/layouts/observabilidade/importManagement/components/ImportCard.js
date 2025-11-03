@@ -1,6 +1,4 @@
-// material-react-app/src/layouts/observabilidade/importManagement/components/ImportCard.js
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 
 // @mui material components
@@ -16,7 +14,8 @@ import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import Dropzone from "./Dropzone";
 
-function ImportCard({ onUpload, systemOptions, isLoading, onOpenTemplate }) {
+// Recebe a prop 'disableSystemSelect' (que agora só controla o label)
+function ImportCard({ onUpload, systemOptions, isLoading, onOpenTemplate, disableSystemSelect }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [targetSystem, setTargetSystem] = useState(null);
 
@@ -26,6 +25,18 @@ function ImportCard({ onUpload, systemOptions, isLoading, onOpenTemplate }) {
       setTargetSystem(null);
     });
   };
+
+  // Efeito para limpar seleção se as opções mudarem
+  useEffect(() => {
+    // Se o targetSystem atual não estiver mais na lista de opções (ex: RH foi processado e a lista mudou)
+    // ou se o sistema selecionado não for RH e o modo "só RH" for ativado, limpa.
+    if (targetSystem && !systemOptions.includes(targetSystem)) {
+      setTargetSystem(null);
+    }
+    if (disableSystemSelect && targetSystem !== "RH") {
+      setTargetSystem(null);
+    }
+  }, [disableSystemSelect, systemOptions, targetSystem]);
 
   return (
     <Card>
@@ -47,12 +58,23 @@ function ImportCard({ onUpload, systemOptions, isLoading, onOpenTemplate }) {
               <Autocomplete 
                 options={systemOptions} 
                 value={targetSystem}
-                disabled={isLoading}
+                // --- INÍCIO DA CORREÇÃO ---
+                // O campo só é desabilitado pelo 'isLoading', 
+                // não mais pelo 'disableSystemSelect'.
+                disabled={isLoading} 
+                // --- FIM DA CORREÇÃO ---
                 onChange={(event, newValue) => {
                   setTargetSystem(newValue);
                   if (selectedFile) setSelectedFile(null);
                 }} 
-                renderInput={(params) => <TextField {...params} label="Selecione o Destino (RH ou Sistema)" />} 
+                renderInput={(params) => (
+                    <TextField 
+                        {...params} 
+                        // O label dinâmico (controlado por disableSystemSelect) continua correto,
+                        // informando o usuário POR QUE "RH" é a única opção.
+                        label={disableSystemSelect ? "Importe os dados do RH primeiro" : "Selecione o Destino (RH ou Sistema)"} 
+                    />
+                )} 
               />
             </MDBox>
             <MDButton 
@@ -80,15 +102,18 @@ function ImportCard({ onUpload, systemOptions, isLoading, onOpenTemplate }) {
   );
 }
 
+// PropTypes (incluindo disableSystemSelect)
 ImportCard.propTypes = {
   onUpload: PropTypes.func.isRequired,
   systemOptions: PropTypes.arrayOf(PropTypes.string).isRequired,
   isLoading: PropTypes.bool,
   onOpenTemplate: PropTypes.func.isRequired,
+  disableSystemSelect: PropTypes.bool,
 };
 
 ImportCard.defaultProps = {
   isLoading: false,
+  disableSystemSelect: false,
 };
 
 export default ImportCard;

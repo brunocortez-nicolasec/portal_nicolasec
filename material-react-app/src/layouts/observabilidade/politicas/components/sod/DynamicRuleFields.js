@@ -1,6 +1,5 @@
-// src/layouts/observabilidade/politicas/components/sod/DynamicRuleFields.js
-
 import React from "react";
+import PropTypes from 'prop-types'; // <<< Adicionado
 // @mui material components
 import TextField from "@mui/material/TextField";
 import Autocomplete from "@mui/material/Autocomplete";
@@ -19,7 +18,8 @@ function DynamicRuleFields({
   systems,
   attributes,
   values, // Espera { valueASelection, valueAOperator, valueAValue, valueBSelection }
-  onChange // Handler unificado vindo do Modal
+  onChange, // Handler unificado vindo do Modal
+  isDisabled, // <<< 1. Recebe a nova prop
 }) {
 
   // Função interna para renderizar os campos de Atributo (Seleção, Operador, Valor)
@@ -33,6 +33,7 @@ function DynamicRuleFields({
           onChange={(event, newValue) => onChange(valueField, newValue)}
           isOptionEqualToValue={(option, value) => option.id === value?.id}
           renderInput={(params) => <TextField {...params} label="Atributo *" required />}
+          disabled={isDisabled} // <<< 2. Aplica a prop
         />
       </Grid>
       <Grid item xs={12} sm={3}> {/* Ajuste de tamanho */}
@@ -44,6 +45,7 @@ function DynamicRuleFields({
           isOptionEqualToValue={(option, value) => option.id === value?.id}
           renderInput={(params) => <TextField {...params} label="Operador *" required />}
           disableClearable
+          disabled={isDisabled} // <<< 2. Aplica a prop
         />
       </Grid>
       <Grid item xs={12} sm={5}> {/* Ajuste de tamanho */}
@@ -54,6 +56,7 @@ function DynamicRuleFields({
           onChange={(e) => onChange(e.target.name, e.target.value)} // Passa nome e valor
           fullWidth
           required
+          disabled={isDisabled} // <<< 2. Aplica a prop
         />
       </Grid>
     </>
@@ -63,12 +66,13 @@ function DynamicRuleFields({
   const renderProfileField = (valueField, label = "Perfil *") => (
     <Grid item xs={12} sm={6}>
       <Autocomplete
-        options={profiles}
+        options={profiles} // Recebe os perfis JÁ FILTRADOS
         getOptionLabel={(option) => option.name || ""}
         value={values[valueField]} // Ex: values.valueASelection
         onChange={(event, newValue) => onChange(valueField, newValue)}
         isOptionEqualToValue={(option, value) => option.id === value?.id}
         renderInput={(params) => <TextField {...params} label={label} required />}
+        disabled={isDisabled} // <<< 2. Aplica a prop
       />
     </Grid>
   );
@@ -77,12 +81,13 @@ function DynamicRuleFields({
    const renderSystemField = (valueField, label = "Sistema *") => (
     <Grid item xs={12} sm={6}>
       <Autocomplete
-        options={systems}
+        options={systems} // Recebe os sistemas JÁ FILTRADOS
         getOptionLabel={(option) => option.name || ""}
         value={values[valueField]} // Ex: values.valueBSelection
         onChange={(event, newValue) => onChange(valueField, newValue)}
         isOptionEqualToValue={(option, value) => option.id === value?.id}
         renderInput={(params) => <TextField {...params} label={label} required />}
+        disabled={isDisabled} // <<< 2. Aplica a prop
       />
     </Grid>
   );
@@ -120,11 +125,29 @@ function DynamicRuleFields({
       return (
           <Grid item xs={12}>
               <MDTypography variant="caption" color="text">
-                  Selecione um Tipo de Regra para ver os campos de comparação.
+                  {/* Mensagem atualizada */}
+                  Selecione um Sistema Alvo e um Tipo de Regra...
               </MDTypography>
           </Grid>
       );
   }
 }
+
+// --- 3. Adicionar PropTypes ---
+DynamicRuleFields.propTypes = {
+  ruleType: PropTypes.object,
+  profiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  systems: PropTypes.arrayOf(PropTypes.object).isRequired,
+  attributes: PropTypes.arrayOf(PropTypes.object).isRequired,
+  values: PropTypes.object.isRequired,
+  onChange: PropTypes.func.isRequired,
+  isDisabled: PropTypes.bool, // Nova prop
+};
+
+DynamicRuleFields.defaultProps = {
+  isDisabled: false, // Valor padrão
+  ruleType: null,
+};
+// --- Fim da Adição ---
 
 export default DynamicRuleFields;

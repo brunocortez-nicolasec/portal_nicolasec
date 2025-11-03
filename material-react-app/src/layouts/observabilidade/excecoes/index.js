@@ -1,5 +1,3 @@
-// material-react-app/src/layouts/observabilidade/excecoes/index.js
-
 import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { useMaterialUIController } from "context";
@@ -28,16 +26,15 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import MDSnackbar from "components/MDSnackbar";
-import PropTypes from 'prop-types'; // Adicionado para PropTypes
+import PropTypes from 'prop-types';
 
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import DataTable from "examples/Tables/DataTable"; // DataTable importado corretamente
+import DataTable from "examples/Tables/DataTable";
 
 
 // --- COMPONENTE HELPER PADRONIZADO ---
-// (Exatamente o mesmo do DataSourceViewModal)
 function DetailItem({ icon, label, value, children, darkMode }) {
   const valueColor = darkMode ? "white" : "text.secondary";
 
@@ -50,16 +47,19 @@ function DetailItem({ icon, label, value, children, darkMode }) {
         {label}:&nbsp;
       </MDTypography>
 
-      {value != null && value !== '' && ( // Verifica se value não é nulo ou vazio
+      {/* Render value if it exists and is not empty */}
+      {value != null && value !== '' && (
         <MDTypography variant="button" fontWeight="regular" color={valueColor}>
           {value}
         </MDTypography>
       )}
-       {!value && value !== false && !children && ( // Exibe N/A se value for nulo/vazio e não houver children
+      {/* Render N/A if value is null/undefined/empty and no children are provided */}
+       {!value && value !== 0 && value !== false && !children && ( // Added checks for 0 and false
          <MDTypography variant="button" fontWeight="regular" color={valueColor}>
            N/A
          </MDTypography>
        )}
+      {/* Render children if provided */}
       {children}
     </MDBox>
   );
@@ -68,65 +68,182 @@ function DetailItem({ icon, label, value, children, darkMode }) {
 DetailItem.propTypes = {
   icon: PropTypes.string.isRequired,
   label: PropTypes.string.isRequired,
-  value: PropTypes.any,
+  value: PropTypes.oneOfType([PropTypes.string, PropTypes.number, PropTypes.bool]),
   children: PropTypes.node,
   darkMode: PropTypes.bool,
 };
-// Valor padrão adicionado
 DetailItem.defaultProps = {
-  darkMode: false,
-  value: null,
-  children: null,
+    value: null,
+    children: null,
+    darkMode: false,
 };
+// --- FIM DO HELPER ---
 
 
-// --- MODAL DE DETALHES DA EXCEÇÃO (REFEITO COM O NOVO LAYOUT) ---
+// --- INÍCIO DA CORREÇÃO: MODAL DE DETALHES DA EXCEÇÃO ---
 const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenceLabel, darkMode }) => {
-  if (!open) return null;
+  if (!open) return null; // Don't render if not open
 
-  // Função interna para renderizar os campos de detalhes específicos da divergência
-  const renderDivergenceSpecifics = () => {
-    if (!details || !details.divergenceDetails) return null;
-    const { divergenceCode, divergenceDetails } = details;
-    const { rhData, appData, targetSystem } = divergenceDetails;
-
-    switch (divergenceCode) {
-      case "CPF_MISMATCH":
-        return (
-          <>
-            <DetailItem icon="badge" label={`CPF no RH`} value={rhData?.cpf} darkMode={darkMode} />
-            <DetailItem icon="badge" label={`CPF em ${appData?.sourceSystem}`} value={appData?.cpf} darkMode={darkMode} />
-          </>
-        );
-      case "NAME_MISMATCH":
-        return (
-          <>
-            <DetailItem icon="person" label={`Nome no RH`} value={rhData?.name} darkMode={darkMode} />
-            <DetailItem icon="person" label={`Nome em ${appData?.sourceSystem}`} value={appData?.name} darkMode={darkMode} />
-          </>
-        );
-      case "EMAIL_MISMATCH":
-        return (
-          <>
-            <DetailItem icon="email" label={`Email no RH`} value={rhData?.email} darkMode={darkMode} />
-            <DetailItem icon="email" label={`Email em ${appData?.sourceSystem}`} value={appData?.email} darkMode={darkMode} />
-          </>
-        );
-      case "ZOMBIE_ACCOUNT":
-        return (
-          <>
-            <DetailItem icon="toggle_off" label={`Status no RH`} value={rhData?.status} darkMode={darkMode} />
-            <DetailItem icon="toggle_on" label={`Status em ${appData?.sourceSystem}`} value={appData?.status} darkMode={darkMode} />
-          </>
-        );
-      case "ACCESS_NOT_GRANTED":
-        return <DetailItem icon="link_off" label={`Acesso esperado em`} value={targetSystem} darkMode={darkMode} />;
-      default:
-        // Mantém a estrutura visual mesmo sem detalhes específicos
-        return <DetailItem icon="help_outline" label="Detalhes" value="Nenhuma informação adicional." darkMode={darkMode} />;
+  // --- Function to render the actual content when data is ready ---
+  const renderDetailsContent = () => {
+    // Should not happen if guarded correctly, but good practice
+    if (!details) {
+       return <MDTypography>Não foi possível carregar os detalhes.</MDTypography>;
     }
+
+    // Determina se é uma exceção de Conta ou Identidade (NOW SAFE)
+    const isAccountException = details.type === 'Account';
+    const isIdentityException = details.type === 'Identity';
+
+    // Pega os dados corretos (NOW SAFE)
+    const identityData = isIdentityException ? details.identity : details.account?.identity;
+    const accountData = isAccountException ? details.account : null;
+
+    // Função interna para renderizar os campos de detalhes específicos da divergência
+    const renderDivergenceSpecifics = () => {
+        // Add check for divergenceDetails existence
+        if (!details.divergenceDetails) return <DetailItem icon="help_outline" label="Detalhes" value="Nenhuma informação adicional." darkMode={darkMode} />;
+
+        const { divergenceCode, divergenceDetails } = details;
+        const { rhData, appData, targetSystem } = divergenceDetails; // Destructure safely now
+
+        // Helper function to safely get system name
+        const getSystemName = (data) => data?.system?.name ?? 'Sistema';
+
+        switch (divergenceCode) {
+            case "CPF_MISMATCH":
+              return (
+                <>
+                  <DetailItem icon="badge" label={`CPF no RH`} value={rhData?.cpf} darkMode={darkMode} />
+                  <DetailItem icon="badge" label={`CPF em ${getSystemName(appData)}`} value={appData?.cpf} darkMode={darkMode} />
+                </>
+              );
+            case "NAME_MISMATCH":
+              return (
+                <>
+                  <DetailItem icon="person" label={`Nome no RH`} value={rhData?.name} darkMode={darkMode} />
+                  <DetailItem icon="person" label={`Nome em ${getSystemName(appData)}`} value={appData?.name} darkMode={darkMode} />
+                </>
+              );
+            case "EMAIL_MISMATCH":
+              return (
+                <>
+                  <DetailItem icon="email" label={`Email no RH`} value={rhData?.email} darkMode={darkMode} />
+                  <DetailItem icon="email" label={`Email em ${getSystemName(appData)}`} value={appData?.email} darkMode={darkMode} />
+                </>
+              );
+            case "ZOMBIE_ACCOUNT":
+              return (
+                <>
+                  <DetailItem icon="toggle_off" label={`Status no RH`} value={rhData?.status} darkMode={darkMode} />
+                  <DetailItem icon="toggle_on" label={`Status em ${getSystemName(appData)}`} value={appData?.status} darkMode={darkMode} />
+                </>
+              );
+            case "ACCESS_NOT_GRANTED":
+              // targetSystem comes directly from divergenceDetails
+              return <DetailItem icon="link_off" label={`Acesso esperado em`} value={targetSystem} darkMode={darkMode} />;
+            case "ORPHAN_ACCOUNT":
+               return <DetailItem icon="no_accounts" label={`Conta Órfã em`} value={appData?.system?.name || 'Sistema desconhecido'} darkMode={darkMode} />;
+            // Add case for DORMANT_ADMIN if needed
+            case "DORMANT_ADMIN":
+                return <DetailItem icon="timer_off" label={`Admin dormente em`} value={appData?.system?.name || 'Sistema desconhecido'} darkMode={darkMode} />;
+            default:
+              return <DetailItem icon="help_outline" label="Detalhes" value="Nenhuma informação adicional." darkMode={darkMode} />;
+        }
+    };
+
+    // Renderiza os detalhes da Identidade (RH)
+    const renderIdentityDetails = () => (
+        <MDBox>
+            <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>
+                {isIdentityException ? "Identidade (RH)" : "Identidade Vinculada (RH)"}
+            </MDTypography>
+            {!identityData ? (
+                <MDTypography variant="caption" color="textSecondary">Esta conta (Órfã) não está vinculada a nenhuma identidade do RH.</MDTypography>
+            ) : (
+                 <>
+                   <DetailItem icon="person_outline" label="Nome" value={identityData?.name} darkMode={darkMode} />
+                   <DetailItem icon="email" label="Email" value={identityData?.email} darkMode={darkMode} />
+                   <DetailItem icon="badge" label="CPF" value={identityData?.cpf} darkMode={darkMode} />
+                   <DetailItem icon="vpn_key" label="ID RH" value={identityData?.identityId} darkMode={darkMode} />
+                   <DetailItem icon="engineering" label="Tipo" value={identityData?.userType} darkMode={darkMode} />
+                   <DetailItem icon={identityData?.status === 'Ativo' ? "check_circle" : "cancel"} label="Status RH" value={identityData?.status} darkMode={darkMode} />
+                 </>
+            )}
+        </MDBox>
+    );
+
+    // Renderiza os detalhes da Conta (Sistema)
+    const renderAccountDetails = () => {
+        // Guarded by isAccountException check outside, but check accountData anyway
+        if (!accountData) return <MDTypography variant="caption">Dados da conta indisponíveis.</MDTypography>;
+         return (
+            <MDBox>
+              <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Conta (Sistema)</MDTypography>
+              <DetailItem icon="computer" label="Sistema" value={accountData?.system?.name} darkMode={darkMode} />
+              <DetailItem icon="vpn_key" label="ID no Sistema" value={accountData?.accountIdInSystem} darkMode={darkMode} />
+              <DetailItem icon="person_outline" label="Nome na Conta" value={accountData?.name} darkMode={darkMode} />
+              <DetailItem icon="email" label="Email na Conta" value={accountData?.email} darkMode={darkMode} />
+              <DetailItem icon="admin_panel_settings" label="Perfis na Conta" value={accountData?.profiles?.map(p => p?.profile?.name).filter(Boolean).join(', ') || 'Nenhum'} darkMode={darkMode} />
+              <DetailItem icon={accountData?.status === 'Ativo' ? "toggle_on" : "toggle_off"} label="Status Conta" value={accountData?.status} darkMode={darkMode} />
+           </MDBox>
+         );
+    };
+
+    // --- Main render structure for details ---
+    return (
+        <>
+            {/* Seção Superior: Identidade e Conta (se aplicável) */}
+            <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                    {renderIdentityDetails()}
+                </Grid>
+                <Grid item xs={12} md={6}>
+                    {isAccountException ? renderAccountDetails() : (
+                        // If it's an Identity Exception (ACCESS_NOT_GRANTED), show divergence info here
+                        <MDBox>
+                            <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Divergência Ignorada</MDTypography>
+                            <DetailItem icon="warning" label="Tipo" value={getDivergenceLabel(details.divergenceCode)} darkMode={darkMode} />
+                            {renderDivergenceSpecifics()}
+                        </MDBox>
+                    )}
+                </Grid>
+            </Grid>
+
+            {/* Show divergence details section only for Account Exceptions */}
+            {isAccountException && (
+                <>
+                    <Divider sx={{ my: 2 }} />
+                    <MDBox>
+                        <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Divergência Ignorada (Detalhes)</MDTypography>
+                        <DetailItem icon="warning" label="Tipo" value={getDivergenceLabel(details.divergenceCode)} darkMode={darkMode} />
+                        {renderDivergenceSpecifics()}
+                    </MDBox>
+                </>
+            )}
+
+            <Divider sx={{ my: 2 }} />
+
+            {/* Seção Inferior: Detalhes da Exceção (Aprovação) */}
+            <MDBox>
+                <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Detalhes da Aprovação</MDTypography>
+                <Grid container spacing={3}>
+                    <Grid item xs={12} md={6}>
+                        <DetailItem icon="how_to_reg" label="Aprovado por" value={details.user?.name} darkMode={darkMode} />
+                        <DetailItem icon="event" label="Data" value={details.createdAt ? new Date(details.createdAt).toLocaleString('pt-BR') : ""} darkMode={darkMode} />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                        <DetailItem icon="comment" label="Justificativa" value={details.justification} darkMode={darkMode} />
+                        {/* Optionally add expiration date if needed */}
+                        {/* <DetailItem icon="event_busy" label="Expira em" value={details.expiresAt ? new Date(details.expiresAt).toLocaleDateString('pt-BR') : "Nunca"} darkMode={darkMode} /> */}
+                    </Grid>
+                </Grid>
+            </MDBox>
+        </>
+    );
   };
 
+  // --- Main Modal Structure ---
   return (
     <Modal open={open} onClose={onClose} sx={{ display: "grid", placeItems: "center" }}>
       <Card sx={{ width: "90%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
@@ -135,79 +252,55 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
           <MDTypography variant="h5">Detalhes da Exceção</MDTypography>
           <Icon
             sx={({ typography: { size }, palette: { dark, white } }) => ({
-              fontSize: `${size.lg} !important`,
-              color: darkMode ? white.main : dark.main,
-              stroke: "currentColor",
-              strokeWidth: "2px",
-              cursor: "pointer",
-            })}
+                fontSize: `${size.lg} !important`,
+                color: darkMode ? white.main : dark.main,
+                stroke: "currentColor",
+                strokeWidth: "2px",
+                cursor: "pointer",
+             })}
             onClick={onClose}
           >
             close
           </Icon>
         </MDBox>
-        
-        {/* Corpo */}
+
+        {/* Corpo - Conditionally render based on loading/details */}
         <MDBox p={3} pt={1}>
-          {isLoading ? (
-            <MDBox display="flex" justifyContent="center" py={5}><CircularProgress color="info" /></MDBox>
-          ) : details ? (
-            <>
-              {/* Seção Superior: Identidade e Divergência */}
-              <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
-                  <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Identidade</MDTypography>
-                  <DetailItem icon="person_outline" label="Nome" value={details.identity?.name} darkMode={darkMode} />
-                  <DetailItem icon="email" label="Email" value={details.identity?.email} darkMode={darkMode} />
-                  <DetailItem icon="badge" label="CPF" value={details.identity?.cpf} darkMode={darkMode} />
-                  <DetailItem icon="vpn_key" label="ID de Origem" value={details.identity?.identityId} darkMode={darkMode} />
-                  <DetailItem icon="computer" label="Sistema Origem" value={details.identity?.sourceSystem} darkMode={darkMode} /> 
-                  {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
-                  <DetailItem icon="admin_panel_settings" label="Perfil" value={details.identity?.profile?.name} darkMode={darkMode} />
-                  {/* ======================== FIM DA ALTERAÇÃO ========================= */}
-                </Grid>
-
-                <Grid item xs={12} md={6}>
-                  <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Divergência Ignorada</MDTypography>
-                  <DetailItem icon="warning" label="Tipo" value={getDivergenceLabel(details.divergenceCode)} darkMode={darkMode} />
-                  {renderDivergenceSpecifics()}
-                </Grid>
-              </Grid>
-
-              <Divider sx={{ my: 2 }} />
-
-              {/* Seção Inferior: Detalhes da Exceção */}
-              <MDBox>
-                <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Detalhes da Exceção</MDTypography>
-                <Grid container spacing={3}>
-                    <Grid item xs={12} md={6}>
-                        <DetailItem icon="how_to_reg" label="Aprovado por" value={details.user?.name} darkMode={darkMode} />
-                        <DetailItem icon="event" label="Data" value={details.createdAt ? new Date(details.createdAt).toLocaleString('pt-BR') : ""} darkMode={darkMode} />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                        <DetailItem icon="comment" label="Justificativa" value={details.justification} darkMode={darkMode} />
-                    </Grid>
-                </Grid>
-              </MDBox>
-            </>
-          ) : (
-            <MDTypography>Não foi possível carregar os detalhes.</MDTypography>
-          )}
+          {isLoading
+              ? <MDBox display="flex" justifyContent="center" py={5}><CircularProgress color="info" /></MDBox>
+              : renderDetailsContent() // Render details only when not loading
+          }
         </MDBox>
       </Card>
     </Modal>
   );
 };
 
+// Add PropTypes for ExceptionDetailsModal
+ExceptionDetailsModal.propTypes = {
+  open: PropTypes.bool.isRequired,
+  onClose: PropTypes.func.isRequired,
+  isLoading: PropTypes.bool.isRequired,
+  details: PropTypes.object, // Can be null
+  getDivergenceLabel: PropTypes.func.isRequired,
+  darkMode: PropTypes.bool,
+};
+
+ExceptionDetailsModal.defaultProps = {
+  details: null,
+  darkMode: false,
+};
+// --- FIM DA CORREÇÃO ---
+
 
 function GerenciarExcecoes() {
     const [controller] = useMaterialUIController();
     const { token, darkMode } = controller;
-    const [exceptions, setExceptions] = useState([]);
+    const [exceptions, setExceptions] = useState([]); // Agora armazena a lista combinada
     const [isLoading, setIsLoading] = useState(true);
     const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-    const [exceptionToDelete, setExceptionToDelete] = useState(null);
+    const [exceptionToDelete, setExceptionToDelete] = useState(null); // Armazenará o objeto de exceção completo
     const [exportMenu, setExportMenu] = useState(null);
     const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
     const [detailsModalState, setDetailsModalState] = useState({ isOpen: false, isLoading: false, data: null });
@@ -220,15 +313,18 @@ function GerenciarExcecoes() {
         EMAIL_MISMATCH: "Divergência de E-mail",
         DORMANT_ADMIN: "Admin Dormente",
         ORPHAN_ACCOUNT: "Conta Órfã",
+        // UNMATCHED_IDENTITY: "Conta Desvinculada", // ORPHAN_ACCOUNT covers this
+        USERTYPE_MISMATCH: "Divergência de Tipo de Usuário", // Added if used
     };
 
     const getDivergenceLabel = (code) => divergenceLabels[code] || code;
 
+    // fetchExceptions agora recebe os dados combinados do backend
     const fetchExceptions = async () => {
         if (!token) return;
         setIsLoading(true);
         try {
-            const response = await axios.get('/divergences/exceptions', {
+            const response = await axios.get('/divergences/exceptions', { // Backend já combina os dois tipos
                 headers: { "Authorization": `Bearer ${token}` },
             });
             setExceptions(response.data);
@@ -246,24 +342,27 @@ function GerenciarExcecoes() {
         }
     }, [token]);
 
-    const handleOpenDetailsModal = async (exceptionId) => {
-        setDetailsModalState({ isOpen: true, isLoading: true, data: null });
+    // handleOpenDetailsModal agora precisa saber o TIPO da exceção
+    const handleOpenDetailsModal = async (exception) => { // Recebe o objeto 'ex'
+        setDetailsModalState({ isOpen: true, isLoading: true, data: null }); // Set loading true, data null
         try {
-            const response = await axios.get(`/divergences/exceptions/${exceptionId}`, {
+            // Passa o 'type' ('Identity' ou 'Account') como query param
+            const response = await axios.get(`/divergences/exceptions/${exception.id}`, {
                 headers: { Authorization: `Bearer ${token}` },
+                params: { type: exception.type } // <<< Passa o tipo
             });
-            setDetailsModalState({ isOpen: true, isLoading: false, data: response.data });
+            setDetailsModalState({ isOpen: true, isLoading: false, data: response.data }); // Set loading false, data received
         } catch (error) {
             console.error("Erro ao buscar detalhes da exceção:", error);
             setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível carregar os detalhes da exceção." });
-            setDetailsModalState({ isOpen: false, isLoading: false, data: null });
+            setDetailsModalState({ isOpen: false, isLoading: false, data: null }); // Close modal on error
         }
     };
 
     const handleCloseDetailsModal = () => setDetailsModalState({ isOpen: false, isLoading: false, data: null });
 
-    const handleOpenDeleteDialog = (exception) => {
-        setExceptionToDelete(exception);
+    const handleOpenDeleteDialog = (exception) => { // Recebe o objeto 'ex'
+        setExceptionToDelete(exception); // Armazena o objeto (que contém o 'type')
         setDeleteDialogOpen(true);
     };
 
@@ -272,14 +371,17 @@ function GerenciarExcecoes() {
         setDeleteDialogOpen(false);
     };
 
+    // handleConfirmDelete agora usa o 'type' armazenado
     const handleConfirmDelete = async () => {
         if (!exceptionToDelete) return;
         try {
+            // Passa o 'type' ('Identity' ou 'Account') como query param
             await axios.delete(`/divergences/exceptions/${exceptionToDelete.id}`, {
                 headers: { "Authorization": `Bearer ${token}` },
+                params: { type: exceptionToDelete.type } // <<< Passa o tipo
             });
             setNotification({ open: true, color: "success", title: "Sucesso", content: "Exceção removida. O risco voltará a ser monitorado." });
-            fetchExceptions();
+            fetchExceptions(); // Refresh list after delete
         } catch (error) {
             console.error("Erro ao remover exceção:", error);
             setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível remover a exceção." });
@@ -288,9 +390,12 @@ function GerenciarExcecoes() {
         }
     };
 
+    // Bulk Delete agora precisa separar os tipos
     const handleOpenBulkDeleteDialog = () => {
         if (exceptions.length > 0) {
             setBulkDeleteDialogOpen(true);
+        } else {
+             setNotification({ open: true, color: "warning", title: "Aviso", content: "Não há exceções para remover." });
         }
     };
 
@@ -298,22 +403,52 @@ function GerenciarExcecoes() {
         setBulkDeleteDialogOpen(false);
     };
 
+    // handleConfirmBulkDelete agora agrupa por tipo
     const handleConfirmBulkDelete = async () => {
-        const exceptionIds = exceptions.map(ex => ex.id);
-        if (exceptionIds.length === 0) return;
+        if (exceptions.length === 0) return;
+
+        // Separa os IDs por tipo
+        const identityExceptionIds = exceptions
+            .filter(ex => ex.type === 'Identity')
+            .map(ex => ex.id);
+        const accountExceptionIds = exceptions
+            .filter(ex => ex.type === 'Account')
+            .map(ex => ex.id);
+            
+        setIsLoading(true); // Reutiliza o loading da tabela
+        handleCloseBulkDeleteDialog();
 
         try {
-            const payload = { exceptionIds };
-            await axios.post('/divergences/exceptions/bulk-delete', payload, {
-                headers: { "Authorization": `Bearer ${token}` },
-            });
-            setNotification({ open: true, color: "success", title: "Sucesso", content: "Todas as exceções foram removidas com sucesso." });
-            fetchExceptions();
+            const promises = [];
+            // Cria promise para deletar Identity exceptions
+            if (identityExceptionIds.length > 0) {
+                promises.push(axios.post('/divergences/exceptions/bulk-delete', 
+                    { exceptionIds: identityExceptionIds, type: 'Identity' }, 
+                    { headers: { "Authorization": `Bearer ${token}` } }
+                ));
+            }
+            // Cria promise para deletar Account exceptions
+            if (accountExceptionIds.length > 0) {
+                promises.push(axios.post('/divergences/exceptions/bulk-delete', 
+                    { exceptionIds: accountExceptionIds, type: 'Account' }, 
+                    { headers: { "Authorization": `Bearer ${token}` } }
+                ));
+            }
+            
+            // Execute all delete requests
+            if (promises.length > 0) {
+                 await Promise.all(promises);
+                 setNotification({ open: true, color: "success", title: "Sucesso", content: "Todas as exceções foram removidas com sucesso." });
+                 fetchExceptions(); // Refresh list after bulk delete
+            } else {
+                 setNotification({ open: true, color: "info", title: "Informação", content: "Nenhuma exceção encontrada para remover." });
+            }
+
         } catch (error) {
             console.error("Erro ao remover todas as exceções:", error);
             setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível remover todas as exceções." });
         } finally {
-            handleCloseBulkDeleteDialog();
+             setIsLoading(false);
         }
     };
 
@@ -321,23 +456,43 @@ function GerenciarExcecoes() {
     const openExportMenu = (event) => setExportMenu(event.currentTarget);
     const closeExportMenu = () => setExportMenu(null);
 
+    // Helper to escape CSV data
+    const escapeCsv = (str) => `"${String(str ?? '').replace(/"/g, '""')}"`;
+
+    // Exportação CSV (ajustada para nova estrutura)
     const handleExportCsv = () => {
         closeExportMenu();
+        if (exceptions.length === 0) {
+             setNotification({ open: true, color: "warning", title: "Exportação", content: "Não há dados para exportar." });
+             return;
+        }
+
         let csvContent = "data:text/csv;charset=utf-8,";
-        const headers = ["Identidade_Nome", "Identidade_Email", "Sistema", "Tipo_Divergencia", "Justificativa", "Aprovado_Por", "Data"];
-        csvContent += headers.join(",") + "\r\n";
+        // BOM for UTF-8 Excel compatibility
+        csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+
+        const headers = ["Tipo_Excecao", "Nome_Item", "Email_Item", "Sistema_Alvo", "Tipo_Divergencia", "Justificativa", "Aprovado_Por", "Data"];
+        csvContent += headers.map(escapeCsv).join(",") + "\r\n";
 
         exceptions.forEach(ex => {
+            const isIdentityEx = ex.type === 'Identity';
+            const item = isIdentityEx ? ex.identity : ex.account;
+            // Use fallback identifiers if name is missing
+            const itemName = item?.name || (isIdentityEx ? `ID_RH:${ex.identity?.identityId}` : `ID_Sistema:${ex.account?.accountIdInSystem}`) || "N/A";
+            const itemEmail = item?.email || "N/A";
+            const systemName = ex.targetSystem || item?.system?.name || "N/A"; // Use targetSystem or account's system name
+
             const row = [
-                `"${ex.identity?.name || "N/A"}"`,
-                `"${ex.identity?.email || "N/A"}"`,
-                `"${ex.identity?.sourceSystem || ex.targetSystem || "N/A"}"`,
-                `"${getDivergenceLabel(ex.divergenceCode)}"`,
-                `"${ex.justification.replace(/"/g, '""')}"`,
-                `"${ex.user?.name || "N/A"}"`,
-                `"${new Date(ex.createdAt).toLocaleDateString('pt-BR')}"`,
+                ex.type,
+                itemName,
+                itemEmail,
+                systemName,
+                getDivergenceLabel(ex.divergenceCode),
+                ex.justification,
+                ex.user?.name || "N/A",
+                ex.createdAt ? new Date(ex.createdAt).toLocaleDateString('pt-BR') : "N/A",
             ];
-            csvContent += row.join(",") + "\r\n";
+            csvContent += row.map(escapeCsv).join(",") + "\r\n";
         });
 
         const encodedUri = encodeURI(csvContent);
@@ -349,62 +504,108 @@ function GerenciarExcecoes() {
         document.body.removeChild(link);
     };
     
+    // Exportação PDF (ajustada para nova estrutura)
     const handleExportPdf = () => {
         closeExportMenu();
+         if (exceptions.length === 0) {
+             setNotification({ open: true, color: "warning", title: "Exportação", content: "Não há dados para exportar." });
+             return;
+        }
+
         const doc = new jsPDF();
-        const tableColumns = ["Identidade", "Sistema", "Tipo", "Aprovado Por", "Data"];
+        const tableColumns = ["Item", "Sistema", "Tipo Divergência", "Aprovado Por", "Data"];
         const tableRows = [];
 
         exceptions.forEach(ex => {
+            const isIdentityEx = ex.type === 'Identity';
+            const item = isIdentityEx ? ex.identity : ex.account;
+            const itemName = item?.name || (isIdentityEx ? `ID_RH:${ex.identity?.identityId}` : `ID_Sistema:${ex.account?.accountIdInSystem}`) || "N/A";
+            const itemIdentifier = item?.email || item?.cpf || (isIdentityEx ? ex.identity?.identityId : ex.account?.accountIdInSystem) || "N/A";
+            const systemName = ex.targetSystem || item?.system?.name || "N/A";
+            
             const row = [
-                `${ex.identity?.name || "N/A"} (${ex.identity?.email || "N/A"})`,
-                ex.identity?.sourceSystem || ex.targetSystem || "N/A",
+                `${itemName}\n(${itemIdentifier})`, // Combine name and identifier
+                systemName,
                 getDivergenceLabel(ex.divergenceCode),
                 ex.user?.name || "N/A",
-                new Date(ex.createdAt).toLocaleDateString('pt-BR')
+                ex.createdAt ? new Date(ex.createdAt).toLocaleDateString('pt-BR') : "N/A"
             ];
             tableRows.push(row);
         });
 
         doc.text("Relatório de Exceções de Divergência", 14, 15);
-        autoTable(doc, { head: [tableColumns], body: tableRows, startY: 20 });
+        autoTable(doc, {
+             head: [tableColumns],
+             body: tableRows,
+             startY: 20,
+             styles: { fontSize: 8 }, // Adjust font size if needed
+             headStyles: { fillColor: [22, 160, 133] }, // Example header color
+        });
         doc.save("relatorio_excecoes.pdf");
     };
 
+    // Colunas da Tabela (ajustadas para nova estrutura)
     const columns = useMemo(() => [
         {
-            Header: "Identidade",
-            accessor: "identity.name",
+            Header: "Item (Identidade/Conta)",
+            // Use a combination for sorting/filtering if needed, or rely on display value
+            accessor: row => { // Custom accessor for combined data
+                 const isIdentityEx = row.type === 'Identity';
+                 const item = isIdentityEx ? row.identity : row.account;
+                 return item?.name || item?.email || row.id; // Fallback sort value
+            },
+            id: 'itemDetail', // Unique ID for the column
             width: "25%",
             align: "left",
-            Cell: ({ row: { original: ex } }) => (
-                <MDBox 
-                    lineHeight={1} 
-                    onClick={() => handleOpenDetailsModal(ex.id)} 
-                    sx={{ cursor: "pointer", "&:hover > .MuiTypography-button": { textDecoration: "underline" } }}
-                >
-                    <MDTypography display="block" variant="button" fontWeight="medium">{ex.identity?.name || "N/A"}</MDTypography>
-                    <MDTypography variant="caption">{ex.identity?.email} ({ex.identity?.sourceSystem || ex.targetSystem})</MDTypography>
-                </MDBox>
-            ),
+            Cell: ({ row: { original: ex } }) => {
+                const isIdentityEx = ex.type === 'Identity';
+                const item = isIdentityEx ? ex.identity : ex.account;
+                // Use fallback identifiers clearly
+                const itemName = item?.name || (isIdentityEx ? `ID_RH:${ex.identity?.identityId}` : `ID_Sistema:${ex.account?.accountIdInSystem}`) || "Item Desconhecido";
+                const itemEmail = item?.email;
+                const itemCpf = item?.cpf; // Get CPF if available
+                const systemName = ex.targetSystem || item?.system?.name || "N/A"; // System name from account or targetSystem
+                
+                // Choose secondary identifier: email or CPF or ID
+                let secondaryIdentifier = itemEmail || itemCpf || (isIdentityEx ? ex.identity?.identityId : ex.account?.accountIdInSystem) || "";
+
+                return (
+                    <MDBox 
+                        lineHeight={1} 
+                        onClick={() => handleOpenDetailsModal(ex)} // Passa o objeto 'ex' inteiro
+                        sx={{ cursor: "pointer", "&:hover > .MuiTypography-button": { textDecoration: "underline", color: "info.main" } }}
+                    >
+                        <MDTypography display="block" variant="button" fontWeight="medium">
+                            {itemName} {isIdentityEx ? "(Identidade RH)" : `(Conta ${systemName})`}
+                        </MDTypography>
+                        {secondaryIdentifier && ( // Only show if identifier exists
+                            <MDTypography variant="caption">
+                                {secondaryIdentifier}
+                            </MDTypography>
+                        )}
+                    </MDBox>
+                );
+            },
         },
         { Header: "Tipo de Divergência", accessor: "divergenceCode", align: "center", Cell: ({ value }) => <MDTypography variant="caption" fontWeight="medium">{getDivergenceLabel(value)}</MDTypography> },
-        { Header: "Justificativa", accessor: "justification", align: "left", Cell: ({ value }) => <MDTypography variant="caption" sx={{ whiteSpace: "pre-wrap" }}>{value}</MDTypography> },
+        { Header: "Justificativa", accessor: "justification", align: "left", Cell: ({ value }) => <MDTypography variant="caption" sx={{ display: 'block', whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxWidth: '250px' }}>{value}</MDTypography> }, // Improved wrapping
         { Header: "Aprovado Por", accessor: "user.name", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> },
-        { Header: "Data", accessor: "createdAt", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{new Date(value).toLocaleDateString('pt-BR')}</MDTypography> },
+        { Header: "Data", accessor: "createdAt", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value ? new Date(value).toLocaleDateString('pt-BR') : "N/A"}</MDTypography> },
         { 
             Header: "Ações", 
             accessor: "actions", 
+            id: 'actions', // Ensure unique ID
             align: "center",
             disableSortBy: true,
             Cell: ({ row: { original: ex } }) => (
-                <MDButton variant="text" color="error" onClick={() => handleOpenDeleteDialog(ex)}>
+                <MDButton variant="text" color="error" onClick={() => handleOpenDeleteDialog(ex)} title="Reativar Monitoramento"> {/* Passa o objeto 'ex' */}
                     <Icon>delete_forever</Icon>&nbsp;Reativar
                 </MDButton>
             )
         },
-    ], [exceptions]); // Dependência de 'exceptions' adicionada
+    ], [exceptions, handleOpenDetailsModal, handleOpenDeleteDialog, getDivergenceLabel]); // Dependencies updated
 
+    // Rows for the table are just the exceptions data
     const rows = useMemo(() => exceptions, [exceptions]);
 
     return (
@@ -429,10 +630,11 @@ function GerenciarExcecoes() {
                                         onClick={handleOpenBulkDeleteDialog}
                                         disabled={exceptions.length === 0 || isLoading}
                                         sx={{ mr: 1 }}
+                                        title="Reativar monitoramento para todas as exceções listadas"
                                     >
                                         <Icon>delete_sweep</Icon>&nbsp;Reativar Todas
                                     </MDButton>
-                                    <MDButton variant="gradient" color="dark" onClick={openExportMenu}>
+                                    <MDButton variant="gradient" color="dark" onClick={openExportMenu} disabled={exceptions.length === 0 || isLoading}>
                                         <Icon>download</Icon>
                                         &nbsp;Exportar Relatório
                                     </MDButton>
@@ -441,8 +643,8 @@ function GerenciarExcecoes() {
                             <MDBox pt={3}>
                                 <DataTable
                                     table={{ columns, rows }}
-                                    isSorted={false}
-                                    entriesPerPage={{ defaultValue: 10, entries: [10, 25, 50] }}
+                                    isSorted={true} // Enable sorting
+                                    entriesPerPage={{ defaultValue: 10, entries: [10, 25, 50, 100] }} // Added 100
                                     showTotalEntries
                                     noEndBorder
                                     canSearch
@@ -454,42 +656,52 @@ function GerenciarExcecoes() {
                 </Grid>
             </MDBox>
             
-            <ExceptionDetailsModal 
-                open={detailsModalState.isOpen}
-                onClose={handleCloseDetailsModal}
-                isLoading={detailsModalState.isLoading}
-                details={detailsModalState.data}
-                getDivergenceLabel={getDivergenceLabel}
-                darkMode={darkMode}
-            />
+            {/* Render modal only when isOpen is true */}
+            {detailsModalState.isOpen && (
+                 <ExceptionDetailsModal 
+                    open={detailsModalState.isOpen}
+                    onClose={handleCloseDetailsModal}
+                    isLoading={detailsModalState.isLoading}
+                    details={detailsModalState.data}
+                    getDivergenceLabel={getDivergenceLabel}
+                    darkMode={darkMode}
+                 />
+            )}
 
             <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
-                <DialogTitle>Reativar Risco</DialogTitle>
+                <DialogTitle>Reativar Monitoramento de Risco</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
-                        Você tem certeza que deseja reativar o risco para a divergência em "<strong>{exceptionToDelete?.identity?.name}</strong>"?
+                        Você tem certeza que deseja reativar o monitoramento para a divergência em "
+                        <strong>
+                           {exceptionToDelete?.type === 'Identity' 
+                               ? (exceptionToDelete?.identity?.name || exceptionToDelete?.identity?.email || `ID ${exceptionToDelete?.identity?.id}`) 
+                               : (exceptionToDelete?.account?.name || exceptionToDelete?.account?.accountIdInSystem || `Conta ID ${exceptionToDelete?.account?.id}`)
+                           }
+                        </strong>
+                        "?
                         <br/><br/>
-                        Isso removerá a exceção e a divergência voltará a ser exibida nos painéis.
+                        Isso removerá a exceção e a divergência voltará a ser exibida nos painéis, se ainda aplicável.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <MDButton onClick={handleCloseDeleteDialog} color="secondary">Cancelar</MDButton>
-                    <MDButton onClick={handleConfirmDelete} color="error">Confirmar</MDButton>
+                    <MDButton onClick={handleConfirmDelete} color="error">Confirmar Reativação</MDButton>
                 </DialogActions>
             </Dialog>
             
             <Dialog open={bulkDeleteDialogOpen} onClose={handleCloseBulkDeleteDialog}>
-                <DialogTitle>Reativar Todos os Riscos</DialogTitle>
+                <DialogTitle>Reativar Monitoramento de Todos os Riscos</DialogTitle>
                 <DialogContent>
                     <DialogContentText>
                         Você tem certeza que deseja reativar <strong>TODAS as {exceptions.length}</strong> exceções listadas?
                         <br/><br/>
-                        Esta ação não pode ser desfeita e todas as divergências voltarão a ser exibidas nos painéis.
+                        Esta ação não pode ser desfeita e todas as divergências voltarão a ser exibidas nos painéis, se ainda aplicáveis.
                     </DialogContentText>
                 </DialogContent>
                 <DialogActions>
                     <MDButton onClick={handleCloseBulkDeleteDialog} color="secondary">Cancelar</MDButton>
-                    <MDButton onClick={handleConfirmBulkDelete} color="error">Confirmar e Reativar</MDButton>
+                    <MDButton onClick={handleConfirmBulkDelete} color="error">Confirmar e Reativar Todas</MDButton>
                 </DialogActions>
             </Dialog>
             

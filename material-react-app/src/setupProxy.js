@@ -19,6 +19,7 @@ const apiRoutes = [
   "/profiles",
   "/identity-attributes",
   "/rbac-rules",
+  "/accounts",
 ];
 
 // Configuração do proxy com a função onProxyReq

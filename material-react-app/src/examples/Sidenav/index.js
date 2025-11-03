@@ -210,7 +210,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         }}
       >
         <MDTypography variant="caption" color={textColor}>
-          Versão 1.0.0
+          Versão 2.0.0
         </MDTypography>
       </MDBox>
     </SidenavRoot>

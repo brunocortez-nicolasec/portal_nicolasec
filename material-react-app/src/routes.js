@@ -74,7 +74,7 @@ const routes = [
         icon: <Icon fontSize="small">monitoring</Icon>,
         collapse: [
             {
-                name: "Sistemas",
+                name: "Fonte de Dados",
                 key: "sistemas",
                 route: "/observabilidade/sistemas",
                 component: <GerenciarSistemas />,

@@ -16,23 +16,25 @@ enum ImportStatus {
 }
 
 model User {
-  id                   Int                   @id @default(autoincrement())
-  name                 String
-  email                String                @unique
-  password             String
-  profile_image        String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  roleId               Int
-  role                 Role                  @relation(fields: [roleId], references: [id])
-  groups               Group[]
-  packageId            Int?
-  package              Package?              @relation(fields: [packageId], references: [id])
-  importLogs           ImportLog[]
-  systems              System[]
-  divergenceExceptions DivergenceException[]
-  sodRules             SodRule[]
-  rbacRules            RbacRule[]
+  id                        Int                           @id @default(autoincrement())
+  name                      String
+  email                     String                        @unique
+  password                  String
+  profile_image             String?
+  createdAt                 DateTime                      @default(now())
+  updatedAt                 DateTime                      @updatedAt
+  roleId                    Int
+  role                      Role                          @relation(fields: [roleId], references: [id])
+  groups                    Group[]
+  packageId                 Int?
+  package                   Package?                      @relation(fields: [packageId], references: [id])
+  importLogs                ImportLog[]
+  systems                   System[]
+  // Modificado para apontar para os dois novos tipos de exceção
+  divergenceExceptions      IdentityDivergenceException[]
+  accountDivergenceExceptions AccountDivergenceException[]
+  sodRules                  SodRule[]
+  rbacRules                 RbacRule[]
 
   @@map("users")
 }
@@ -110,6 +112,11 @@ model System {
   type              String   @default("CSV")
   connectionDetails Json?
 
+  accounts  Account[]
+  profiles  Profile[]
+  rbacRules RbacRule[]
+  sodRules  SodRule[]
+
   @@map("systems")
 }
 
@@ -130,104 +137,165 @@ model ImportLog {
 }
 
 model Profile {
-  id                Int        @id @default(autoincrement())
-  name              String     @unique
-  identities        Identity[]
-  createdAt         DateTime   @default(now())
-  updatedAt         DateTime   @updatedAt
+  id                Int       @id @default(autoincrement())
+  name              String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   rbacRulesGranted  RbacRule[] @relation("GrantedProfile")
   rbacRulesRequired RbacRule[] @relation("RequiredProfile")
+  systemId          Int
+  system            System    @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  accounts          AccountProfile[]
 
+  @@unique([systemId, name])
   @@map("profiles")
 }
 
 model Identity {
-  id                   Int                   @id @default(autoincrement())
-  sourceSystem         String
-  identityId           String
-  name                 String?
-  email                String?
-  status               String?
-  userType             String?
-  cpf                  String?
-  extraData            Json?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  profileId            Int?
-  profile              Profile?              @relation(fields: [profileId], references: [id])
-  divergenceExceptions DivergenceException[]
+  id               Int                           @id @default(autoincrement())
+  sourceSystem     String
+  identityId       String
+  name             String?
+  email            String?                       @unique
+  status           String?
+  userType         String?
+  cpf              String?                       @unique
+  extraData        Json?
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+  accounts         Account[]
+
+  divergenceExceptions IdentityDivergenceException[] @relation("IdentityExceptions")
 
   @@unique([sourceSystem, identityId])
   @@map("identities")
 }
 
-model DivergenceException {
+model Account {
+  id                Int                            @id @default(autoincrement())
+  accountIdInSystem String
+  name              String?
+  email             String?
+  status            String?
+  userType          String?
+  cpf               String?
+  extraData         Json?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+  identityId        Int?
+  identity          Identity?                      @relation(fields: [identityId], references: [id], onDelete: SetNull)
+  systemId          Int
+  system            System                         @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  profiles          AccountProfile[]
+
+  divergenceExceptions AccountDivergenceException[] @relation("AccountExceptions")
+
+  @@unique([systemId, accountIdInSystem])
+  @@index([identityId])
+  @@index([systemId])
+  @@map("accounts")
+}
+
+model AccountProfile {
+  accountId Int
+  profileId Int
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+  @@id([accountId, profileId])
+  @@index([profileId])
+  @@map("account_profiles")
+}
+
+
+model IdentityDivergenceException {
   id             Int       @id @default(autoincrement())
   divergenceCode String
   justification  String
   createdAt      DateTime  @default(now())
   expiresAt      DateTime?
-  targetSystem   String?
-  identityId     Int
-  identity       Identity  @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  targetSystem   String
   userId         Int
   user           User      @relation(fields: [userId], references: [id])
+  identityId     Int
+  identity       Identity  @relation("IdentityExceptions", fields: [identityId], references: [id], onDelete: Cascade)
 
   @@unique([identityId, divergenceCode, targetSystem])
-  @@map("divergence_exceptions")
+  @@map("identity_divergence_exceptions")
 }
 
+model AccountDivergenceException {
+  id             Int       @id @default(autoincrement())
+  divergenceCode String
+  justification  String
+  createdAt      DateTime  @default(now())
+  expiresAt      DateTime?
+  userId         Int
+  user           User      @relation(fields: [userId], references: [id])
+  accountId      Int
+  account        Account   @relation("AccountExceptions", fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, divergenceCode])
+  @@map("account_divergence_exceptions")
+}
+
+
 model SodRule {
-  id              Int      @id @default(autoincrement())
+  id              Int       @id @default(autoincrement())
   name            String
   description     String?
   areaNegocio     String?
   processoNegocio String?
   owner           String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   userId          Int
-  user            User     @relation(fields: [userId], references: [id])
-  ruleType        String   // Ex: ROLE_X_ROLE, ATTR_X_ROLE, ATTR_X_SYSTEM
-
-  // --- Campos para Valor A ---
-  valueAType      String   // PROFILE ou ATTRIBUTE
-  valueAId        String   // ID do Perfil (Int como String) ou ID/Nome do Atributo (String)
-
-  // --- NOVOS CAMPOS PARA valueA QUANDO valueAType = "ATTRIBUTE" ---
-  valueAOperator  String? // Operador (ex: "equals", "contains") - Opcional (?) pois só se aplica a ATTR
-  valueAValue     String? // Valor específico do atributo (ex: "Ativo") - Opcional (?) pois só se aplica a ATTR
-
-  // --- Campos para Valor B ---
-  valueBType      String   // PROFILE ou SYSTEM (ou ATTRIBUTE no futuro?)
-  valueBId        String   // ID do Perfil (Int como String) ou ID do Sistema (Int como String)
-
-  @@unique([userId, valueAType, valueAId, valueBType, valueBId]) // Unique constraint pode precisar ser revisada se valueAValue/Operator forem incluídos
+  user            User      @relation(fields: [userId], references: [id])
+  
+  // --- INÍCIO DA CORREÇÃO ---
+  systemId        Int?      // <<< CORRIGIDO: Agora é opcional
+  system          System?   @relation(fields: [systemId], references: [id], onDelete: Cascade) // <<< CORRIGIDO: @relation mantido e opcional
+  // --- FIM DA CORREÇÃO ---
+  
+  ruleType        String
+  valueAType      String
+  valueAId        String
+  valueAOperator  String?
+  valueAValue     String?
+  valueBType      String
+  valueBId        String
+  
+  // Removida a regra unique que falharia com systemId null
+  // @@unique([userId, systemId, valueAType, valueAId, valueAOperator, valueAValue, valueBType, valueBId], name: "UniqueSodRuleByUserSystem")
+  
+  @@index([systemId])
   @@map("sod_rules")
 }
 
 model RbacRule {
-  id                      Int      @id @default(autoincrement())
+  id                      Int       @id @default(autoincrement())
   name                    String
   description             String?
   areaNegocio             String?
   processoNegocio         String?
   owner                   String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
   userId                  Int
-  user                    User     @relation(fields: [userId], references: [id])
+  user                    User      @relation(fields: [userId], references: [id])
+  systemId                Int
+  system                  System    @relation(fields: [systemId], references: [id], onDelete: Cascade)
   conditionType           String
   grantedProfileId        Int
-  grantedProfile          Profile  @relation("GrantedProfile", fields: [grantedProfileId], references: [id], onDelete: Cascade)
+  grantedProfile          Profile   @relation("GrantedProfile", fields: [grantedProfileId], references: [id], onDelete: Cascade)
   requiredProfileId       Int?
-  requiredProfile         Profile? @relation("RequiredProfile", fields: [requiredProfileId], references: [id], onDelete: SetNull)
+  requiredProfile         Profile?  @relation("RequiredProfile", fields: [requiredProfileId], references: [id], onDelete: SetNull)
   requiredAttributeId     String?
   requiredAttributeValue  String?
   requiredAttributeOperator String?
   logicalOperator         String?
   attributeConditions     RbacAttributeCondition[]
-
+  @@index([systemId])
   @@map("rbac_rules")
 }
 

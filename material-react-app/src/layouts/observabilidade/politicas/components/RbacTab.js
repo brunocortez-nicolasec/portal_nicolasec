@@ -1,7 +1,6 @@
-// src/layouts/observabilidade/politicas/components/RbacTab.js
-
 import { useState, useEffect } from "react";
 import axios from "axios";
+import PropTypes from 'prop-types'; // <<< ADICIONADO: Para validar as novas props
 
 // @mui material components
 import Icon from "@mui/material/Icon";
@@ -20,55 +19,54 @@ import RbacTable from "./rbac/RbacTable";
 import RbacModal from "./rbac/RbacModal";
 
 // --- Componente Principal RbacTab ---
-function RbacTab() {
+// <<< 1. Aceitar as props do GerenciarPoliticas (pai) >>>
+function RbacTab({ allSystems, allProfiles, allAttributes }) {
   const [controller] = useMaterialUIController();
   const { token } = controller;
 
+  // <<< 2. Simplificar estados (loadingData agora é só para as regras) >>>
   const [loadingData, setLoadingData] = useState(true);
   const [rbacRules, setRbacRules] = useState([]);
-  const [allProfiles, setAllProfiles] = useState([]);
-  const [allAttributes, setAllAttributes] = useState([]);
+  // const [allProfiles, setAllProfiles] = useState([]); // <<< REMOVIDO (Vem das props)
+  // const [allAttributes, setAllAttributes] = useState([]); // <<< REMOVIDO (Vem das props)
   
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingRule, setEditingRule] = useState(null); // Armazena a regra para edição
+  const [editingRule, setEditingRule] = useState(null);
   
   const [snackbar, setSnackbar] = useState({ open: false, color: "info", title: "", message: "" });
 
   const closeSnackbar = () => setSnackbar({ ...snackbar, open: false });
   const showSnackbar = (color, title, message) => setSnackbar({ open: true, color, title, message });
 
+  // <<< 3. Simplificar fetchInitialData para buscar APENAS rbac-rules >>>
   const fetchInitialData = async () => {
     if (!token) return;
     setLoadingData(true);
     try {
-      const [rulesRes, profilesRes, attributesRes] = await Promise.all([
-        axios.get("/rbac-rules", { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get("/profiles", { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get("/identity-attributes", { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+      // Busca apenas as regras. Perfis, Sistemas e Atributos vêm das props.
+      const rulesRes = await axios.get("/rbac-rules", { headers: { Authorization: `Bearer ${token}` } });
       setRbacRules(rulesRes.data);
-      setAllProfiles(profilesRes.data);
-      setAllAttributes(attributesRes.data);
     } catch (error) {
       console.error("Erro ao buscar dados RBAC:", error);
-      showSnackbar("error", "Erro de Rede", "Falha ao carregar dados RBAC.");
+      showSnackbar("error", "Erro de Rede", "Falha ao carregar regras RBAC.");
     } finally {
       setLoadingData(false);
     }
   };
 
+  // useEffect agora só busca as regras quando o token muda.
   useEffect(() => {
     if (token) fetchInitialData();
   }, [token]);
 
   const handleOpenModal = (rule = null) => {
-    setEditingRule(rule); // Define a regra a ser editada (ou null para nova)
+    setEditingRule(rule);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setEditingRule(null); // Limpa a regra em edição
+    setEditingRule(null);
   };
 
   const handleDelete = async (ruleId) => {
@@ -76,7 +74,7 @@ function RbacTab() {
       try {
         await axios.delete(`/rbac-rules/${ruleId}`, { headers: { Authorization: `Bearer ${token}` } });
         showSnackbar("success", "Sucesso", "Regra RBAC deletada.");
-        fetchInitialData(); // Recarrega
+        fetchInitialData(); // Recarrega (apenas as regras)
       } catch (error) {
         console.error("Erro ao deletar regra RBAC:", error);
         showSnackbar("error", "Erro ao Deletar", error.response?.data?.message || "Erro.");
@@ -96,30 +94,28 @@ function RbacTab() {
       </MDBox>
 
       {/* Seção da Tabela */}
+      {/* <<< 4. Passar props recebidas para a Tabela >>> */}
       <RbacTable
         loading={loadingData}
         rules={rbacRules}
-        profiles={allProfiles}
-        attributes={allAttributes}
-        onEdit={handleOpenModal} // Passa a função de abrir o modal
+        profiles={allProfiles}     // Passa a prop recebida
+        attributes={allAttributes} // Passa a prop recebida
+        onEdit={handleOpenModal}
         onDelete={handleDelete}
       />
 
       {/* --- Modal de Criação/Edição RBAC --- */}
-      {/* O Modal só é renderizado (e busca seus dados) quando necessário, 
-        mas para evitar complexidade, mantemos ele montado e apenas o controlamos com 'open'.
-        Se os 'allProfiles' e 'allAttributes' forem MUITO grandes, poderíamos otimizar
-        para só renderizar o Modal quando 'isModalOpen' for true.
-      */}
+      {/* <<< 5. Passar TODAS as props (incluindo allSystems) para o Modal >>> */}
       <RbacModal
         open={isModalOpen}
         onClose={handleCloseModal}
-        onRefresh={fetchInitialData}
+        onRefresh={fetchInitialData} // onRefresh agora só busca regras (correto)
         showSnackbar={showSnackbar}
         token={token}
         ruleToEdit={editingRule}
-        profiles={allProfiles}
-        attributes={allAttributes}
+        systems={allSystems}       // <<< Passa a nova prop 'allSystems'
+        profiles={allProfiles}     // <<< Passa a prop recebida
+        attributes={allAttributes} // <<< Passa a prop recebida
       />
 
       {/* --- Snackbar para Notificações --- */}
@@ -136,5 +132,13 @@ function RbacTab() {
     </>
   );
 }
+
+// --- 6. Adicionar PropTypes para as novas props ---
+RbacTab.propTypes = {
+  allSystems: PropTypes.arrayOf(PropTypes.object).isRequired,
+  allProfiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  allAttributes: PropTypes.arrayOf(PropTypes.object).isRequired,
+};
+// --- Fim da Adição ---
 
 export default RbacTab;
