@@ -11,7 +11,8 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import SidenavCollapse from "examples/Sidenav/SidenavCollapse";
 import SidenavRoot from "examples/Sidenav/SidenavRoot";
-import sidenavLogoLabel from "examples/Sidenav/styles/sidenav";
+// O estilo que precisamos já está importado aqui
+import sidenavLogoLabel from "examples/Sidenav/styles/sidenav"; 
 import {
   useMaterialUIController,
   setMiniSidenav,
@@ -47,6 +48,8 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
 
   useEffect(() => {
     function handleMiniSidenav() {
+      // Esta função é chamada tanto no clique quanto no resize.
+      // Ela que controla a variável 'miniSidenav'.
       setMiniSidenav(dispatch, window.innerWidth < 1200);
       setTransparentSidenav(dispatch, window.innerWidth < 1200 ? false : transparentSidenav);
       setWhiteSidenav(dispatch, window.innerWidth < 1200 ? false : whiteSidenav);
@@ -173,13 +176,12 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
             <Icon sx={{ fontWeight: "bold" }}>close</Icon>
           </MDTypography>
         </MDBox>
-        {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
         <MDBox component={NavLink} to="/" display="flex" alignItems="center" justifyContent="center">
           {brand && <MDBox component="img" src={brand} alt="Brand" width="2rem" />}
           {brandName && (
             <MDBox
               width={!brandName && "100%"}
-              sx={(theme) => sidenavLogoLabel(theme, { miniSidenav })}
+              sx={(theme) => sidenavLogoLabel(theme, { miniSidenav })} // <<< O estilo que funciona
             >
               <MDTypography component="h6" variant="button" fontWeight="medium" color={textColor}>
                 {brandName}
@@ -187,10 +189,9 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
             </MDBox>
           )}
         </MDBox>
-        {/* ======================== FIM DA ALTERAÇÃO ========================= */}
       </MDBox>
 
-      <List>
+      <List sx={{ mb: 2 }}> {/* Adicionado um margin-bottom na lista para espaço */}
         <Divider
           light={
             (!darkMode && !whiteSidenav && !transparentSidenav) ||
@@ -200,19 +201,27 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
         {renderRoutes}
       </List>
 
+      {/* --- INÍCIO DA CORREÇÃO --- */}
+      {/* Este Box será empurrado para o final pelo 'marginTop: auto' */}
       <MDBox
-        sx={{
-          position: "absolute",
-          bottom: "1rem",
-          left: 0,
-          right: 0,
+        sx={(theme) => ({
+          // 1. Usa 'margin-top: auto' para empurrá-lo para o final do flex-container
+          marginTop: "auto",
+          
+          // 2. Usa o estilo 'sidenavLogoLabel' para desaparecer quando 'miniSidenav' for true
+          ...sidenavLogoLabel(theme, { miniSidenav }), 
+          
+          // 3. Estilos de posicionamento e espaçamento
+          paddingTop: "1rem", // Espaço acima
+          paddingBottom: "1rem", // Espaço abaixo
           textAlign: "center",
-        }}
+        })}
       >
         <MDTypography variant="caption" color={textColor}>
           Versão 2.0.0
         </MDTypography>
       </MDBox>
+      {/* --- FIM DA CORREÇÃO --- */}
     </SidenavRoot>
   );
 }
@@ -220,13 +229,13 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
 Sidenav.defaultProps = {
   color: "info",
   brand: "",
-  brandName: "", // Alterado para string vazia para não ser mais obrigatório
+  brandName: "",
 };
 
 Sidenav.propTypes = {
   color: PropTypes.oneOf(["primary", "secondary", "info", "success", "warning", "error", "dark"]),
   brand: PropTypes.string,
-  brandName: PropTypes.string, // Alterado para não ser mais .isRequired
+  brandName: PropTypes.string,
   routes: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 

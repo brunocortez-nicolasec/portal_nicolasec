@@ -145,10 +145,13 @@ const getSystemMetrics = async (req, res) => {
             return acc;
         }, {});
 
+        // --- INÍCIO DA CORREÇÃO 1 ---
+        // Acesso privilegiado (kpiAdicional) SÓ conta perfis (e usa 'includes' minúsculo)
         const acessoPrivilegiado = systemAccounts.filter(acc =>
             acc.status === 'Ativo' &&
             acc.profiles.some(p => p.profile.name.toLowerCase().includes('admin'))
         ).length;
+        // --- FIM DA CORREÇÃO 1 ---
 
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -172,8 +175,6 @@ const getSystemMetrics = async (req, res) => {
             accountExceptions.map(ex => `${ex.accountId}_${ex.divergenceCode}`)
         );
         
-        // --- INÍCIO DA CORREÇÃO (Etapa 1 - Lógica de SoD) ---
-
         // 3. Buscar Regras de SOD (TODOS OS TIPOS)
         const sodWhere = {}; 
         
@@ -187,7 +188,6 @@ const getSystemMetrics = async (req, res) => {
             ];
         }
 
-        // --- CORREÇÃO AQUI: Checa se 'system' existe antes de usar toUpperCase() ---
         const activeSodRules = (system && system.toUpperCase() !== 'RH')
             ? await prisma.sodRule.findMany({
                 where: sodWhere,
@@ -201,11 +201,8 @@ const getSystemMetrics = async (req, res) => {
                     systemId: true 
                 }
               })
-            : []; // Se for "Geral" (system=undefined) ou "RH", a lógica de 'isGeneral' cuida disso
+            : []; 
         
-        // --- FIM DA CORREÇÃO ---
-        
-        // Agrupa as regras por systemId para performance na visão "Geral"
         const rulesBySystemId = activeSodRules.reduce((acc, rule) => {
             const key = rule.systemId;
             if (!acc[key]) {
@@ -234,8 +231,11 @@ const getSystemMetrics = async (req, res) => {
                                  (account.email && rhMapByEmail.get(cleanText(account.email)));
             
             let hasDivergence = false;
-            const isAdmin = account.profiles.some(p => p.profile.name.toLowerCase().includes('admin')) || 
-                            (account.userType || '').toLowerCase().includes('admin');
+            
+            // --- INÍCIO DA CORREÇÃO 2 (BUG 6 vs 4) ---
+            // 'isAdmin' agora é definido APENAS pelos perfis da conta.
+            const isAdmin = account.profiles.some(p => p.profile.name.toLowerCase().includes('admin'));
+            // --- FIM DA CORREÇÃO 2 ---
             
             if (!rhEquivalent) {
                 if (!accountExceptionsSet.has(`${account.id}_ORPHAN_ACCOUNT`)) {
@@ -289,7 +289,6 @@ const getSystemMetrics = async (req, res) => {
                     for (const rule of applicableSodRules) {
                         let violationFound = false;
 
-                        // --- Caso 1: Perfil x Perfil ---
                         if (rule.ruleType === 'ROLE_X_ROLE') {
                             if (accountProfileIds.size < 2) continue;
                             const ruleProfileId1 = parseInt(rule.valueAId, 10);
@@ -301,7 +300,6 @@ const getSystemMetrics = async (req, res) => {
                             }
                         }
                         
-                        // --- Caso 2: Atributo x Perfil (O SEU CASO) ---
                         else if (rule.ruleType === 'ATTR_X_ROLE') {
                             if (!rhEquivalent) continue; 
 

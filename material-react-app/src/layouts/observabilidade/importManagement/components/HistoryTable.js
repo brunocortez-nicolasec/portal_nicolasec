@@ -81,9 +81,6 @@ function HistoryTable({ history, isLoading, onOpenDetails, onOpenDelete }) {
                     <MDTypography component="a" color="text" sx={{ cursor: "pointer" }} onClick={() => onOpenDetails(log)}>
                         <Icon>visibility</Icon>
                     </MDTypography>
-                    <MDTypography component="a" color="error" sx={{ cursor: "pointer" }} onClick={() => onOpenDelete(log.id)}>
-                        <Icon>delete</Icon>
-                    </MDTypography>
                 </MDBox>
             )
         },

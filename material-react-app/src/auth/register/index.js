@@ -87,7 +87,15 @@ function Register() {
       // Passa os dados formatados para AuthService.register
       const response = await AuthService.register(registrationData); // <<< USA registrationData
 
-      const token = response.token; // Assumindo que a API retorna um token
+      // --- INÍCIO DA CORREÇÃO DO BUG ---
+      // O backend retorna 'access_token', não 'token'
+      const token = response.access_token;
+      // --- FIM DA CORREÇÃO DO BUG ---
+
+      if (!token) {
+        throw new Error("Token não recebido do backend após o registro.");
+      }
+
       const userResponse = await axios.get("/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
