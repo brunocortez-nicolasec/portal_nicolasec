@@ -1,5 +1,3 @@
-// material-react-app/src/layouts/observabilidade/sistemas/components/DataSourceModal.js
-
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { useTheme } from "@mui/material/styles";
@@ -8,15 +6,17 @@ import { useTheme } from "@mui/material/styles";
 import Modal from "@mui/material/Modal";
 import Card from "@mui/material/Card";
 import Grid from "@mui/material/Grid";
-import Select from "@mui/material/Select";
-import MenuItem from "@mui/material/MenuItem";
+// --- MODIFICAÇÃO 1: Importações alteradas ---
+import Autocomplete from "@mui/material/Autocomplete"; // Usaremos este
+// import Select from "@mui/material/Select"; // Não mais necessário
+// import MenuItem from "@mui/material/MenuItem"; // Não mais necessário
 import Checkbox from "@mui/material/Checkbox";
 import FormControlLabel from "@mui/material/FormControlLabel";
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
-import MDInput from "components/MDInput";
+import MDInput from "components/MDInput"; // Usaremos este para o Autocomplete
 import MDButton from "components/MDButton";
 
 function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
@@ -25,7 +25,8 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
   const defaultState = {
     name: "",
     databaseType: "CSV",
-    description: "", // Descrição é um campo padrão
+    description: "",
+    origem: "", // Campo "Origem"
     username: "",
     serverName: "",
     port: "",
@@ -38,7 +39,17 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
 
   const [formData, setFormData] = useState(defaultState);
 
-  // Estilo para corrigir a cor do texto das labels das checkboxes no modo escuro
+  // --- MODIFICAÇÃO 2: Opções para os Autocompletes ---
+  const tipoFonteOptions = [
+    "CSV",
+    "PostgreSQL",
+    "Oracle",
+    "Microsoft SQL Server",
+    "Other"
+  ];
+
+  const origemOptions = ["RH", "IDM", "Sistema"];
+
   const checkboxLabelStyles = {
     "& .MuiTypography-root": {
       color: darkMode ? theme.palette.white.main : theme.palette.text.primary,
@@ -49,7 +60,6 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
   useEffect(() => {
     if (open) {
       if (initialData) {
-        // Garante que o estado inicialize corretamente, mesclando dados existentes com o padrão
         setFormData({ ...defaultState, ...initialData });
       } else {
         setFormData(defaultState);
@@ -65,7 +75,6 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
       Other: "",
       CSV: "",
     };
-    // Garante que a mudança de porta só ocorra se o usuário não estiver editando
     if (!initialData) {
       if (Object.keys(defaults).includes(formData.databaseType)) {
         setFormData((prev) => ({ ...prev, port: defaults[prev.databaseType] }));
@@ -80,9 +89,13 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
       [name]: type === "checkbox" ? checked : value,
     }));
   };
-
-  const handleSelectChange = (e) => {
-    setFormData((prev) => ({ ...prev, databaseType: e.target.value }));
+  
+  // --- MODIFICAÇÃO 3: Handler para o Autocomplete ---
+  const handleAutocompleteChange = (name, newValue) => {
+    setFormData((prev) => ({
+      ...prev,
+      [name]: newValue,
+    }));
   };
 
   const handleSave = () => {
@@ -93,8 +106,7 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
   const renderDynamicFields = () => {
     switch (formData.databaseType) {
       case "CSV":
-        // O campo Descrição foi removido daqui
-        return null; 
+        return null;
       case "PostgreSQL":
         return (
           <>
@@ -152,18 +164,35 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
             <Grid item xs={12}>
               <MDInput label="Name" name="name" value={formData.name} onChange={handleInputChange} fullWidth autoFocus />
             </Grid>
+            
             <Grid item xs={12}>
-              <MDTypography variant="caption" fontWeight="medium" color="text">Tipo de Fonte</MDTypography>
-              <Select name="databaseType" value={formData.databaseType} onChange={handleSelectChange} fullWidth sx={{ minHeight: "44px" }}>
-                <MenuItem value="CSV">CSV</MenuItem>
-                <MenuItem value="PostgreSQL">PostgreSQL</MenuItem>
-                <MenuItem value="Oracle">Oracle</MenuItem>
-                <MenuItem value="Microsoft SQL Server">Microsoft SQL Server</MenuItem>
-                <MenuItem value="Other">Other</MenuItem>
-              </Select>
+              <Autocomplete
+                options={origemOptions}
+                value={formData.origem || null}
+                onChange={(event, newValue) => {
+                  handleAutocompleteChange("origem", newValue);
+                }}
+                renderInput={(params) => (
+                  <MDInput {...params} label="Origem" />
+                )}
+                fullWidth
+              />
             </Grid>
 
-            {/* ======================= INÍCIO DA ALTERAÇÃO ======================= */}
+            <Grid item xs={12}>
+              <Autocomplete
+                options={tipoFonteOptions}
+                value={formData.databaseType || null}
+                onChange={(event, newValue) => {
+                  handleAutocompleteChange("databaseType", newValue);
+                }}
+                renderInput={(params) => (
+                  <MDInput {...params} label="Tipo de Fonte" />
+                )}
+                fullWidth
+              />
+            </Grid>
+
             <Grid item xs={12}>
               <MDInput
                 label="Descrição (Opcional)"
@@ -175,7 +204,6 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
                 rows={3}
               />
             </Grid>
-            {/* ======================== FIM DA ALTERAÇÃO ========================= */}
 
             {renderDynamicFields()}
 
