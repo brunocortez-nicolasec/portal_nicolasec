@@ -1,0 +1,41 @@
+id,name,email,status,userType,perfil,ultimo_login
+ana.silva@example.com,Ana Silva,ana.silva@example.com,Ativo,Funcionário,Usuário,2025-09-30
+bruno.fernandes@example.com,Bruno Fernandes,bruno.fernandes@example.com,Ativo,Funcionário,Admin,2025-10-01
+carla.souza@example.com,Carla Souza,carla.souza@example.com,Ativo,Funcionário,Usuário,2025-09-15
+daniel.alves@example.com,Daniel Alves,daniel.alves@example.com,Inativo,Funcionário,Usuário,2025-08-01
+eliana.costa@example.com,Eliana Costa,eliana.costa@example.com,Ativo,Terceirizado,Usuário,2025-10-02
+fabio.gomes@example.com,Fábio Gomes,fabio.gomes@example.com,Ativo,Terceirizado,Usuário,2025-09-28
+gisele.lima@example.com,Gisele Lima,gisele.lima@example.com,Ativo,Funcionário,Usuário,2024-05-10
+helena.ribeiro@example.com,Helena Ribeiro,helena.ribeiro@example.com,Ativo,Estagiário,Usuário,2025-09-29
+igor.martins@example.com,Igor Martins,igor.martins@example.com,Ativo,Funcionário,Admin,2025-09-25
+julia.santos@example.com,Julia Santos,julia.santos@example.com,Inativo,Terceirizado,Usuário,2025-07-20
+kleber.pereira@example.com,Kleber Pereira,kleber.pereira@example.com,Ativo,Prestador de Serviço,Usuário,2025-09-22
+lucas.oliveira@example.com,Lucas Oliveira,lucas.oliveira@example.com,Ativo,Funcionário,Usuário,2025-09-30
+maria.clara@example.com,Maria Clara,maria.clara@example.com,Ativo,Funcionário,Usuário,2024-01-15
+nelson.rodrigues@example.com,Nelson Rodrigues,nelson.rodrigues@example.com,Ativo,Funcionário,Usuário,2025-09-18
+otavio.mendes@example.com,Otávio Mendes,otavio.mendes@example.com,Inativo,Funcionário,Usuário,2025-03-03
+paula.fernandes@example.com,Paula Fernandes,paula.fernandes@example.com,Ativo,Terceirizado,Usuário,
+quintino.barbosa@example.com,Quintino Barbosa,quintino.barbosa@example.com,Ativo,Funcionário,Usuário,2025-08-30
+ricardo.neves@example.com,Ricardo Neves,ricardo.neves@example.com,Ativo,Estagiário,Usuário,2025-09-27
+simone.andrade@example.com,Simone Andrade,simone.andrade@example.com,Ativo,Funcionário,Admin,2025-10-01
+tiago.leifert@example.com,Tiago Leifert,tiago.leifert@example.com,Inativo,Terceirizado,Usuário,2025-06-11
+ursula.bezerra@example.com,Ursula Bezerra,ursula.bezerra@example.com,Ativo,Funcionário,Usuário,2025-09-20
+vania.abreu@example.com,Vania Abreu,vania.abreu@example.com,Ativo,Funcionário,Usuário,2025-09-25
+wagner.moura@example.com,Wagner Moura,wagner.moura@example.com,Ativo,Prestador de Serviço,Usuário,2024-03-20
+ximena.santos@example.com,Ximena Santos,ximena.santos@example.com,Ativo,Funcionário,Usuário,2025-09-19
+yasmin.brunet@example.com,Yasmin Brunet,yasmin.brunet@example.com,Inativo,Funcionário,Usuário,2025-02-01
+zeca.pagodinho@example.com,Zeca Pagodinho,zeca.pagodinho@example.com,Ativo,,Usuário,2025-09-29
+amanda.guedes@example.com,Amanda Guedes,amanda.guedes@example.com,Ativo,Funcionário,Usuário,2025-10-01
+bernardo.reis@example.com,Bernardo Reis,bernardo.reis@example.com,Ativo,Terceirizado,Usuário,2025-09-28
+cecilia.meireles@example.com,Cecília Meireles,cecilia.meireles@example.com,Ativo,Funcionário,Usuário,2025-09-22
+diogo.nogueira@example.com,Diogo Nogueira,diogo.nogueira@example.com,Inativo,Estagiário,Usuário,2025-08-10
+ester.exposito@example.com,Ester Expósito,ester.exposito@example.com,Ativo,Funcionário,Usuário,2025-09-30
+fernanda.montenegro@example.com,Fernanda Montenegro,fernanda.montenegro@example.com,Ativo,Funcionário,Admin,2025-10-02
+gustavo.lima@example.com,Gustavo Lima,gustavo.lima@example.com,Ativo,Prestador de Serviço,Usuário,2025-09-17
+heloisa.pacheco@example.com,Heloísa Pacheco,heloisa.pacheco@example.com,Inativo,Funcionário,Usuário,2025-01-05
+isabela.garcia@example.com,Isabela Garcia,isabela.garcia@example.com,Ativo,Funcionário,Usuário,2025-09-26
+joao.gordo@example.com,João Gordo,joao.gordo@example.com,Ativo,Terceirizado,Usuário,
+laura.pausini@example.com,Laura Pausini,laura.pausini@example.com,Ativo,,Usuário,2025-09-24
+marcelo.d2@example.com,Marcelo D2,marcelo.d2@example.com,Ativo,Funcionário,Usuário,2025-09-23
+noel.rosa@example.com,Noel Rosa,noel.rosa@example.com,Inativo,Funcionário,Usuário,2024-11-11
+oscar.schmidt@example.com,Oscar Schmidt,oscar.schmidt@example.com,Ativo,Funcionário,Usuário,2025-09-12

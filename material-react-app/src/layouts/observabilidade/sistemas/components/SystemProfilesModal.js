@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
+import PropTypes from "prop-types";
 import axios from "axios";
-import { useMaterialUIController } from "context";
-import PropTypes from 'prop-types';
 
 // @mui material components
 import Dialog from "@mui/material/Dialog";
@@ -11,6 +10,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import CircularProgress from "@mui/material/CircularProgress";
 import DialogContentText from "@mui/material/DialogContentText";
 import Tooltip from "@mui/material/Tooltip";
+import Icon from "@mui/material/Icon"; // <<< Importação do Icon (estava faltando no seu)
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -19,10 +19,27 @@ import MDTypography from "components/MDTypography";
 import MDSnackbar from "components/MDSnackbar";
 import DataTable from "examples/Tables/DataTable";
 import MDBadge from "components/MDBadge";
+import MDAvatar from "components/MDAvatar"; 
+import defaultAvatar from "assets/images/default-avatar.jpg"; 
 
-function SystemProfilesModal({ open, onClose, system }) {
-  const [controller] = useMaterialUIController();
-  const { token } = controller;
+// Helper 'Author'
+function Author({ image, name }) {
+  return (
+    <MDBox display="flex" alignItems="center" lineHeight={1}>
+      <MDAvatar src={image || defaultAvatar} name={name} size="sm" />
+      <MDBox ml={2} lineHeight={1}>
+        <MDTypography display="block" variant="button" fontWeight="medium">
+          {name}
+        </MDTypography>
+      </MDBox>
+    </MDBox>
+  );
+}
+Author.propTypes = { image: PropTypes.string, name: PropTypes.string.isRequired };
+
+
+// Renomeada a prop 'system' para 'dataSource' para clareza
+function SystemProfilesModal({ open, onClose, dataSource, onDataClear }) {
   const [dataList, setDataList] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -34,8 +51,13 @@ function SystemProfilesModal({ open, onClose, system }) {
   const closeSnackbar = () => setSnackbar({ ...snackbar, open: false });
   const showSnackbar = (color, title, message) => setSnackbar({ open: true, color, title, message });
 
+  const api = axios.create({
+    baseURL: "/",
+    headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
+  });
+
   const fetchDataForSystem = async (signal) => {
-    if (!open || !system || !token) {
+    if (!open || !dataSource || !dataSource.id) {
       setDataList([]);
       setLoading(false);
       setError(null);
@@ -46,36 +68,22 @@ function SystemProfilesModal({ open, onClose, system }) {
     setError(null);
     setDataList([]);
 
-    const isRh = system.id === 'rh' || system.name?.toUpperCase() === 'RH';
-    let url = '';
-    let params = {};
+    // --- INÍCIO DA CORREÇÃO ---
+    // Corrigido o endpoint de /imports/data... para /systems/:id/data
+    let url = `/systems/${dataSource.id}/data`; 
+    // --- FIM DA CORREÇÃO ---
 
     try {
-      if (isRh) {
-        // Lógica para RH
-        url = `/identities`;
-        params = { sourceSystem: 'RH' };
-      } else {
-        // Lógica para Outros Sistemas (Accounts)
-        url = `/accounts`;
-        params = { systemId: system.id, includeProfiles: true };
-      }
-
-      const response = await axios.get(url, {
-        headers: { Authorization: `Bearer ${token}` },
-        params: params,
-        signal: signal,
-      });
-
+      const response = await api.get(url, { signal });
       setDataList(response.data || []);
 
     } catch (err) {
       if (!axios.isCancel(err)) {
-          console.error(`Erro ao buscar dados para o sistema ${system.name}:`, err);
-          setError(err.response?.data?.message || `Não foi possível carregar os dados de ${system.name}.`);
-          setDataList([]);
+        console.error(`Erro ao buscar dados para a fonte ${dataSource.name_datasource}:`, err);
+        setError(err.response?.data?.message || `Não foi possível carregar os dados de ${dataSource.name_datasource}.`);
+        setDataList([]);
       } else {
-          console.log("Requisição de busca cancelada.");
+        console.log("Requisição de busca cancelada.");
       }
     } finally {
        if (!signal?.aborted) {
@@ -91,105 +99,111 @@ function SystemProfilesModal({ open, onClose, system }) {
     return () => {
       abortController.abort();
     };
-  }, [open, system, token]);
+  }, [open, dataSource]); 
 
   const handleOpenConfirm = () => setIsConfirmOpen(true);
   const handleCloseConfirm = () => setIsConfirmOpen(false);
 
   const handleConfirmClear = async () => {
-    if (!system || isClearing) return;
+    if (!dataSource || isClearing) return;
 
     setIsClearing(true);
     handleCloseConfirm();
 
-    const isRh = system.id === 'rh' || system.name?.toUpperCase() === 'RH';
-    let url = '';
-    let params = {};
-
+    // --- INÍCIO DA CORREÇÃO ---
+    // Corrigido o endpoint de /imports/data... para /systems/:id/data
     try {
-      if (isRh) {
-        url = `/identities`;
-        params = { sourceSystem: 'RH' };
-      } else {
-        url = `/accounts`;
-        params = { systemId: system.id };
+      await api.delete(`/systems/${dataSource.id}/data`);
+
+      showSnackbar("success", "Sucesso", `Dados da fonte "${dataSource.name_datasource}" limpos.`);
+      setDataList([]);
+      
+      if (onDataClear) {
+        onDataClear();
       }
 
-      await axios.delete(url, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: params
-      });
-
-      showSnackbar("success", "Sucesso", `Dados do sistema "${system.name}" limpos.`);
-      setDataList([]);
-
     } catch (err) {
-        console.error(`Erro ao limpar dados do sistema ${system.name}:`, err);
+        console.error(`Erro ao limpar dados da fonte ${dataSource.name_datasource}:`, err);
         showSnackbar("error", "Erro ao Limpar", err.response?.data?.message || "Não foi possível limpar os dados.");
     } finally {
         setIsClearing(false);
     }
+    // --- FIM DA CORREÇÃO ---
   };
 
-  const isRhSystem = system?.id === 'rh' || system.name?.toUpperCase() === 'RH';
+  const origem = dataSource?.origem_datasource;
 
-  const columns = useMemo(() => [
+  const columns = useMemo(() => {
+    let baseColumns = [
       { 
-        Header: "ID no Sistema", 
-        accessor: "accountIdInSystem",
-        Cell: ({ row: { original } }) => (
-            <MDTypography variant="caption">
-                {isRhSystem ? original.identityId : original.accountIdInSystem}
-            </MDTypography>
-        )
+        Header: "Nome", 
+        accessor: "name", 
+        Cell: ({ row: { original } }) => {
+          const name = original.name_hr || original.name_idm || original.name_account || '-';
+          const image = original.profile_image; 
+          return <Author image={image} name={name} />;
+        }
       },
-      { Header: "Nome", accessor: "name", Cell: ({value}) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
-      { Header: "Email", accessor: "email", Cell: ({value}) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
+      { 
+        Header: "Email", 
+        accessor: "email",
+        Cell: ({ row: { original } }) => {
+          const email = original.email_hr || original.email_idm || original.email_account || '-';
+          return <MDTypography variant="caption">{email}</MDTypography>
+        }
+      },
       { 
         Header: "Status", 
         accessor: "status", 
         align: "center", 
-        Cell: ({ value }) => (
-            value ? 
+        Cell: ({ row: { original } }) => {
+          const status = original.status_hr || original.status_idm || original.status_account;
+          return status ? 
             <MDBadge 
-                badgeContent={value} 
-                color={value.toLowerCase() === 'ativo' ? 'success' : 'error'} 
-                variant="gradient" 
-                size="sm" 
+              badgeContent={status} 
+              color={status.toLowerCase() === 'ativo' ? 'success' : 'error'} 
+              variant="gradient" 
+              size="sm" 
+              container
             /> : 
             <MDTypography variant="caption">-</MDTypography>
-        )
-      },
-      { 
-        Header: "Perfil (Sistema)", 
-        accessor: "profiles",
-        align: "left", 
-        Cell: ({ value }) => { // value é o array [ { id: 1, name: 'Admin' } ]
-            if (isRhSystem || !Array.isArray(value) || value.length === 0) {
-                 return <MDTypography variant="caption">N/A (RH)</MDTypography>;
-            }
-            // --- INÍCIO DA CORREÇÃO ---
-            // Removemos '.profile' pois o backend já simplificou o array
-            const profileNames = value.map(p => p?.name).filter(Boolean).join(', ');
-            // --- FIM DA CORREÇÃO ---
-            return <MDTypography variant="caption">{profileNames || 'Nenhum'}</MDTypography>;
         }
       },
-      {
-         Header: "Vínculo (Identidade)",
-         accessor: "identity",
-         Cell: ({ value }) => (
-            <MDTypography variant="caption">
-                {isRhSystem ? "Fonte Autoritativa" : (value ? value.name || value.email || `ID: ${value.id}` : 'Sem Vínculo (Órfã)')}
-            </MDTypography>
-         )
-      }
-  ], [isRhSystem]); // Dependência correta
+    ];
+
+    if (origem === "RH") {
+      baseColumns.unshift({ 
+        Header: "ID (RH)", 
+        accessor: "identity_id_hr",
+        Cell: ({value}) => <MDTypography variant="caption">{value}</MDTypography>
+      });
+      baseColumns.push({ 
+        Header: "CPF", 
+        accessor: "cpf_hr",
+        Cell: ({value}) => <MDTypography variant="caption">{value || '-'}</MDTypography>
+      });
+    } else if (origem === "SISTEMA") {
+      baseColumns.unshift({ 
+        Header: "ID (Sistema)", 
+        accessor: "id_in_system_account",
+        Cell: ({value}) => <MDTypography variant="caption">{value}</MDTypography>
+      });
+    } else if (origem === "IDM") {
+      baseColumns.unshift({ 
+        Header: "ID (IDM)", 
+        accessor: "identity_id_idm",
+        Cell: ({value}) => <MDTypography variant="caption">{value}</MDTypography>
+      });
+    }
+    
+    return baseColumns;
+
+  }, [origem]); 
 
   return (
     <>
       <Dialog open={open} onClose={onClose} fullWidth maxWidth="lg">
-        <DialogTitle>Contas e Identidades Associadas a "{system?.name || ''}"</DialogTitle>
+        <DialogTitle>Dados Processados de "{dataSource?.name_datasource || ''}"</DialogTitle>
         <DialogContent dividers sx={{ p: 0 }}>
           {loading && (
             <MDBox display="flex" justifyContent="center" alignItems="center" p={3}>
@@ -197,9 +211,13 @@ function SystemProfilesModal({ open, onClose, system }) {
             </MDBox>
           )}
           {!loading && error && (
-            <MDTypography variant="body2" color="error" textAlign="center" p={2}>
-              Erro: {error}
-            </MDTypography>
+            <MDBox p={3}> {/* Adicionado padding ao redor do alerta de erro */}
+              <MDAlert color="error">
+                <MDTypography variant="body2" color="white">
+                  Erro: {error}
+                </MDTypography>
+              </MDAlert>
+            </MDBox>
           )}
           {!loading && !error && (
             <MDBox p={1}>
@@ -210,19 +228,17 @@ function SystemProfilesModal({ open, onClose, system }) {
                 showTotalEntries
                 noEndBorder
                 canSearch
-                entriesCount={dataList.length}
-                customMessageNoData={isRhSystem ? "Nenhuma identidade encontrada." : "Nenhuma conta encontrada para este sistema."}
-                tableProps={{ size: 'small' }}
               />
             </MDBox>
           )}
         </DialogContent>
         <DialogActions sx={{ justifyContent: "space-between", px: 2, py: 1.5 }}>
-          <Tooltip title={isRhSystem ? `Limpar todas as identidades do RH` : `Limpar todas as contas do sistema ${system?.name}`}>
+          <Tooltip title={`Limpar todos os dados de "${dataSource?.name_datasource}"`}>
             <span>
               <MDButton
                 onClick={handleOpenConfirm}
                 color="error"
+                variant="gradient" // <<< Adicionado variant
                 disabled={loading || isClearing || dataList.length === 0}
               >
                 {isClearing ? "Limpando..." : "Limpar Dados"}
@@ -240,7 +256,7 @@ function SystemProfilesModal({ open, onClose, system }) {
           <DialogTitle>Confirmar Limpeza</DialogTitle>
           <DialogContent>
               <DialogContentText>
-                  Você tem certeza que deseja excluir **TODAS as {isRhSystem ? "identidades" : "contas"}** associadas ao sistema "{system?.name || ''}"?
+                  Você tem certeza que deseja excluir **TODOS os dados** associados à fonte "{dataSource?.name_datasource || ''}"?
                   <br/>
                   Esta ação **não pode ser desfeita**.
               </DialogContentText>
@@ -274,11 +290,13 @@ function SystemProfilesModal({ open, onClose, system }) {
 SystemProfilesModal.propTypes = {
   open: PropTypes.bool.isRequired,
   onClose: PropTypes.func.isRequired,
-  system: PropTypes.object,
+  dataSource: PropTypes.object, // Corrigido de 'system'
+  onDataClear: PropTypes.func, // Nova prop para recarregar o "pai"
 };
 
 SystemProfilesModal.defaultProps = {
-  system: null,
+  dataSource: null,
+  onDataClear: () => {},
 };
 
 export default SystemProfilesModal;

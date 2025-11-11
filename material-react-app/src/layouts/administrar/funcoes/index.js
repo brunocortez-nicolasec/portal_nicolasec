@@ -1,5 +1,3 @@
-// src/layouts/administrar/funcoes/index.js
-
 import { useState, useEffect } from "react";
 import axios from "axios";
 
@@ -30,7 +28,8 @@ function GerenciarFuncoes() {
   const fetchRoles = async () => {
     try {
       setLoading(true);
-      const response = await api.get("/roles");
+      // --- CORRIGIDO ---
+      const response = await api.get("/profiles"); // De /roles para /profiles
       setRoles(response.data);
     } catch (error) {
       console.error("Erro ao buscar funções:", error);
@@ -71,7 +70,8 @@ function GerenciarFuncoes() {
 
   const handleCreateRole = async (newRoleData) => {
     try {
-      await api.post("/roles", newRoleData);
+      // --- CORRIGIDO ---
+      await api.post("/profiles", newRoleData); // De /roles para /profiles
       setNotification({ show: true, color: "success", message: "Função criada com sucesso!" });
       fetchRoles();
     } catch (error) {
@@ -82,7 +82,8 @@ function GerenciarFuncoes() {
 
   const handleUpdateRole = async (roleId, updatedData) => {
     try {
-      await api.patch(`/roles/${roleId}`, updatedData);
+      // --- CORRIGIDO ---
+      await api.patch(`/profiles/${roleId}`, updatedData); // De /roles para /profiles
       setNotification({ show: true, color: "success", message: "Função atualizada com sucesso!" });
       fetchRoles();
     } catch (error) {
@@ -94,7 +95,8 @@ function GerenciarFuncoes() {
   const handleDeleteClick = async (roleId) => {
     if (window.confirm("Tem certeza que deseja deletar esta função? Esta ação é irreversível.")) {
       try {
-        await api.delete(`/roles/${roleId}`);
+        // --- CORRIGIDO ---
+        await api.delete(`/profiles/${roleId}`); // De /roles para /profiles
         setNotification({ show: true, color: "success", message: "Função deletada com sucesso!" });
         fetchRoles();
       } catch (error) {

@@ -34,7 +34,8 @@
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@babel/preset-env": "^7.18.2",
     "@babel/register": "^7.17.7",
-    "prisma": "^6.16.2"
+    "prisma": "^6.16.2",
+    "prisma-erd-generator": "^2.0.4"
   },
   "scripts": {
     "start": "babel-node --experimental-specifier-resolution=node src/index.js",

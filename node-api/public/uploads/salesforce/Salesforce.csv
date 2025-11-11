@@ -1,0 +1,31 @@
+id_user,nome_completo,email,status,cpf,userType,last_login,perfil
+U001,Ana Silva,ana.silva@example.com,Ativo,11122233301,Funcionário,2025-09-28,Admin
+U004,Daniel Alves,daniel.alves@example.com,Inativo,11122233304,Funcionário,2025-05-10,Financeiro
+U005,Eduarda Lima,eduarda.lima@example.com,Ativo,11122233305,Estagiário,2025-10-03,Suporte
+U006,Fábio Rocha,fabio.rocha@example.com,Ativo,99999999999,Funcionário,2025-09-22,Admin
+U008,Heitor Barros,heitor.barros@example.com,Ativo,11122233308,Terceirizado,2024-01-10,Usuario
+U009,Isabela Neves,isabela.neves@example.com,Inativo,11122233309,Funcionário,2025-03-01,Usuario
+U010,João Mendes,joao.mendes@example.com,Ativo,11122233310,Funcionário,2025-10-05,Financeiro
+U011,Laura Santos,laura.santos@example.com,Ativo,11122233311,Estagiário,2025-10-01,Suporte
+U012,Marcos Vieira,marcos.vieira@example.com,Ativo,11122233312,Funcionário,2025-09-27,Usuario
+U014,Otávio Ramos,otavio.ramos@example.com,Inativo,11122233314,Terceirizado,2025-06-20,Usuario
+U015,Patrícia Gomes,patricia.gomes@example.com,Ativo,11122233315,Funcionário,2025-10-04,Admin
+U016,Rafael Castro,rafael.castro@example.com,Ativo,11122233316,Funcionário,2025-09-18,Usuario
+U017,Sofia Martins,sofia.martins@example.com,Ativo,11122233317,Terceirizado,2024-03-20,Suporte
+U018,Thiago Azevedo,thiago.azevedo@example.com,Ativo,11122233318,Funcionário,2025-09-21,Usuario
+U020,William Pinto,william.pinto@example.com,Inativo,11122233320,Funcionário,2025-01-15,Financeiro
+U021,Yasmin Farias,yasmin.farias@example.com,Ativo,11122233321,Funcionário,2025-09-26,Usuario
+U022,Zeca Pereira,zeca.pereira@example.com,Ativo,11122233322,Terceirizado,2025-09-01,Usuario
+U026,Davi Nogueira,davi.nogueira@example.com,Inativo,11122233326,Funcionário,2025-04-11,Usuario
+U028,Frederico Lopes,frederico.lopes@example.com,Ativo,11122233328,Terceirizado,2025-09-10,Usuario
+U030,Hugo Justino,hugo.justino@example.com,Ativo,11122233330,Funcionário,2025-09-17,Usuario
+SF_01,Contato Externo,contato.sf@example.com,Ativo,77766655501,Contato,2025-09-05,Usuario
+SF_02,Lead de Vendas,lead.vendas@example.com,Ativo,77766655502,Lead,2025-09-06,Usuario
+SF_03,Parceiro Comercial,parceiro@example.com,Ativo,77766655503,Parceiro,2025-09-07,Usuario
+U013,Natália Cunha,natalia.cunha@example.com,Ativo,11122233313,Funcionário,2025-09-29,Usuario
+U019,Valentina Ribeiro,valentina.ribeiro@example.com,Ativo,11122233319,Estagiário,2025-10-02,Usuario
+U023,Amanda Soares,amanda.soares@example.com,Ativo,11122233323,Funcionário,2025-09-19,Suporte
+U024,Bento Cardoso,bento.cardoso@example.com,Ativo,11122233324,Funcionário,2025-09-23,Usuario
+U025,Celina Moreira,celina.moreira@example.com,Ativo,11122233325,Estagiário,2025-10-06,Usuario
+U027,Elisa Ferraz,elisa.ferraz@example.com,Ativo,11122233327,Funcionário,2025-09-25,Financeiro
+U029,Giovana Pires,giovana.pires@example.com,Ativo,11122233329,Funcionário,2025-09-24,Usuario

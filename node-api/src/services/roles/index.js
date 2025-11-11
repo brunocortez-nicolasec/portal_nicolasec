@@ -1,137 +1,214 @@
-// node-api/src/services/roles/index.js
-
 import express from "express";
 import passport from "passport";
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from "@prisma/client"; // Importar Prisma
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role?.name === 'Admin') {
-    next();
-  } else {
-    res.status(403).json({ message: "Acesso negado. Apenas administradores." });
+/**
+ * @route   GET /roles (ou /resources)
+ * @desc    Busca Recursos (antigos Perfis), opcionalmente filtrados por systemId.
+ * @access  Private
+ * @query   ?systemId=<ID> (Opcional) Filtra recursos por ID do sistema (Fluxo 3).
+ */
+const getResources = async (req, res) => {
+  const { systemId } = req.query;
+  const whereClause = {};
+
+  // Adiciona filtro se systemId for fornecido
+  if (systemId) {
+    const systemIdInt = parseInt(systemId, 10);
+    if (!isNaN(systemIdInt)) {
+      // Filtra Recursos (Resource) que têm 'algum' relacionamento
+      // na tabela System_Resource onde o systemId bate.
+      whereClause.systems = {
+        some: {
+          systemId: systemIdInt,
+        },
+      };
+    } else {
+      return res.status(400).json({ message: "systemId inválido." });
+    }
+  }
+
+  try {
+    const resources = await prisma.resource.findMany({
+      where: whereClause,
+      orderBy: { name_resource: "asc" },
+      select: {
+        id: true,
+        name_resource: true,
+        description_resource: true,
+        // Inclui os sistemas relacionados (para saber onde é usado)
+        systems: {
+          select: {
+            system: {
+              select: {
+                id: true,
+                dataSource: { // Busca o nome da fonte de dados principal
+                  select: { name_datasource: true }
+                }
+              }
+            }
+          }
+        }
+      },
+    });
+
+    // Formata a resposta para ser mais limpa (opcional, mas recomendado)
+    const formattedResources = resources.map(r => ({
+      id: r.id,
+      name: r.name_resource,
+      description: r.description_resource,
+      // Simplifica a lista de sistemas
+      systems: r.systems.map(s => ({
+        id: s.system.id,
+        name: s.system.dataSource?.name_datasource || 'Nome não encontrado'
+      }))
+    }));
+
+    res.status(200).json(formattedResources);
+  } catch (error) {
+    console.error("Erro ao buscar Recursos:", error);
+    res.status(500).json({ message: "Erro interno do servidor." });
   }
 };
 
-// ROTA GET: Retorna todas as funções (sem alterações)
-router.get(
-  "/",
-  passport.authenticate("jwt", { session: false }),
-  isAdmin,
-  async (req, res) => {
-    try {
-      const roles = await prisma.role.findMany({
-        orderBy: { createdAt: 'asc' }
-      });
-      res.status(200).json(roles);
-    } catch (error) {
-      console.error("Erro ao buscar funções:", error);
-      res.status(500).json({ message: "Erro interno ao buscar funções." });
-    }
+/**
+ * @route   POST /roles (ou /resources)
+ * @desc    Cria um novo Recurso E o associa a um Sistema.
+ * @access  Private
+ * @body    { name: string, systemId: number }
+ */
+const createResource = async (req, res) => {
+  const { name, systemId } = req.body;
+
+  // Validação
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ message: "Nome do Recurso é obrigatório." });
   }
-);
-
-// ROTA POST: Cria uma nova função (sem alterações)
-router.post(
-  "/",
-  passport.authenticate("jwt", { session: false }),
-  isAdmin,
-  async (req, res) => {
-    try {
-      const { name } = req.body;
-
-      if (!name) {
-        return res.status(400).json({ message: "O nome da função é obrigatório." });
-      }
-
-      const newRole = await prisma.role.create({
-        data: { name },
-      });
-
-      res.status(201).json(newRole);
-    } catch (error) {
-      if (error.code === 'P2002') {
-        return res.status(409).json({ message: "Uma função com este nome já existe." });
-      }
-      console.error("Erro ao criar função:", error);
-      res.status(500).json({ message: "Erro interno ao criar a função." });
-    }
+  if (systemId === null || systemId === undefined || isNaN(parseInt(systemId, 10))) {
+    return res.status(400).json({ message: "ID do Sistema (systemId) é obrigatório." });
   }
-);
+  const systemIdInt = parseInt(systemId, 10);
 
-// --- NOVA ROTA PATCH: Atualiza o nome de uma função ---
-router.patch(
-  "/:id",
-  passport.authenticate("jwt", { session: false }),
-  isAdmin,
-  async (req, res) => {
-    try {
-      const roleId = parseInt(req.params.id, 10);
-      const { name } = req.body;
-
-      if (isNaN(roleId)) {
-        return res.status(400).json({ message: "ID de função inválido." });
-      }
-      if (!name) {
-        return res.status(400).json({ message: "O novo nome da função é obrigatório." });
-      }
-
-      const updatedRole = await prisma.role.update({
-        where: { id: roleId },
-        data: { name },
-      });
-
-      res.status(200).json(updatedRole);
-    } catch (error) {
-      if (error.code === 'P2002') {
-        return res.status(409).json({ message: "Uma função com este nome já existe." });
-      }
-      if (error.code === 'P2025') {
-        return res.status(404).json({ message: "Função não encontrada." });
-      }
-      console.error("Erro ao atualizar função:", error);
-      res.status(500).json({ message: "Erro interno ao atualizar a função." });
+  try {
+    // 1. Verifica se o Sistema (Fluxo 3) existe
+    const systemExists = await prisma.system.findUnique({ where: { id: systemIdInt } });
+    if (!systemExists) {
+      return res.status(404).json({ message: `Sistema (Fluxo 3) com ID ${systemIdInt} não encontrado.` });
     }
-  }
-);
 
-// --- NOVA ROTA DELETE: Deleta uma função ---
-router.delete(
-  "/:id",
-  passport.authenticate("jwt", { session: false }),
-  isAdmin,
-  async (req, res) => {
-    try {
-      const roleId = parseInt(req.params.id, 10);
-
-      if (isNaN(roleId)) {
-        return res.status(400).json({ message: "ID de função inválido." });
-      }
-
-      // Verificação de segurança: impede deletar uma função que está em uso
-      const userCount = await prisma.user.count({
-        where: { roleId: roleId },
+    // 2. Cria o Recurso e a Relação em uma transação
+    const newResource = await prisma.$transaction(async (tx) => {
+      // Primeiro, cria o recurso
+      const resource = await tx.resource.create({
+        data: {
+          name_resource: name.trim(),
+        },
       });
 
-      if (userCount > 0) {
-        return res.status(409).json({ message: `Esta função não pode ser deletada, pois está atribuída a ${userCount} usuário(s).` });
-      }
-
-      await prisma.role.delete({
-        where: { id: roleId },
+      // Em seguida, associa ao sistema
+      await tx.system_Resource.create({
+        data: {
+          systemId: systemIdInt,
+          resourceId: resource.id,
+        },
       });
 
-      res.status(200).json({ message: "Função deletada com sucesso." });
-    } catch (error) {
-      if (error.code === 'P2025') {
-        return res.status(404).json({ message: "Função não encontrada." });
-      }
-      console.error("Erro ao deletar função:", error);
-      res.status(500).json({ message: "Erro interno ao deletar a função." });
+      return resource;
+    });
+
+    res.status(201).json(newResource); // Retorna o recurso criado
+
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ message: `Recurso com nome "${name}" já pode existir ou a relação já foi criada.` });
     }
+    console.error("Erro ao criar Recurso:", error);
+    res.status(500).json({ message: "Erro interno do servidor ao criar Recurso." });
   }
-);
+};
+
+/**
+ * @route   PATCH /roles/:id (ou /resources/:id)
+ * @desc    Atualiza o nome de um Recurso.
+ * @access  Private
+ * @param   id (ID do Recurso)
+ * @body    { name: string }
+ */
+const updateResource = async (req, res) => {
+  const resourceId = parseInt(req.params.id, 10);
+  const { name } = req.body;
+
+  if (isNaN(resourceId)) {
+    return res.status(400).json({ message: "ID de Recurso inválido." });
+  }
+  if (!name || typeof name !== 'string' || name.trim() === '') {
+    return res.status(400).json({ message: "Novo nome do Recurso é obrigatório." });
+  }
+
+  try {
+    const updatedResource = await prisma.resource.update({
+      where: { id: resourceId },
+      data: {
+        name_resource: name.trim(),
+      },
+    });
+    res.status(200).json(updatedResource);
+
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(409).json({ message: `Recurso com nome "${name}" já existe.` });
+    }
+     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+       return res.status(404).json({ message: "Recurso não encontrado." });
+    }
+    console.error(`Erro ao atualizar Recurso #${resourceId}:`, error);
+    res.status(500).json({ message: "Erro interno do servidor ao atualizar Recurso." });
+  }
+};
+
+/**
+ * @route   DELETE /roles/:id (ou /resources/:id)
+ * @desc    Deleta um Recurso.
+ * @access  Private
+ * @param   id (ID do Recurso)
+ */
+const deleteResource = async (req, res) => {
+  const resourceId = parseInt(req.params.id, 10);
+
+  if (isNaN(resourceId)) {
+    return res.status(400).json({ message: "ID de Recurso inválido." });
+  }
+
+  try {
+    const deleteResult = await prisma.resource.deleteMany({
+      where: { id: resourceId }
+    });
+
+    if (deleteResult.count === 0) {
+      return res.status(404).json({ message: "Recurso não encontrado." });
+    }
+
+    res.status(204).send(); // Sucesso, sem conteúdo
+
+  } catch (error) {
+    // P2003: Foreign key constraint failed
+    // Se Account_Resource ou System_Resource ainda referencia este Recurso
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      return res.status(409).json({ message: "Não é possível excluir este Recurso pois ele está sendo referenciado (em contas ou sistemas)." });
+    }
+    console.error(`Erro ao deletar Recurso #${resourceId}:`, error);
+    res.status(500).json({ message: "Erro interno do servidor ao deletar Recurso." });
+  }
+};
+
+// --- Definição das Rotas ---
+// (Você pode querer mudar o 'passaport.authenticate' para um 'isAdmin' se for o caso)
+router.get("/", passport.authenticate("jwt", { session: false }), getResources);
+router.post("/", passport.authenticate("jwt", { session: false }), createResource); 
+router.patch("/:id", passport.authenticate("jwt", { session: false }), updateResource);
+router.delete("/:id", passport.authenticate("jwt", { session: false }), deleteResource);
 
 export default router;

@@ -14,10 +14,9 @@ import MDInput from "components/MDInput";
 import MDButton from "components/MDButton";
 
 function EditUserModal({ open, onClose, user, onSave }) {
-  // Adiciona 'packageId' ao estado do formulário
   const [userData, setUserData] = useState({ name: "", email: "", role: "", packageId: "" });
-  const [roles, setRoles] = useState([]);
-  // Novo estado para armazenar a lista de pacotes
+  // --- CORRIGIDO: 'roles' -> 'profiles' ---
+  const [profiles, setProfiles] = useState([]);
   const [packages, setPackages] = useState([]);
 
   useEffect(() => {
@@ -26,17 +25,16 @@ function EditUserModal({ open, onClose, user, onSave }) {
       headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
     });
 
-    // Busca as Funções (Roles)
-    const fetchRoles = async () => {
+    // --- CORRIGIDO: 'fetchRoles' -> 'fetchProfiles' e endpoint '/profiles' ---
+    const fetchProfiles = async () => {
       try {
-        const response = await api.get("/roles");
-        setRoles(response.data);
+        const response = await api.get("/profiles"); // Corrigido de '/roles'
+        setProfiles(response.data); // Corrigido de 'setRoles'
       } catch (error) {
-        console.error("Erro ao buscar funções:", error);
+        console.error("Erro ao buscar perfis:", error); // Mensagem corrigida
       }
     };
 
-    // Busca os Pacotes (Packages)
     const fetchPackages = async () => {
       try {
         const response = await api.get("/packages");
@@ -47,21 +45,22 @@ function EditUserModal({ open, onClose, user, onSave }) {
     };
 
     if (open) {
-      fetchRoles();
+      fetchProfiles(); // Corrigido de 'fetchRoles'
       fetchPackages();
     }
   }, [open]);
 
-  // Popula o formulário com os dados do usuário quando ele é selecionado
   useEffect(() => {
     if (user) {
+      // --- INÍCIO DA CORREÇÃO ---
+      // O 'user' que vem do componente "pai" agora tem 'profile' (do GET /users)
       setUserData({
         name: user.name || "",
         email: user.email || "",
-        role: user.role?.name || "",
-        // Define o packageId, ou null se o usuário não tiver pacote
+        role: user.profile?.name || "", // Corrigido de 'user.role?.name'
         packageId: user.packageId || "",
       });
+      // --- FIM DA CORREÇÃO ---
     }
   }, [user]);
 
@@ -70,7 +69,8 @@ function EditUserModal({ open, onClose, user, onSave }) {
   };
 
   const handleSave = () => {
-    // Ao salvar, passa o objeto completo, incluindo o novo packageId
+    // A chave 'role' é mantida no 'userData'
+    // pois o backend (POST /users) espera receber a chave 'role' com o nome
     onSave(user.id, userData);
     onClose();
   };
@@ -102,25 +102,25 @@ function EditUserModal({ open, onClose, user, onSave }) {
           </MDBox>
           <MDBox mb={2}>
             <FormControl fullWidth>
-              <InputLabel id="role-select-label">Função (Role)</InputLabel>
+              <InputLabel id="role-select-label">Função (Perfil)</InputLabel>
               <Select
                 labelId="role-select-label"
-                name="role"
-                value={userData.role}
-                label="Função (Role)"
+                name="role" // Mantido como 'role'
+                value={userData.role} // Mantido como 'userData.role'
+                label="Função (Perfil)"
                 onChange={handleChange}
                 sx={{ height: "44px" }}
               >
-                {roles.map((role) => (
-                  <MenuItem key={role.id} value={role.name}>
-                    {role.name}
+                {/* --- CORRIGIDO: 'roles.map' -> 'profiles.map' --- */}
+                {profiles.map((profile) => (
+                  <MenuItem key={profile.id} value={profile.name}>
+                    {profile.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
           </MDBox>
 
-          {/* --- NOVO DROPDOWN DE PACOTES --- */}
           <MDBox mb={2}>
             <FormControl fullWidth>
               <InputLabel id="package-select-label">Pacote</InputLabel>
@@ -132,7 +132,6 @@ function EditUserModal({ open, onClose, user, onSave }) {
                 onChange={handleChange}
                 sx={{ height: "44px" }}
               >
-                {/* Opção para remover o pacote do usuário */}
                 <MenuItem value="">
                   <em>Nenhum</em>
                 </MenuItem>

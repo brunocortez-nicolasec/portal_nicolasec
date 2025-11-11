@@ -1,12 +1,13 @@
 // material-react-app/src/layouts/observabilidade/importManagement/components/HistoryTable.js
 
-import React, { useMemo } from "react"; // <<< ALTERAÇÃO: Adicionado 'useMemo'
+import React, { useMemo } from "react";
 import PropTypes from "prop-types";
 
 // @mui material components
 import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
+import Tooltip from "@mui/material/Tooltip"; // <<< ADICIONADO (Para consistência)
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -23,35 +24,44 @@ const statusMap = {
 };
 
 function HistoryTable({ history, isLoading, onOpenDetails, onOpenDelete }) {
-    // <<< INÍCIO DA ALTERAÇÃO >>>
-    // A definição de 'columns' e 'rows' foi reestruturada para separar os dados da renderização,
-    // permitindo que o filtro de pesquisa funcione corretamente.
+    
     const columns = useMemo(() => [
         { 
             Header: "Status", 
             accessor: "status", 
             width: "10%", 
             align: "center",
+            Cell: ({ value }) => {
+                const statusInfo = statusMap[value] || { text: value, color: "secondary" };
+                return (
+                    <MDBadge 
+                        badgeContent={statusInfo.text} 
+                        color={statusInfo.color || "secondary"} 
+                        size="sm" 
+                        variant="gradient" 
+                        container 
+                    />
+                );
+            }
+        },
+        // --- INÍCIO DA CORREÇÃO ---
+        { 
+            Header: "Destino (Fonte de Dados)", 
+            // O accessor agora aponta para o nome dentro do objeto dataSource
+            accessor: "dataSource.name_datasource", 
+            align: "left",
             Cell: ({ value }) => (
-                <MDBadge 
-                    badgeContent={statusMap[value]?.text || value} 
-                    color={statusMap[value]?.color || "secondary"} 
-                    size="sm" 
-                    container 
-                />
+                <MDTypography variant="caption" fontWeight="medium">
+                    {value || "N/A"}
+                </MDTypography>
             )
         },
+        // --- FIM DA CORREÇÃO ---
         { 
-            Header: "Destino", 
-            accessor: "targetSystem", // A busca agora usa este campo de texto simples
-            align: "left",
-            Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography>
-        },
-        { 
-            Header: "Arquivo", 
+            Header: "Arquivo/Caminho", // Alterado de "Arquivo"
             accessor: "fileName", 
             align: "left",
-            Cell: ({ value }) => <MDTypography variant="caption" fontWeight="medium">{value}</MDTypography>
+            Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> // Removido fontWeight
         },
         { 
             Header: "Data", 
@@ -67,7 +77,7 @@ function HistoryTable({ history, isLoading, onOpenDetails, onOpenDelete }) {
         },
         { 
             Header: "Registros", 
-            accessor: "records", // Um accessor customizado para não quebrar a busca
+            accessor: "records", 
             align: "center",
             Cell: ({ row: { original: log } }) => <MDTypography variant="caption">{`${log.processedRows} / ${log.totalRows}`}</MDTypography>
         },
@@ -75,19 +85,21 @@ function HistoryTable({ history, isLoading, onOpenDetails, onOpenDelete }) {
             Header: "Ações", 
             accessor: "acoes", 
             align: "center",
-            disableSortBy: true, // Ações não precisam ser ordenáveis
+            disableSortBy: true,
             Cell: ({ row: { original: log } }) => (
                 <MDBox display="flex" justifyContent="center" alignItems="center" sx={{ gap: 2 }}>
-                    <MDTypography component="a" color="text" sx={{ cursor: "pointer" }} onClick={() => onOpenDetails(log)}>
-                        <Icon>visibility</Icon>
-                    </MDTypography>
+                    {/* --- CORREÇÃO: Adicionado Tooltip --- */}
+                    <Tooltip title={log.errorDetails ? "Ver Detalhes do Erro" : "Ver Detalhes"}>
+                        <MDTypography component="a" color={log.errorDetails ? "error" : "text"} sx={{ cursor: "pointer" }} onClick={() => onOpenDetails(log)}>
+                            <Icon>visibility</Icon>
+                        </MDTypography>
+                    </Tooltip>
                 </MDBox>
             )
         },
-    ], []);
+    ], []); // Removida dependência 'history'
 
     const rows = useMemo(() => history, [history]);
-    // <<< FIM DA ALTERAÇÃO >>>
 
     return (
         <Grid item xs={12} sx={{ mt: 3 }}>

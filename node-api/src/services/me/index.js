@@ -9,11 +9,12 @@ export const getProfileRouteHandler = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Busca o usuário e inclui a role e o package (com suas platforms)
+    // --- INÍCIO DA CORREÇÃO ---
+    // Busca o usuário e inclui o profile e o package (com suas platforms)
     const foundUser = await prisma.user.findUnique({
       where: { id: userId },
       include: {
-        role: true,
+        profile: true, // Corrigido de 'role' para 'profile'
         package: {
           include: {
             platforms: true,
@@ -21,6 +22,7 @@ export const getProfileRouteHandler = async (req, res) => {
         },
       },
     });
+    // --- FIM DA CORREÇÃO ---
 
     if (!foundUser) {
       return res.status(404).json({ message: "Usuário não encontrado." });
@@ -35,7 +37,11 @@ export const getProfileRouteHandler = async (req, res) => {
           name: foundUser.name,
           email: foundUser.email,
           profile_image: foundUser.profile_image,
-          role: foundUser.role ? foundUser.role.name : "Sem função",
+          // --- INÍCIO DA CORREÇÃO ---
+          // Corrigido para ler de 'foundUser.profile'
+          // Mantemos a chave 'role' para compatibilidade com o frontend
+          role: foundUser.profile ? foundUser.profile.name : "Sem perfil",
+          // --- FIM DA CORREÇÃO ---
           package: foundUser.package || null,
           createdAt: foundUser.createdAt,
           updatedAt: foundUser.updatedAt

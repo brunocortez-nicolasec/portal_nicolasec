@@ -1,5 +1,3 @@
-// node-api/src/services/auth/index.js
-
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 import randomToken from "random-token";
@@ -28,11 +26,10 @@ export const loginRouteHandler = async (req, res) => {
       return res.status(400).json({ message: "Email e senha são obrigatórios." });
     }
 
-    // Busca o usuário e inclui os dados da sua função (role)
     const foundUser = await prisma.user.findUnique({
       where: { email: email },
       include: {
-        role: true, // Pede ao Prisma para buscar o objeto Role relacionado
+        profile: true, 
       },
     });
 
@@ -42,11 +39,10 @@ export const loginRouteHandler = async (req, res) => {
 
     const validPassword = await bcrypt.compare(password, foundUser.password);
     if (validPassword) {
-      // Usa o nome da função (foundUser.role.name) no payload do token
       const tokenPayload = {
         id: foundUser.id,
         email: foundUser.email,
-        role: foundUser.role ? foundUser.role.name : 'Sem função',
+        role: foundUser.profile ? foundUser.profile.name : 'Sem perfil', 
       };
       
       const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: "24h" });
@@ -75,32 +71,32 @@ export const registerRouteHandler = async (req, res, name, email, password) => {
       return res.status(400).json({ message: "Password must be at least 8 characters long." });
     }
 
-    // Busca a função "Membro" para usar como padrão no registro
-    const defaultRole = await prisma.role.findUnique({
-      where: { name: 'Membro' },
+    // --- INÍCIO DA CORREÇÃO ---
+    // Busca o perfil "Membro" (com 'M' maiúsculo)
+    const defaultProfile = await prisma.profile.findUnique({
+      where: { name: 'Membro' }, // Corrigido de 'membro' para 'Membro'
     });
 
-    if (!defaultRole) {
-      // Falha se a função "Membro" não existir no banco de dados
-      return res.status(500).json({ message: "Função padrão 'Membro' não encontrada no sistema." });
+    if (!defaultProfile) {
+      // Esta mensagem agora só aparecerá se 'Membro' (maiúsculo) não for encontrado
+      return res.status(500).json({ message: "Perfil padrão 'Membro' não encontrado no sistema." });
     }
+    // --- FIM DA CORREÇÃO ---
     
     const salt = await bcrypt.genSalt(10);
     const hashPassword = await bcrypt.hash(password, salt);
     
-    // Cria o novo usuário já associando o ID da função padrão
     const newUser = await prisma.user.create({
       data: {
         name: name,
         email: email,
         password: hashPassword,
-        roleId: defaultRole.id, // Associa o usuário à função "Membro"
+        profileId: defaultProfile.id,
       },
     });
 
-    // Inclui o nome da função no token de registro
     const token = jwt.sign(
-      { id: newUser.id, email: newUser.email, role: defaultRole.name },
+      { id: newUser.id, email: newUser.email, role: defaultProfile.name },
       process.env.JWT_SECRET,
       { expiresIn: "24h" }
     );

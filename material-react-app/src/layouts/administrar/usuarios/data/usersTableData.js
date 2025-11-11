@@ -43,7 +43,10 @@ export default function data(users, handleEdit, handleDelete) {
   const rows = users.map(user => ({
     user: <Author image={user.profile_image} name={user.name} />,
     email: <MDTypography variant="caption">{user.email}</MDTypography>,
-    role: <MDTypography variant="caption">{user.role?.name || "Sem função"}</MDTypography>,
+    // --- INÍCIO DA CORREÇÃO ---
+    // O backend agora envia o objeto 'profile' em vez de 'role'
+    role: <MDTypography variant="caption">{user.profile?.name || "Sem função"}</MDTypography>,
+    // --- FIM DA CORREÇÃO ---
     // --- 2. NOVA PROPRIEDADE PARA EXIBIR O PACOTE ---
     package: (
       <MDTypography variant="caption" color="text" fontWeight="medium">

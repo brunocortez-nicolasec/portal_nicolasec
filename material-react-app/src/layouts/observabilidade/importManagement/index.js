@@ -13,7 +13,6 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
 import MDAlert from "components/MDAlert";
-import Box from "@mui/material/Box"; // Importação mantida caso seja usada implicitamente por outros componentes
 import Card from "@mui/material/Card";
 import Modal from "@mui/material/Modal";
 import Divider from "@mui/material/Divider";
@@ -29,8 +28,6 @@ import PropTypes from 'prop-types';
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-// import Autocomplete from "@mui/material/Autocomplete"; // Removido se não usado diretamente aqui
-// import TextField from "@mui/material/TextField"; // Removido se não usado diretamente aqui
 import CircularProgress from "@mui/material/CircularProgress";
 
 // --- NOVOS COMPONENTES FILHOS ---
@@ -39,8 +36,6 @@ import ImportCard from "./components/ImportCard";
 
 
 // --- Componentes auxiliares para os modais ---
-
-// Modal de Template (Reformatado)
 const ColumnDetail = ({ name, description, example }) => (
   <MDBox mb={2}>
     <MDTypography variant="button" fontWeight="bold" color="info" textGradient sx={{ fontFamily: 'monospace' }}>
@@ -54,14 +49,7 @@ const ColumnDetail = ({ name, description, example }) => (
     </MDTypography>
   </MDBox>
 );
-
-ColumnDetail.propTypes = {
-  name: PropTypes.string.isRequired,
-  description: PropTypes.string.isRequired,
-  example: PropTypes.string.isRequired,
-};
-
-// Componente Helper Padronizado
+ColumnDetail.propTypes = { name: PropTypes.string.isRequired, description: PropTypes.string.isRequired, example: PropTypes.string.isRequired };
 function DetailItem({ icon, label, value, children, darkMode }) {
   const valueColor = darkMode ? "white" : "text.secondary";
   return (
@@ -74,14 +62,9 @@ function DetailItem({ icon, label, value, children, darkMode }) {
     </MDBox>
   );
 }
+DetailItem.propTypes = { icon: PropTypes.string.isRequired, label: PropTypes.string.isRequired, value: PropTypes.any, children: PropTypes.node, darkMode: PropTypes.bool };
+// --- Fim dos Componentes Auxiliares ---
 
-DetailItem.propTypes = {
-  icon: PropTypes.string.isRequired,
-  label: PropTypes.string.isRequired,
-  value: PropTypes.any,
-  children: PropTypes.node,
-  darkMode: PropTypes.bool,
-};
 
 const statusMap = {
     SUCCESS: { text: "SUCESSO", color: "success" },
@@ -96,44 +79,44 @@ function ImportManagement() {
     const { token, darkMode } = controller;
 
     const [history, setHistory] = useState([]);
-    const [isLoadingHistory, setIsLoadingHistory] = useState(true); // Renomeado para clareza
-    const [isUploading, setIsUploading] = useState(false);
-    const [allCsvSystemNames, setAllCsvSystemNames] = useState([]); // Armazena todos os nomes de sistemas CSV
-    const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+    const [isProcessing, setIsProcessing] = useState(false); 
+    
+    const [allDataSources, setAllDataSources] = useState([]); 
+    const [loadingDataSources, setLoadingDataSources] = useState(true);
 
-    // --- 1. Adicionar Estados de Controle ---
-    const [isRhDataPresent, setIsRhDataPresent] = useState(false);
-    const [checkingRhData, setCheckingRhData] = useState(true); // Começa true para verificar no início
-    // --- Fim da Adição ---
+    const [notification, setNotification] = useState({ open: false, color: "info", title: "", content: "" });
 
     // Estados dos Modais
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [logToDelete, setLogToDelete] = useState(null);
     const [detailsModalOpen, setDetailsModalOpen] = useState(false);
     const [selectedLogDetails, setSelectedLogDetails] = useState(null);
-    const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-    const [confirmPayload, setConfirmPayload] = useState(null);
     const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
-    // Função para buscar sistemas CSV (Separada para clareza)
-    const fetchSystems = async () => {
+    const fetchDataSources = async () => {
         if (!token) {
-           setAllCsvSystemNames([]);
+           setAllDataSources([]);
+           setLoadingDataSources(false); 
            return;
         }
+        setLoadingDataSources(true);
         try {
             const response = await axios.get('/systems', { headers: { "Authorization": `Bearer ${token}` } });
-            const csvSystems = response.data.filter(system => system.type === "CSV");
-            const systemNames = csvSystems.map(system => system.name);
-            setAllCsvSystemNames(systemNames);
+            // ======================= INÍCIO DA ALTERAÇÃO =======================
+            // REMOVIDO: Filtro .filter(ds => ds.type_datasource === "CSV")
+            // Agora passamos TODAS as fontes para o ImportCard
+            setAllDataSources(response.data);
+            // ======================== FIM DA ALTERAÇÃO =========================
         } catch (error) {
-            console.error("Erro ao buscar a lista de sistemas:", error);
-            setAllCsvSystemNames([]);
-            setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível carregar a lista de sistemas para importação." });
+            console.error("Erro ao buscar a lista de fontes de dados:", error);
+            setAllDataSources([]);
+            setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível carregar as fontes de dados para importação." });
+        } finally {
+            setLoadingDataSources(false);
         }
     };
 
-    // Função para buscar histórico (Separada)
     const fetchHistory = async () => {
         if (!token) {
            setIsLoadingHistory(false);
@@ -151,130 +134,100 @@ function ImportManagement() {
         }
     };
 
-    // --- 2. Função para Verificar Dados do RH ---
-    const checkRhDataPresence = async () => {
-        if (!token) {
-            setIsRhDataPresent(false);
-            setCheckingRhData(false);
-            return;
-        };
-        setCheckingRhData(true);
-        try {
-            const response = await axios.get(`/imports/check/RH`, { // Chama o endpoint específico para RH
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            setIsRhDataPresent(response.data.exists); // Define o estado com base na resposta
-        } catch (error) {
-            console.error("Erro ao verificar dados do RH:", error);
-            setIsRhDataPresent(false);
-            setNotification({ open: true, color: "error", title: "Erro", content: "Não foi possível verificar os dados do RH." });
-        } finally {
-            setCheckingRhData(false);
-        }
-    };
-    // --- Fim da Adição ---
-
-    // useEffect principal para buscar dados iniciais
     useEffect(() => {
         if (token) {
-            setIsLoadingHistory(true);
-            setCheckingRhData(true);
             Promise.all([
                 fetchHistory(),
-                fetchSystems(),
-                checkRhDataPresence() // << Chama a nova função de verificação
+                fetchDataSources()
             ]);
         } else {
              setIsLoadingHistory(false);
-             setCheckingRhData(false);
-             setIsRhDataPresent(false);
-             setAllCsvSystemNames([]);
+             setLoadingDataSources(false);
+             setAllDataSources([]);
              setHistory([]);
         }
     }, [token]);
 
-    // --- 3. Calcular Opções de Sistema Disponíveis ---
-    const availableSystemOptions = useMemo(() => {
-        if (checkingRhData) {
-            return ["RH"]; // Mostra só RH enquanto verifica
-        }
-        if (!isRhDataPresent) {
-            return ["RH"]; // Mostra só RH se os dados não existirem
-        }
-        return ["RH", ...allCsvSystemNames]; // Mostra todos se os dados do RH existirem
-    }, [isRhDataPresent, checkingRhData, allCsvSystemNames]);
-    // --- Fim do Cálculo ---
 
+    // ======================= INÍCIO DA ALTERAÇÃO =======================
+    // Fluxo A: (Dropzone) - Chama o endpoint /imports/upload
+    const handleProcessUpload = async (file, dataSourceId, processingTarget, callback) => {
+      setIsProcessing(true);
+      const formData = new FormData();
+      formData.append("csvFile", file);
+      formData.append("dataSourceId", dataSourceId);
+      formData.append("processingTarget", processingTarget); // <-- ADICIONADO
 
-    // Função genérica de upload (Modificada para atualizar isRhDataPresent)
-    const genericUpload = async (file, system, callback) => {
-        setIsUploading(true);
-        const formData = new FormData();
-        formData.append("csvFile", file);
-        formData.append("targetSystem", system);
-
-        try {
-            const response = await axios.post('/imports', formData, { headers: { 'Content-Type': 'multipart/form-data', 'Authorization': `Bearer ${token}` } });
-
-             // --- 5. Atualização Pós-Upload do RH ---
-             const importLog = response.data;
-             if (system === "RH" && (importLog?.status === "PROCESSING" || importLog?.status === "SUCCESS")) {
-                // Atualiza o estado para liberar outros sistemas
-                setIsRhDataPresent(true);
-             }
-             // --- Fim da Atualização ---
-
-            setNotification({ open: true, color: "success", icon: "check", title: "Sucesso", content: "Arquivo enviado para processamento!" });
-            if (callback) callback();
-            fetchHistory();
-        } catch (error) {
-            console.error("Upload Error:", error);
-            fetchHistory();
-            const errorMessage = error.response?.data?.message || "Falha no upload do arquivo.";
-            setNotification({ open: true, color: "error", icon: "error", title: "Erro no Upload", content: errorMessage });
-        } finally {
-            setIsUploading(false);
-        }
+      try {
+        const response = await axios.post('/imports/upload', formData, { 
+          headers: { 
+            'Content-Type': 'multipart/form-data', 
+            'Authorization': `Bearer ${token}` 
+          } 
+        });
+        
+        handleProcessSuccess(response.data, callback);
+      } catch (error) {
+        handleProcessError(error, callback);
+      } finally {
+        setIsProcessing(false);
+      }
     };
 
-    // Handler de Upload (com verificação "RH Primeiro")
-    const handleUpload = async (file, system, callback) => {
-        if (!file || !system) return;
-
-        // Verifica se o sistema selecionado é permitido
-        if (!isRhDataPresent && system !== "RH") {
-            setNotification({ open: true, color: "warning", icon: "warning", title: "Ação Bloqueada", content: "Importe os dados do RH antes de importar outros sistemas." });
-            return; // Impede o upload
-        }
-
-        try {
-            const checkResponse = await axios.get(`/imports/check/${system}`, { headers: { "Authorization": `Bearer ${token}` } });
-            // Mostra confirmação apenas se *não* for RH e dados existirem
-            if (checkResponse.data.exists && system !== 'RH') {
-                setConfirmPayload({ file, system, callback });
-                setConfirmDialogOpen(true);
-            } else {
-                // Se for RH ou se dados não existirem para outros sistemas, faz upload direto
-                await genericUpload(file, system, callback);
-            }
-        } catch (error) {
-            console.error("Check Error:", error);
-            setNotification({ open: true, color: "error", icon: "error", title: "Erro", content: "Não foi possível verificar a plataforma." });
-        }
+    // Fluxo B: (Diretório) - Chama o endpoint /imports/process-directory
+    const handleProcessDirectory = async (dataSourceId, processingTarget, callback) => {
+      setIsProcessing(true);
+      try {
+        // Adicionado 'processingTarget' ao corpo da requisição
+        const response = await axios.post('/imports/process-directory', { dataSourceId, processingTarget }, { 
+          headers: { 'Authorization': `Bearer ${token}` } 
+        });
+        
+        handleProcessSuccess(response.data, callback);
+      } catch (error) {
+        handleProcessError(error, callback);
+      } finally {
+        setIsProcessing(false);
+      }
     };
+    // ======================== FIM DA ALTERAÇÃO =========================
+    
+    // Funções helper para tratar a resposta
+    const handleProcessSuccess = (importLog, callback) => {
+      let statusTitle = "Processamento Concluído";
+      let statusColor = "success";
 
+      if (importLog.status === "FAILED") {
+          statusTitle = "Falha no Processamento";
+          statusColor = "error";
+      } else if (importLog.status === "SUCCESS" && importLog.errorDetails) {
+            statusTitle = "Processado com Avisos";
+            statusColor = "warning";
+      }
 
-    const handleConfirmAndUpload = async () => {
-        if (confirmPayload) {
-            await genericUpload(confirmPayload.file, confirmPayload.system, confirmPayload.callback);
-        }
-        setConfirmDialogOpen(false);
-        setConfirmPayload(null);
+      setNotification({ 
+          open: true, 
+          color: statusColor, 
+          icon: statusColor === "success" ? "check" : "warning", 
+          title: statusTitle, 
+          content: `Fonte: ${importLog.dataSource.name_datasource}. ${importLog.processedRows}/${importLog.totalRows} linhas processadas.` 
+      });
+      
+      if (callback) callback();
+      fetchHistory();
+    };
+    
+    const handleProcessError = (error, callback) => {
+      console.error("Erro ao processar:", error);
+      fetchHistory();
+      const errorMessage = error.response?.data?.message || "Falha ao iniciar o processamento.";
+      setNotification({ open: true, color: "error", icon: "error", title: "Erro no Processamento", content: errorMessage });
+      if (callback) callback(true); 
     };
 
     const handleOpenDeleteDialog = (id) => { setLogToDelete(id); setDeleteDialogOpen(true); };
     const handleCloseDeleteDialog = () => { setLogToDelete(null); setDeleteDialogOpen(false); };
-    const handleConfirmDelete = async () => { // Esta função deleta APENAS o LOG (back-end foi ajustado)
+    const handleConfirmDelete = async () => { 
         if (!logToDelete) return;
         try {
             await axios.delete(`/imports/${logToDelete}`, { headers: { "Authorization": `Bearer ${token}` } });
@@ -295,50 +248,25 @@ function ImportManagement() {
     const closeNotification = () => setNotification({ ...notification, open: false });
     const handleOpenTemplateModal = () => setTemplateModalOpen(true);
     const handleCloseTemplateModal = () => setTemplateModalOpen(false);
-    const handleCloseConfirmDialog = () => { setConfirmDialogOpen(false); setConfirmPayload(null); };
-    const handleDownloadTemplate = () => {
-        const header = "id_user,nome_completo,email,status,cpf,userType,last_login,perfil\n";
-        const blob = new Blob([header], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.setAttribute("href", url);
-        link.setAttribute("download", "template_importacao.csv");
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    };
-
+    
     return (
         <DashboardLayout>
             <DashboardNavbar />
             <MDBox pt={6} pb={3}>
                 <Grid container spacing={3}>
-                   <Grid item xs={12}>
-                        {/* --- 4. Adicionar Alerta Condicional --- */}
-                        {!checkingRhData && !isRhDataPresent && (
-                            <MDAlert color="warning" sx={{ mb: 2 }}>
-                                <MDTypography variant="body2" color="white">
-                                    A importação para outros sistemas só será liberada após o processamento bem-sucedido dos dados do **RH**.
-                                </MDTypography>
-                            </MDAlert>
-                        )}
-                        {/* --- Fim do Alerta --- */}
-
-                        {/* Passa as opções de sistema disponíveis calculadas */}
+                    <Grid item xs={12}>
                         <ImportCard
-                            onUpload={handleUpload}
-                            systemOptions={availableSystemOptions} // <<< Passa as opções filtradas
-                            isLoading={isUploading || checkingRhData} // Fica loading durante o check inicial também
+                            onProcessUpload={handleProcessUpload}
+                            onProcessDirectory={handleProcessDirectory}
+                            dataSourceOptions={allDataSources} 
+                            isLoading={isProcessing || loadingDataSources}
                             onOpenTemplate={handleOpenTemplateModal}
-                            // Adiciona prop para desabilitar seleção se necessário
-                            disableSystemSelect={checkingRhData || !isRhDataPresent}
                         />
                     </Grid>
 
                     <HistoryTable
                         history={history}
-                        isLoading={isLoadingHistory} // Usa o estado correto
+                        isLoading={isLoadingHistory}
                         onOpenDetails={handleOpenDetailsModal}
                         onOpenDelete={handleOpenDeleteDialog}
                     />
@@ -350,53 +278,32 @@ function ImportManagement() {
               <DialogTitle>Confirmar Exclusão</DialogTitle>
               <DialogContent><DialogContentText>Você tem certeza que deseja excluir este registro de importação? Esta ação não pode ser desfeita.</DialogContentText></DialogContent>
               <DialogActions>
-                  <MDButton onClick={handleCloseDeleteDialog} color="secondary">Cancelar</MDButton>
-                  <MDButton onClick={handleConfirmDelete} color="error" autoFocus>Excluir</MDButton>
-              </DialogActions>
-            </Dialog>
-
-            <Dialog open={confirmDialogOpen} onClose={handleCloseConfirmDialog}>
-              <DialogTitle>Confirmar Substituição</DialogTitle>
-              <DialogContent>
-                  <DialogContentText>
-                      Essa plataforma já possui um CSV processado. Você deseja fazer a substituição dos dados?
-                  </DialogContentText>
-              </DialogContent>
-              <DialogActions>
-                  <MDButton onClick={handleCloseConfirmDialog} color="secondary">Não</MDButton>
-                  <MDButton onClick={handleConfirmAndUpload} color="info" autoFocus>Sim</MDButton>
+                <MDButton onClick={handleCloseDeleteDialog} color="secondary">Cancelar</MDButton>
+                <MDButton onClick={handleConfirmDelete} color="error" autoFocus>Excluir</MDButton>
               </DialogActions>
             </Dialog>
 
             <Dialog open={templateModalOpen} onClose={handleCloseTemplateModal} fullWidth maxWidth="md">
                 <DialogTitle sx={{ p: 2 }}>
-                  <MDTypography variant="h5">Template do Arquivo CSV</MDTypography>
+                  <MDTypography variant="h5">Processamento de CSV</MDTypography>
                 </DialogTitle>
                 <DialogContent dividers sx={{ p: 3, borderTop: "none" }}>
-                    <MDTypography variant="h6" gutterBottom> Estrutura do Arquivo CSV </MDTypography>
-                    <DialogContentText component="div" sx={{ mb: 3 }}>
-                      <MDTypography variant="body2" color="text">
-                        Para garantir a importação, o cabeçalho do seu arquivo CSV deve conter as seguintes colunas, na ordem exata:
-                      </MDTypography>
-                    </DialogContentText>
-                    <MDBox>
-                        <ColumnDetail name="id_user" description="Identificador único do usuário no sistema de origem." example="1023A" />
-                        <ColumnDetail name="nome_completo" description="Nome completo do colaborador." example="Ana Carolina de Souza" />
-                        <ColumnDetail name="email" description="Endereço de e-mail principal do usuário." example="ana.souza@empresa.com" />
-                        <ColumnDetail name="status" description="Situação atual da conta (ex: Ativo, Inativo)." example="Ativo" />
-                        <ColumnDetail name="cpf" description="CPF do usuário (apenas números, sem pontos ou traços)." example="11122233344" />
-                        <ColumnDetail name="userType" description="Define o tipo de vínculo do usuário (ex: Funcionário, Terceirizado)." example="Funcionário" />
-                        <ColumnDetail name="last_login" description="Data do último acesso no formato AAAA-MM-DD." example="2025-09-15" />
-                        <ColumnDetail name="perfil" description="Define o perfil de acesso do usuário (ex: Admin, Usuário)." example="Admin" />
-                    </MDBox>
+                    <MDTypography variant="body2" color="text">
+                        O processamento de CSVs agora é feito com base no mapeamento de colunas definido 
+                        para cada Fonte de Dados.
+                        <br/><br/>
+                        1. Vá para <MDTypography component="strong" variant="body2">Observabilidade &gt; Fonte de Dados</MDTypography> para cadastrar sua fonte.
+                        <br/>
+                        2. Vá para <MDTypography component="strong" variant="body2">Observabilidade &gt; Mapeamento de Dados</MDTypography> para configurar o "de-para" das colunas.
+                        <br/>
+                        3. Volte para esta página, selecione a fonte configurada e escolha o método de processamento.
+                    </MDTypography>
                 </DialogContent>
-                <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
-                    <MDButton onClick={handleDownloadTemplate} color="success" variant="gradient" startIcon={<Icon>download</Icon>}> Baixar Template </MDButton>
-                    <MDButton onClick={handleCloseTemplateModal} color="info"> Fechar </MDButton>
+                 <DialogActions sx={{ p: 2, justifyContent: 'flex-end' }}>
+                  <MDButton onClick={handleCloseTemplateModal} color="info"> Fechar </MDButton>
                 </DialogActions>
             </Dialog>
 
-            {/* Modal de Detalhes da Importação (Padronizado) */}
             {selectedLogDetails && (() => {
                 const startTime = new Date(selectedLogDetails.createdAt);
                 const endTime = selectedLogDetails.completedAt ? new Date(selectedLogDetails.completedAt) : null;
@@ -409,55 +316,53 @@ function ImportManagement() {
 
                 return (
                     <Modal open={detailsModalOpen} onClose={handleCloseDetailsModal} sx={{ display: "grid", placeItems: "center" }}>
-                      <Card sx={{ width: "90%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
-                          <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
-                              <MDTypography variant="h5">Detalhes da Importação #{selectedLogDetails.id}</MDTypography>
-                              <Icon
-                                  sx={({ typography: { size }, palette: { dark, white } }) => ({
-                                      fontSize: `${size.lg} !important`,
-                                      color: darkMode ? white.main : dark.main,
-                                      stroke: "currentColor",
-                                      strokeWidth: "2px",
-                                      cursor: "pointer",
-                                  })}
-                                  onClick={handleCloseDetailsModal}
-                              >
-                                  close
-                              </Icon>
-                          </MDBox>
+                        <Card sx={{ width: "90%", maxWidth: "800px", maxHeight: "90vh", overflowY: "auto" }}>
+                            <MDBox p={2} display="flex" justifyContent="space-between" alignItems="center">
+                                <MDTypography variant="h5">Detalhes da Importação #{selectedLogDetails.id}</MDTypography>
+                                <Icon
+                                    sx={({ typography: { size }, palette: { dark, white } }) => ({
+                                        fontSize: `${size.lg} !important`,
+                                        color: darkMode ? white.main : dark.main,
+                                        stroke: "currentColor",
+                                        strokeWidth: "2px",
+                                        cursor: "pointer",
+                                    })}
+                                    onClick={handleCloseDetailsModal}
+                                >
+                                    close
+                                </Icon>
+                            </MDBox>
 
-                          <MDBox p={3} pt={1}>
-                              <Grid container spacing={3}>
-                                  {/* Coluna da Esquerda */}
-                                  <Grid item xs={12} md={6}>
-                                      <DetailItem icon="badge" label="Usuário" value={selectedLogDetails.user?.name} darkMode={darkMode} />
-                                      <DetailItem icon="storage" label="Sistema" value={selectedLogDetails.targetSystem} darkMode={darkMode} />
-                                      <DetailItem icon="description" label="Arquivo" value={selectedLogDetails.fileName} darkMode={darkMode} />
-                                      <DetailItem icon="numbers" label="Registros" value={`${selectedLogDetails.processedRows} / ${selectedLogDetails.totalRows}`} darkMode={darkMode} />
-                                  </Grid>
-                                  {/* Coluna da Direita */}
-                                  <Grid item xs={12} md={6}>
-                                      <DetailItem icon="play_arrow" label="Início" value={startTime.toLocaleString('pt-BR')} darkMode={darkMode} />
-                                      <DetailItem icon="check_circle" label="Término" value={endTime ? endTime.toLocaleString('pt-BR') : ""} darkMode={darkMode} />
-                                      <DetailItem icon="timer" label="Duração" value={duration} darkMode={darkMode} />
-                                      <DetailItem icon="task_alt" label="Status" darkMode={darkMode}>
-                                          <MDBadge badgeContent={statusInfo.text} color={statusInfo.color} size="sm" variant="gradient" container sx={{ ml: 1 }}/>
-                                      </DetailItem>
-                                  </Grid>
-                              </Grid>
+                            <MDBox p={3} pt={1}>
+                                <Grid container spacing={3}>
+                                    <Grid item xs={12} md={6}>
+                                        <DetailItem icon="badge" label="Usuário" value={selectedLogDetails.user?.name} darkMode={darkMode} />
+                                        <DetailItem icon="storage" label="Fonte de Dados" value={selectedLogDetails.dataSource?.name_datasource} darkMode={darkMode} />
+                                        <DetailItem icon="description" label="Arquivo/Caminho" value={selectedLogDetails.fileName} darkMode={darkMode} />
+                                        <DetailItem icon="numbers" label="Registros" value={`${selectedLogDetails.processedRows} / ${selectedLogDetails.totalRows}`} darkMode={darkMode} />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                        <DetailItem icon="play_arrow" label="Início" value={startTime.toLocaleString('pt-BR')} darkMode={darkMode} />
+                                        <DetailItem icon="check_circle" label="Término" value={endTime ? endTime.toLocaleString('pt-BR') : ""} darkMode={darkMode} />
+                                        <DetailItem icon="timer" label="Duração" value={duration} darkMode={darkMode} />
+                                        <DetailItem icon="task_alt" label="Status" darkMode={darkMode}>
+                                            <MDBadge badgeContent={statusInfo.text} color={statusInfo.color} size="sm" variant="gradient" container sx={{ ml: 1 }}/>
+                                        </DetailItem>
+                                    </Grid>
+                                </Grid>
 
-                              {selectedLogDetails.status === "FAILED" && selectedLogDetails.errorDetails && (
-                                  <>
-                                      <Divider sx={{ my: 2 }} />
-                                      <MDAlert color="error" sx={{ mt: 1 }}>
-                                          <MDTypography variant="button" color="white" sx={{ whiteSpace: "pre-wrap" }}>
-                                              <strong>Detalhes do Erro:</strong><br/>{selectedLogDetails.errorDetails}
-                                          </MDTypography>
-                                      </MDAlert>
-                                  </>
-                              )}
-                          </MDBox>
-                      </Card>
+                                {selectedLogDetails.status === "FAILED" && selectedLogDetails.errorDetails && (
+                                    <>
+                                        <Divider sx={{ my: 2 }} />
+                                        <MDAlert color="error" sx={{ mt: 1 }}>
+                                            <MDTypography variant="button" color="white" sx={{ whiteSpace: "pre-wrap" }}>
+                                                <strong>Detalhes do Erro:</strong><br/>{selectedLogDetails.errorDetails}
+                                            </MDTypography>
+                                        </MDAlert>
+                                    </>
+                                )}
+                            </MDBox>
+                        </Card>
                     </Modal>
                 );
             })()}

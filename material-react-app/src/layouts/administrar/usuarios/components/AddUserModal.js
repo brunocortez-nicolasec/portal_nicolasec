@@ -20,36 +20,36 @@ function AddUserModal({ open, onClose, onSave }) {
     name: "",
     email: "",
     password: "",
-    role: "Membro",
+    role: "Membro", // Mantido como 'role' para compatibilidade com o backend
   });
   
   const [isPasswordValid, setIsPasswordValid] = useState(false);
-  // 2. Novo estado para armazenar a lista de funções
-  const [roles, setRoles] = useState([]);
+  // --- CORRIGIDO: 'roles' -> 'profiles' ---
+  const [profiles, setProfiles] = useState([]);
 
-  // 3. useEffect para buscar as funções da API quando o modal abre
+  // --- CORRIGIDO: 'fetchRoles' -> 'fetchProfiles' e endpoint '/profiles' ---
   useEffect(() => {
-    const fetchRoles = async () => {
+    const fetchProfiles = async () => { // Renomeado
       try {
         const api = axios.create({
           baseURL: "/",
           headers: { Authorization: `Bearer ${localStorage.getItem("token")}` },
         });
-        const response = await api.get("/roles");
-        setRoles(response.data);
+        const response = await api.get("/profiles"); // Corrigido de '/roles'
+        setProfiles(response.data); // Corrigido de 'setRoles'
       } catch (error) {
-        console.error("Erro ao buscar funções:", error);
+        console.error("Erro ao buscar perfis:", error); // Mensagem corrigida
       }
     };
 
     if (open) {
-      fetchRoles();
+      fetchProfiles(); // Corrigido de 'fetchRoles'
       // Reseta o formulário
       setUserData({
         name: "",
         email: "",
         password: "",
-        role: "Membro",
+        role: "Membro", // Define o padrão
       });
       setIsPasswordValid(false);
     }
@@ -100,6 +100,27 @@ function AddUserModal({ open, onClose, onSave }) {
             />
           </MDBox>
           <MDBox mb={2}>
+            <FormControl fullWidth>
+              <InputLabel id="role-select-label">Função</InputLabel>
+              <Select
+                labelId="role-select-label"
+                id="role-select"
+                name="role" // Mantido como 'role'
+                value={userData.role} // Mantido como 'userData.role'
+                label="Função"
+                onChange={handleChange}
+                sx={{ height: "44px" }}
+              >
+                {/* --- CORRIGIDO: 'roles.map' -> 'profiles.map' --- */}
+                {profiles.map((profile) => (
+                  <MenuItem key={profile.id} value={profile.name}>
+                    {profile.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </MDBox>
+          <MDBox mb={2}>
             <MDInput
               type="password"
               label="Senha"
@@ -113,27 +134,6 @@ function AddUserModal({ open, onClose, onSave }) {
             />
           </MDBox>
 
-          <MDBox mb={2}>
-            <FormControl fullWidth>
-              <InputLabel id="role-select-label">Função</InputLabel>
-              <Select
-                labelId="role-select-label"
-                id="role-select"
-                name="role"
-                value={userData.role}
-                label="Função"
-                onChange={handleChange}
-                sx={{ height: "44px" }}
-              >
-                {/* 4. Mapeia as funções buscadas para as opções do dropdown */}
-                {roles.map((role) => (
-                  <MenuItem key={role.id} value={role.name}>
-                    {role.name}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </MDBox>
         </MDBox>
       </DialogContent>
       <DialogActions>

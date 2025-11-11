@@ -1,5 +1,3 @@
-// node-api/src/services/users/index.js
-
 import express from "express";
 import passport from "passport";
 import { PrismaClient } from '@prisma/client';
@@ -8,15 +6,18 @@ import bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 const router = express.Router();
 
+// --- CORRIGIDO ---
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role?.name === 'Admin') {
+  // O req.user vem do passport.js corrigido, que já inclui 'profile'
+  // Corrigido de 'admin' (minúsculo) para 'Admin' (maiúsculo)
+  if (req.user && req.user.profile?.name === 'Admin') { 
     next();
   } else {
     res.status(403).json({ message: "Acesso negado. Apenas administradores." });
   }
 };
 
-// Rota GET (sem alterações)
+// Rota GET (Corrigido include)
 router.get(
   "/",
   passport.authenticate("jwt", { session: false }),
@@ -24,7 +25,7 @@ router.get(
   async (req, res) => {
     try {
       const users = await prisma.user.findMany({
-        include: { role: true, package: true },
+        include: { profile: true, package: true }, // 'role' -> 'profile'
         orderBy: { createdAt: 'desc' }
       });
       res.status(200).json(users);
@@ -35,18 +36,21 @@ router.get(
   }
 );
 
-// Rota POST (sem alterações)
+// Rota POST (Corrigido)
 router.post(
   "/",
   passport.authenticate("jwt", { session: false }),
   isAdmin,
   async (req, res) => {
     try {
-      const { name, email, password, role, packageId } = req.body;
-      const roleObject = await prisma.role.findUnique({ where: { name: role } });
-      if (!roleObject) {
-        return res.status(400).json({ message: `A função '${role}' não é válida.` });
+      const { name, email, password, role, packageId } = req.body; 
+      
+      const profileObject = await prisma.profile.findUnique({ where: { name: role } });
+      
+      if (!profileObject) {
+        return res.status(400).json({ message: `O perfil '${role}' não é válido.` });
       }
+
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
         return res.status(409).json({ message: "Este email já está em uso." });
@@ -58,11 +62,12 @@ router.post(
           name,
           email,
           password: hashedPassword,
-          roleId: roleObject.id,
+          profileId: profileObject.id, // 'roleId' -> 'profileId'
           packageId: packageId || null,
         },
-        include: { role: true, package: true },
+        include: { profile: true, package: true }, // 'role' -> 'profile'
       });
+
       res.status(201).json(newUser);
     } catch (error) {
       console.error("Create User Error:", error);
@@ -71,7 +76,7 @@ router.post(
   }
 );
 
-// Rota PATCH (COM A CORREÇÃO)
+// Rota PATCH (Corrigido)
 router.patch(
   "/:id",
   passport.authenticate("jwt", { session: false }),
@@ -89,25 +94,22 @@ router.patch(
       
       if (role) {
         const roleNameToFind = typeof role === 'string' ? role : role.name;
-        const roleObject = await prisma.role.findUnique({ where: { name: roleNameToFind } });
+        const profileObject = await prisma.profile.findUnique({ where: { name: roleNameToFind } });
         
-        if (!roleObject) {
-          return res.status(400).json({ message: `A função '${roleNameToFind}' não é válida.` });
+        if (!profileObject) {
+          return res.status(400).json({ message: `O perfil '${roleNameToFind}' não é válido.` });
         }
-        dataToUpdate.roleId = roleObject.id;
+        dataToUpdate.profileId = profileObject.id; // 'roleId' -> 'profileId'
       }
       
-      // --- MUDANÇA PRINCIPAL AQUI ---
       if (packageId !== undefined) {
-          // Se packageId for um texto vazio (""), converte para null.
-          // Senão, usa o valor recebido (que deve ser um número).
-          dataToUpdate.packageId = packageId === "" ? null : packageId;
+        dataToUpdate.packageId = packageId === "" ? null : packageId;
       }
       
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: dataToUpdate,
-        include: { role: true, package: true },
+        include: { profile: true, package: true }, // 'role' -> 'profile'
       });
       
       res.status(200).json(updatedUser);
@@ -118,7 +120,7 @@ router.patch(
   }
 );
 
-// Rota DELETE (sem alterações)
+// Rota DELETE (Não precisou de alterações)
 router.delete(
   "/:id",
   passport.authenticate("jwt", { session: false }),

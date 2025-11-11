@@ -1,5 +1,3 @@
-// node-api/src/services/packages/index.js
-
 import express from "express";
 import passport from "passport";
 import { PrismaClient } from '@prisma/client';
@@ -7,14 +5,16 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Middleware de Admin
+// --- INÍCIO DA CORREÇÃO ---
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role?.name === 'Admin') {
+  // Corrigido de 'role' para 'profile'. O 'Admin' (maiúsculo) já estava correto.
+  if (req.user && req.user.profile?.name === 'Admin') {
     next();
   } else {
     res.status(403).json({ message: "Acesso negado. Apenas administradores." });
   }
 };
+// --- FIM DA CORREÇÃO ---
 
 // ROTA GET /: Lista todos os pacotes
 router.get(

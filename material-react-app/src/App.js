@@ -29,6 +29,11 @@ import Register from "auth/register";
 import UserProfile from "layouts/user-profile";
 import UserManagement from "layouts/user-management";
 
+// --- INÍCIO DA ADIÇÃO ---
+// 1. Importar o novo componente de mapeamento
+import MapeamentoDados from "layouts/observabilidade/mapeamentoDados";
+// --- FIM DA ADIÇÃO ---
+
 export default function App() {
   const [controller, dispatch] = useMaterialUIController();
   const {
@@ -158,6 +163,21 @@ export default function App() {
             }
             key="user-management"
           />
+
+          {/* --- INÍCIO DA ADIÇÃO --- */}
+          {/* 2. Adicionar a rota com o parâmetro :id */}
+          <Route
+            exact
+            path="/observabilidade/mapeamento-dados/:id"
+            element={
+              <ProtectedRoute isAuthenticated={!!token}>
+                <MapeamentoDados />
+              </ProtectedRoute>
+            }
+            key="mapeamento-dados-id"
+          />
+          {/* --- FIM DA ADIÇÃO --- */}
+
           {getRoutes(routes)}
           <Route path="*" element={<Navigate to="/mind-the-gap" />} />
         </Routes>

@@ -1,6 +1,12 @@
+// schema.prisma (Refatorado com SystemConfig + DataMapping limpo)
+
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+generator erd {
+  provider = "prisma-erd-generator"
 }
 
 datasource db {
@@ -15,28 +21,55 @@ enum ImportStatus {
   FAILED
 }
 
+enum DataSourceOrigem {
+  RH
+  IDM
+  SISTEMA
+}
+
+enum DataSourceType {
+  CSV
+  API
+  DATABASE
+}
+
+enum SystemConnectionType {
+  CSV
+  DATABASE
+  API
+}
+
+// ===============================================
+// MODELOS DE UTILIDADE DO APP
+// ===============================================
+
 model User {
-  id                        Int                           @id @default(autoincrement())
-  name                      String
-  email                     String                        @unique
-  password                  String
-  profile_image             String?
-  createdAt                 DateTime                      @default(now())
-  updatedAt                 DateTime                      @updatedAt
-  roleId                    Int
-  role                      Role                          @relation(fields: [roleId], references: [id])
-  groups                    Group[]
-  packageId                 Int?
-  package                   Package?                      @relation(fields: [packageId], references: [id])
-  importLogs                ImportLog[]
-  systems                   System[]
-  // Modificado para apontar para os dois novos tipos de exceção
-  divergenceExceptions      IdentityDivergenceException[]
-  accountDivergenceExceptions AccountDivergenceException[]
-  sodRules                  SodRule[]
-  rbacRules                 RbacRule[]
+  id              Int            @id @default(autoincrement())
+  name            String
+  email           String         @unique
+  password        String
+  profile_image   String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  profileId       Int
+  profile         Profile        @relation(fields: [profileId], references: [id])
+  groups          Group[]
+  packageId       Int?
+  package         Package?       @relation(fields: [packageId], references: [id])
+  importLogs      ImportLog[]
+  dataSources     DataSource[]
 
   @@map("users")
+}
+
+model Profile { // Antiga 'Role'
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+
+  @@map("profiles")
 }
 
 model PasswordReset {
@@ -58,16 +91,6 @@ model Credential {
   @@map("credentials")
 }
 
-model Role {
-  id        Int      @id @default(autoincrement())
-  name      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  users     User[]
-
-  @@map("roles")
-}
-
 model Group {
   id        Int      @id @default(autoincrement())
   name      String   @unique
@@ -79,11 +102,11 @@ model Group {
 }
 
 model Platform {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  key      String    @unique
-  route    String    @unique
-  icon     String?
+  id     Int       @id @default(autoincrement())
+  name   String    @unique
+  key    String    @unique
+  route  String    @unique
+  icon   String?
   packages Package[]
 
   @@map("platforms")
@@ -101,29 +124,40 @@ model Package {
   @@map("packages")
 }
 
-model System {
-  id                Int      @id @default(autoincrement())
-  name              String   @unique
-  description       String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  userId            Int
-  user              User     @relation(fields: [userId], references: [id])
-  type              String   @default("CSV")
-  connectionDetails Json?
+// --- TABELA MESTRA DE CONFIGURAÇÃO (COM SUFIXOS) ---
 
-  accounts  Account[]
-  profiles  Profile[]
-  rbacRules RbacRule[]
-  sodRules  SodRule[]
+model DataSource {
+  id                   Int                @id @default(autoincrement())
+  name_datasource      String             @unique
+  origem_datasource    DataSourceOrigem
+  type_datasource      DataSourceType
+  description_datasource String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  userId               Int
+  user                 User               @relation(fields: [userId], references: [id])
+  importLogs           ImportLog[]
 
-  @@map("systems")
+  // Relações 1-para-1 (Config)
+  hrConfig             HRConfig?
+  idmConfig            IDMConfig?
+  systemConfig         SystemConfig? 
+
+  // Relações 1-para-1 (Mapeamento)
+  mappingRH            DataMappingRH?
+  mappingIDM           DataMappingIDM?
+  mappingSystem        DataMappingSystem?
+
+  // Relação 1-para-Muitos (Dados)
+  identitiesHR         IdentitiesHR[]
+  identitiesIDM        IdentitiesIDM[]
+
+  @@map("DataSource")
 }
 
 model ImportLog {
   id            Int          @id @default(autoincrement())
   fileName      String
-  targetSystem  String
   status        ImportStatus @default(PENDING)
   processedRows Int          @default(0)
   totalRows     Int          @default(0)
@@ -132,180 +166,295 @@ model ImportLog {
   completedAt   DateTime?
   userId        Int
   user          User         @relation(fields: [userId], references: [id])
+  dataSourceId  Int?
+  dataSource    DataSource?  @relation(fields: [dataSourceId], references: [id])
 
   @@map("import_logs")
 }
 
-model Profile {
-  id                Int       @id @default(autoincrement())
-  name              String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  rbacRulesGranted  RbacRule[] @relation("GrantedProfile")
-  rbacRulesRequired RbacRule[] @relation("RequiredProfile")
-  systemId          Int
-  system            System    @relation(fields: [systemId], references: [id], onDelete: Cascade)
-  accounts          AccountProfile[]
+// ===============================================
+// FLUXO 1: FONTE AUTORITATIVA (RH)
+// ===============================================
 
-  @@unique([systemId, name])
-  @@map("profiles")
+model HRConfig {
+  id           Int        @id @default(autoincrement())
+  dataSourceId Int        @unique
+  dataSource   DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  diretorio_hr String?
+
+  @@map("HRConfig")
 }
 
-model Identity {
-  id               Int                           @id @default(autoincrement())
-  sourceSystem     String
-  identityId       String
-  name             String?
-  email            String?                       @unique
-  status           String?
-  userType         String?
-  cpf              String?                       @unique
-  extraData        Json?
-  createdAt        DateTime                      @default(now())
-  updatedAt        DateTime                      @updatedAt
-  accounts         Account[]
+model IdentitiesHR {
+  id             Int        @id @default(autoincrement())
+  identity_id_hr String     @unique
+  name_hr        String?
+  email_hr       String?    @unique
+  status_hr      String?
+  user_type_hr   String?
+  cpf_hr         String?    @unique
+  extra_data_hr  Json?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  
+  // "Etiqueta" de qual DataSource estes dados pertencem
+  dataSourceId   Int
+  dataSource     DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
-  divergenceExceptions IdentityDivergenceException[] @relation("IdentityExceptions")
+  // Relação com Fluxo 3
+  accounts       Accounts[] 
 
-  @@unique([sourceSystem, identityId])
-  @@map("identities")
+  @@map("IdentitiesHR")
 }
 
-model Account {
-  id                Int                            @id @default(autoincrement())
-  accountIdInSystem String
-  name              String?
-  email             String?
-  status            String?
-  userType          String?
-  cpf               String?
-  extraData         Json?
-  createdAt         DateTime                       @default(now())
-  updatedAt         DateTime                       @updatedAt
-  identityId        Int?
-  identity          Identity?                      @relation(fields: [identityId], references: [id], onDelete: SetNull)
-  systemId          Int
-  system            System                         @relation(fields: [systemId], references: [id], onDelete: Cascade)
-  profiles          AccountProfile[]
+model DataMappingRH {
+  id             Int        @id @default(autoincrement())
+  dataSourceId   Int        @unique
+  dataSource     DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  identity_id_hr String?
+  name_hr        String?
+  email_hr       String?
+  status_hr      String?
+  user_type_hr   String?
+  cpf_hr         String?
+  extra_data_hr  String?
 
-  divergenceExceptions AccountDivergenceException[] @relation("AccountExceptions")
-
-  @@unique([systemId, accountIdInSystem])
-  @@index([identityId])
-  @@index([systemId])
-  @@map("accounts")
+  @@map("data_mappings_hr")
 }
 
-model AccountProfile {
-  accountId Int
-  profileId Int
-  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+// ===============================================
+// FLUXO 2: IDM (Inalterado)
+// ===============================================
+
+model IDMConfig {
+  id           Int        @id @default(autoincrement())
+  dataSourceId Int        @unique
+  dataSource   DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  api_url      String
+  api_user     String?
+
+  @@map("IDMConfig")
+}
+
+model DataMappingIDM {
+  id              Int        @id @default(autoincrement())
+  dataSourceId    Int        @unique
+  dataSource      DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  identity_id_idm String?
+  name_idm        String?
+  email_idm       String?
+  status_idm      String?
+  extra_data_idm  String?
+
+  @@map("data_mappings_idm")
+}
+
+model IdentitiesIDM {
+  id              Int                     @id @default(autoincrement())
+  identity_id_idm String                  @unique
+  name_idm        String?
+  email_idm       String?                 @unique
+  status_idm      String?
+  extra_data_idm  Json?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  roles           Identities_RolesIDM[]
+  
+  dataSourceId    Int
+  dataSource      DataSource              @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+
+  @@map("IdentitiesIDM")
+}
+
+model RolesIDM {
+  id                   Int                   @id @default(autoincrement())
+  name_role_idm        String                @unique
+  description_role_idm String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  identities           Identities_RolesIDM[]
+  endpoints            RolesIDM_Endpoint[]
+
+  @@map("RolesIDM")
+}
+
+model Endpoint_IDM {
+  id                       Int                   @id @default(autoincrement())
+  name_endpoint_idm        String                @unique
+  description_endpoint_idm String?
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  roles                    RolesIDM_Endpoint[]
+  sources                  Endpoint_Source[]
+
+  @@map("Endpoint_IDM")
+}
+
+model ResourceIDM {
+  id                     Int               @id @default(autoincrement())
+  name_resource_idm      String
+  description_resource_idm String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  endpoints              Endpoint_Source[]
+
+  @@map("ResourceIDM")
+}
+
+model Identities_RolesIDM {
+  identityId Int
+  identity   IdentitiesIDM @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  roleId     Int
+  role       RolesIDM      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime      @default(now())
+
+  @@id([identityId, roleId])
+  @@map("Identities_RolesIDM")
+}
+
+model RolesIDM_Endpoint {
+  roleId     Int
+  role       RolesIDM     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  endpointId Int
+  endpoint   Endpoint_IDM @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  assignedAt DateTime     @default(now())
+
+  @@id([roleId, endpointId])
+  @@map("RolesIDM_Endpoint")
+}
+
+model Endpoint_Source {
+  endpointId Int
+  endpoint   Endpoint_IDM @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  resourceId Int
+  resource   ResourceIDM  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  assignedAt DateTime     @default(now())
+
+  @@id([endpointId, resourceId])
+  @@map("Endpoint_Source")
+}
+
+
+// ===============================================
+// FLUXO 3: SISTEMAS CORPORATIVOS (REFATORADO)
+// ===============================================
+
+model System {
+  id          Int      @id @default(autoincrement())
+  name_system String   @unique
+  
+  description_system String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relação 1-para-N com as Configs de Fonte de Dados
+  dataSourcesConfigs SystemConfig[]
+
+  // Relações 1-para-N diretas com os dados
+  accounts  Accounts[]
+  resources Resource[]
+  
+  @@map("System")
+}
+
+model SystemConfig {
+  id            Int        @id @default(autoincrement())
+  
+  // Relação 1-para-1 com DataSource
+  dataSourceId  Int        @unique
+  dataSource    DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+
+  // Relação N-para-1 com System (Qual sistema esta config alimenta?)
+  systemId      Int
+  system        System     @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
+  // Fonte 1: Contas (Accounts)
+  tipo_fonte_contas   SystemConnectionType // (CSV, DATABASE, etc.)
+  diretorio_contas    String?
+  // (Futuramente: db_host_contas, etc.)
+
+  // Fonte 2: Recursos (Resources)
+  tipo_fonte_recursos SystemConnectionType // (CSV, DATABASE, etc.)
+  diretorio_recursos  String?
+  // (Futuramente: db_host_recursos, etc.)
+
+  @@map("SystemConfig")
+}
+
+
+model DataMappingSystem {
+  id           Int        @id @default(autoincrement())
+  dataSourceId Int        @unique
+  dataSource   DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+
+  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  // Mapeamento para Contas (prefixos 'map_' removidos)
+  accounts_id_in_system String? 
+  accounts_name         String? 
+  accounts_email        String? 
+  accounts_status       String? 
+  accounts_identity_id  String? // O FK para o RH (Mantido, pois você pediu)
+
+  // Mapeamento para Recursos (prefixos 'map_' removidos)
+  resources_id_in_system String? 
+  resources_name         String?
+  resources_description  String?
+  // ======================== FIM DA ALTERAÇÃO =========================
+  
+  @@map("data_mappings_system")
+}
+
+// --- Entidades Sistema---
+model Accounts {
+  id                     Int      @id @default(autoincrement())
+  id_in_system_account   String   @unique 
+  name_account           String?
+  email_account          String?
+  status_account         String?
+  user_type_account      String?
+  extra_data_account     Json?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  
+  // Relação 1:N com System (Obrigatória)
+  systemId Int
+  system   System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
+  // Relação 1:N com IdentitiesHR (Obrigatória)
+  // (Este é o campo que você mencionou)
+  identityId Int
+  identity   IdentitiesHR @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  
+  // Relação N:M com Resource (via Assignment)
+  assignments Assignment[]
+
+  @@map("Accounts")
+}
+
+model Resource {
+  id                   Int      @id @default(autoincrement())
+  name_resource        String   
+  description_resource String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now())
+  
+  // Relação 1:N com System (Obrigatória)
+  systemId Int
+  system   System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+
+  // Relação N:M com Accounts (via Assignment)
+  assignments Assignment[]
+
+  @@map("Resource")
+}
+
+model Assignment {
+  accountId  Int
+  account    Accounts @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  resourceId Int
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
   assignedAt DateTime @default(now())
-  @@id([accountId, profileId])
-  @@index([profileId])
-  @@map("account_profiles")
-}
-
-
-model IdentityDivergenceException {
-  id             Int       @id @default(autoincrement())
-  divergenceCode String
-  justification  String
-  createdAt      DateTime  @default(now())
-  expiresAt      DateTime?
-  targetSystem   String
-  userId         Int
-  user           User      @relation(fields: [userId], references: [id])
-  identityId     Int
-  identity       Identity  @relation("IdentityExceptions", fields: [identityId], references: [id], onDelete: Cascade)
-
-  @@unique([identityId, divergenceCode, targetSystem])
-  @@map("identity_divergence_exceptions")
-}
-
-model AccountDivergenceException {
-  id             Int       @id @default(autoincrement())
-  divergenceCode String
-  justification  String
-  createdAt      DateTime  @default(now())
-  expiresAt      DateTime?
-  userId         Int
-  user           User      @relation(fields: [userId], references: [id])
-  accountId      Int
-  account        Account   @relation("AccountExceptions", fields: [accountId], references: [id], onDelete: Cascade)
-
-  @@unique([accountId, divergenceCode])
-  @@map("account_divergence_exceptions")
-}
-
-
-model SodRule {
-  id              Int       @id @default(autoincrement())
-  name            String
-  description     String?
-  areaNegocio     String?
-  processoNegocio String?
-  owner           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  userId          Int
-  user            User      @relation(fields: [userId], references: [id])
   
-  // --- INÍCIO DA CORREÇÃO ---
-  systemId        Int?      // <<< CORRIGIDO: Agora é opcional
-  system          System?   @relation(fields: [systemId], references: [id], onDelete: Cascade) // <<< CORRIGIDO: @relation mantido e opcional
-  // --- FIM DA CORREÇÃO ---
-  
-  ruleType        String
-  valueAType      String
-  valueAId        String
-  valueAOperator  String?
-  valueAValue     String?
-  valueBType      String
-  valueBId        String
-  
-  // Removida a regra unique que falharia com systemId null
-  // @@unique([userId, systemId, valueAType, valueAId, valueAOperator, valueAValue, valueBType, valueBId], name: "UniqueSodRuleByUserSystem")
-  
-  @@index([systemId])
-  @@map("sod_rules")
-}
-
-model RbacRule {
-  id                      Int       @id @default(autoincrement())
-  name                    String
-  description             String?
-  areaNegocio             String?
-  processoNegocio         String?
-  owner                   String?
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
-  userId                  Int
-  user                    User      @relation(fields: [userId], references: [id])
-  systemId                Int
-  system                  System    @relation(fields: [systemId], references: [id], onDelete: Cascade)
-  conditionType           String
-  grantedProfileId        Int
-  grantedProfile          Profile   @relation("GrantedProfile", fields: [grantedProfileId], references: [id], onDelete: Cascade)
-  requiredProfileId       Int?
-  requiredProfile         Profile?  @relation("RequiredProfile", fields: [requiredProfileId], references: [id], onDelete: SetNull)
-  requiredAttributeId     String?
-  requiredAttributeValue  String?
-  requiredAttributeOperator String?
-  logicalOperator         String?
-  attributeConditions     RbacAttributeCondition[]
-  @@index([systemId])
-  @@map("rbac_rules")
-}
-
-model RbacAttributeCondition {
-  id             Int      @id @default(autoincrement())
-  rbacRuleId     Int
-  rbacRule       RbacRule @relation(fields: [rbacRuleId], references: [id], onDelete: Cascade)
-  attributeId    String
-  operator       String
-  attributeValue String
-
-  @@map("rbac_attribute_conditions")
+  @@id([accountId, resourceId])
+  @@map("Assignment") 
 }

@@ -1,5 +1,3 @@
-// src/layouts/administrar/grupos/components/membersTableData.js
-
 import MDTypography from "components/MDTypography";
 import MDBox from "components/MDBox";
 import MDAvatar from "components/MDAvatar";
@@ -28,7 +26,10 @@ export default function data(members) {
   const rows = members.map(member => ({
     user: <Author image={member.profile_image} name={member.name} />,
     email: <MDTypography variant="caption">{member.email}</MDTypography>,
-    role: <MDTypography variant="caption">{member.role?.name || "N/A"}</MDTypography>,
+    // --- INÍCIO DA CORREÇÃO ---
+    // Alterado de 'member.role' para 'member.profile'
+    role: <MDTypography variant="caption">{member.profile?.name || "N/A"}</MDTypography>,
+    // --- FIM DA CORREÇÃO ---
   }));
 
   return { columns, rows };

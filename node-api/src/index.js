@@ -6,7 +6,7 @@ import "./passport.js";
 import { meRoutes, authRoutes } from "./routes";
 import usersRoutes from "./services/users/index.js";
 import conjurRoutes from "./services/conjur/index.js";
-import rolesRoutes from "./services/roles/index.js"; // This is the Administrative Role
+import rolesRoutes from "./services/roles/index.js"; 
 import groupsRoutes from "./services/groups/index.js";
 import platformsRoutes from "./services/platforms/index.js";
 import packagesRoutes from "./services/packages/index.js";
@@ -17,10 +17,14 @@ import divergencesRoutes from "./services/divergences/index.js";
 import livefeedRoutes from "./services/livefeed/index.js";
 import systemsRoutes from "./services/systems/index.js";
 import sodRoutes from "./services/sod/index.js";
-import profilesRoutes from "./services/profiles/index.js"; // This is the Identity Profile
+import profilesRoutes from "./services/profiles/index.js"; 
 import attributesRoutes from "./services/attributes/index.js";
 import rbacRoutes from "./services/rbac/index.js";
-import accountsRoutes from "./services/accounts/index.js"; // <<< 1. ADICIONADO IMPORT
+import accountsRoutes from "./services/accounts/index.js"; 
+import systemsCatalogRoutes from "./services/systems-catalog/index.js";
+import resourcesRoutes from "./services/resources/index.js";
+import passport from "passport"; // Necessário para proteger a nova rota
+import { testCsvConnection } from "./services/datasources/testCsv.js"; 
 import path from "path";
 import * as fs from "fs";
 
@@ -78,7 +82,14 @@ app.use("/sod-rules", sodRoutes);
 app.use("/profiles", profilesRoutes);
 app.use("/identity-attributes", attributesRoutes);
 app.use("/rbac-rules", rbacRoutes);
-app.use("/accounts", accountsRoutes); // <<< 2. ADICIONADO USO DA ROTA
+app.use("/accounts", accountsRoutes);
+app.use("/systems-catalog", systemsCatalogRoutes);
+app.use("/resources", resourcesRoutes);
+app.post(
+  "/datasources/test-csv",
+  passport.authenticate("jwt", { session: false }),
+  testCsvConnection
+);
 
 
 app.listen(PORT, () => console.log(`Server listening to port ${PORT}`));

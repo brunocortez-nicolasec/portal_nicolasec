@@ -1,5 +1,3 @@
-// node-api/src/services/groups/index.js
-
 import express from "express";
 import passport from "passport";
 import { PrismaClient } from '@prisma/client';
@@ -7,13 +5,16 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = express.Router();
 
+// --- INÍCIO DA CORREÇÃO 1 ---
 const isAdmin = (req, res, next) => {
-  if (req.user && req.user.role?.name === 'Admin') {
+  // Corrigido de 'role' para 'profile' e 'Admin' (maiúsculo)
+  if (req.user && req.user.profile?.name === 'Admin') {
     next();
   } else {
     res.status(403).json({ message: "Acesso negado. Apenas administradores." });
   }
 };
+// --- FIM DA CORREÇÃO 1 ---
 
 // ROTA GET /: Lista todos os grupos com contagem de usuários
 router.get(
@@ -59,11 +60,13 @@ router.get(
               name: true,
               email: true,
               profile_image: true,
-              role: {
+              // --- INÍCIO DA CORREÇÃO 2 ---
+              profile: { // Corrigido de 'role' para 'profile'
                 select: {
                   name: true,
                 },
               },
+              // --- FIM DA CORREÇÃO 2 ---
             }
           }
         }

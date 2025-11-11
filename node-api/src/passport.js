@@ -15,14 +15,14 @@ passport.use(
     },
     async function (jwtPayload, done) {
       try {
-        // --- MUDANÇA PRINCIPAL AQUI ---
-        // Agora incluímos a role, o package, e as platforms dentro do package
+        // --- INÍCIO DA CORREÇÃO ---
+        // Alterado 'role: true' para 'profile: true'
         const user = await prisma.user.findUnique({
           where: {
             id: jwtPayload.id,
           },
           include: {
-            role: true,
+            profile: true, // Busca o novo model 'Profile'
             package: {
               include: {
                 platforms: true,
@@ -30,6 +30,7 @@ passport.use(
             },
           },
         });
+        // --- FIM DA CORREÇÃO ---
 
         if (user) {
           return done(null, user);

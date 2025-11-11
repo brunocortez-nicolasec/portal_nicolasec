@@ -25,7 +25,6 @@ const UserProfile = () => {
   });
 
   useEffect(() => {
-    // --- CORREÇÃO AQUI: Lendo os dados do caminho correto ---
     if (authUser?.data?.attributes) {
       const { name, email, role, profile_image } = authUser.data.attributes;
       setUser((prevUser) => ({
@@ -58,21 +57,40 @@ const UserProfile = () => {
     }
   };
 
+  // --- INÍCIO DA CORREÇÃO ---
   const submitHandler = async (e) => {
     e.preventDefault();
-    const attributes = { name: user.name, email: user.email, profile_image: user.profile_image };
 
+    // 1. Monta o objeto de atributos base
+    const attributes = { 
+      name: user.name, 
+      email: user.email, 
+      profile_image: user.profile_image 
+    };
+
+    // 2. Lógica de validação de senha
     if (user.newPassword) {
       if (user.newPassword.length < 8 || user.newPassword !== user.confirmPassword) {
         setNotification({ show: true, message: "As senhas devem ter no mínimo 8 caracteres e ser iguais.", color: "error" });
         return;
       }
-      attributes.password = user.newPassword;
+      // Adiciona os campos de senha que o backend espera
+      attributes.newPassword = user.newPassword;
+      attributes.confirmPassword = user.confirmPassword;
     }
 
+    // 3. Estrutura o payload da forma que o backend espera (JSON:API)
+    const payload = {
+      data: {
+        attributes: attributes,
+      },
+    };
+
     try {
-      await AuthService.updateProfile(authUser.data.id, attributes); // Usa o ID correto
+      // 4. Chama o AuthService com UM argumento (o payload), como ele está definido
+      await AuthService.updateProfile(payload); 
       
+      // Atualiza os dados do usuário no contexto
       const updatedUserResponse = await axios.get("/me", {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -87,6 +105,7 @@ const UserProfile = () => {
       setNotification({ show: true, message: errorMessage, color: "error" });
     }
   };
+  // --- FIM DA CORREÇÃO ---
 
   const handleAvatarClick = () => fileInputRef.current.click();
 
@@ -95,12 +114,11 @@ const UserProfile = () => {
       <DashboardNavbar />
       <MDBox mb={2} />
       <Header
-        name={user.name || "Carregando..."} // Adicionado fallback
+        name={user.name || "Carregando..."} 
         role={user.role}
         profileImage={user.profile_image}
         onAvatarClick={handleAvatarClick}
       >
-        {/* ... (o resto do seu JSX continua igual) ... */}
         <input
           type="file"
           ref={fileInputRef}

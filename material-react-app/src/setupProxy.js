@@ -20,6 +20,9 @@ const apiRoutes = [
   "/identity-attributes",
   "/rbac-rules",
   "/accounts",
+  "/datasources",
+  "/systems-catalog",
+  "/resources",
 ];
 
 // Configuração do proxy com a função onProxyReq
