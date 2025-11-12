@@ -22,9 +22,6 @@ import MDSnackbar from "components/MDSnackbar";
 import ToggleButton from "@mui/material/ToggleButton";
 import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 
-// ======================= INÍCIO DA ALTERAÇÃO =======================
-// REMOVIDO: Mapas de tradução (SYSTEM_UI_TO_DB_KEY, SYSTEM_DB_TO_UI_KEY)
-
 // Definição dos nossos esquemas de destino (usando nomes EXATOS do schema.prisma)
 const SCHEMA_MAP = {
   RH: [
@@ -39,23 +36,30 @@ const SCHEMA_MAP = {
     "accounts_name", 
     "accounts_email", 
     "accounts_status", 
-    "accounts_identity_id"
+    "accounts_identity_id",
+    "accounts_resource_name" // <-- ADICIONADO (para lógica denormalizada)
   ],
   SISTEMA_RECURSOS: [
     "resources_name", 
-    "resources_description"
-    // "resources_id_in_system" (removido, pois o nome é a chave)
+    "resources_description",
+    "resources_permissions"
   ],
 };
 
+// ======================= INÍCIO DA ALTERAÇÃO (Regra de Negócio) =======================
 // Definição dos campos obrigatórios (usando nomes EXATOS do schema.prisma)
 const REQUIRED_FIELDS_MAP = {
   RH: ["identity_id_hr", "email_hr", "status_hr"],
-  IDM: ["identity_id_idm", "email_idm", "status_idm"],
-  SISTEMA_CONTAS: ["accounts_id_in_system", "accounts_identity_id"],
-  SISTEMA_RECURSOS: ["resources_name"],
+  IDM: ["identity_id_idm", "email_idm", "status_idm"], // Mantido por consistência
+  SISTEMA_CONTAS: [
+    "accounts_id_in_system", 
+    "accounts_email", 
+    "accounts_identity_id",
+    "accounts_resource_name" // <-- ADICIONADO AQUI
+  ], 
+  SISTEMA_RECURSOS: ["resources_name", "resources_permissions"],
 };
-// ======================== FIM DA ALTERAÇÃO =========================
+// ======================== FIM DA ALTERAÇÃO (Regra de Negócio) =========================
 
 
 function MapeamentoDados() {
@@ -150,9 +154,6 @@ function MapeamentoDados() {
         let schemaKey = origem;   // Chave do schema (chaves da UI/DB)
         let diretorio = null;
         
-        // ======================= INÍCIO DA ALTERAÇÃO (fetch) =======================
-        // A lógica de tradução foi removida
-        
         const savedMappingsUI = {}; // O estado local
 
         if (origem === "RH" && selectedDataSource.hrConfig) {
@@ -195,7 +196,6 @@ function MapeamentoDados() {
         delete savedMappingsUI.dataSourceId;
         
         setMappings(savedMappingsUI); // Salva o estado
-        // ======================== FIM DA ALTERAÇÃO (fetch) =========================
         
         if (SCHEMA_MAP[schemaKey]) {
           setTargetSchema(SCHEMA_MAP[schemaKey]); 
@@ -208,9 +208,9 @@ function MapeamentoDados() {
           const responseHeader = await api.post("/datasources/test-csv", { diretorio });
           setCsvHeader(responseHeader.data.header.split(','));
         } else if (origem === "RH" || (origem === "SISTEMA" && mappingTarget)) {
-           throw new Error(`Diretório (diretorio_hr ou diretorio_${mappingTarget.toLowerCase()}) não encontrado.`);
+            throw new Error(`Diretório (diretorio_hr ou diretorio_${mappingTarget.toLowerCase()}) não encontrado.`);
         } else {
-           setCsvHeader(["Mapeamento não-CSV ainda não implementado."]);
+            setCsvHeader(["Mapeamento não-CSV ainda não implementado."]);
         }
 
       } catch (err) {
@@ -265,8 +265,6 @@ function MapeamentoDados() {
 
     let finalMappingPayload = mappings; // Para RH e IDM
 
-    // ======================= INÍCIO DA ALTERAÇÃO (Salvar) =======================
-    // Lógica de tradução removida. Agora apenas mesclamos.
     if (selectedDataSource.origem_datasource === "SISTEMA") {
       const fullSavedMap = selectedDataSource.mappingSystem || {};
       
@@ -296,7 +294,6 @@ function MapeamentoDados() {
       delete finalMappingPayload.id;
       delete finalMappingPayload.dataSourceId;
     }
-    // ======================== FIM DA ALTERAÇÃO (Salvar) =========================
 
     try {
       await api.post(`/systems/${selectedDataSource.id}/mapping`, finalMappingPayload); 
@@ -531,6 +528,7 @@ function MapeamentoDados() {
 
                         <Grid item xs={12}>
                           <MDBox display="flex" justifyContent="flex-end" mt={3}>
+{/* ======================= INÍCIO DA ALTERAÇÃO (Erro de Sintaxe) ======================= */}
                             <MDButton 
                               variant="gradient" 
                               color="info" 
@@ -539,6 +537,7 @@ function MapeamentoDados() {
                             >
                               {loadingMapping ? "Salvando..." : "Salvar Mapeamento"}
                             </MDButton> 
+{/* ======================== FIM DA ALTERAÇÃO (Erro de Sintaxe) ========================= */}
                           </MDBox>
                         </Grid>
 

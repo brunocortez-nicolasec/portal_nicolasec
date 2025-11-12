@@ -17,7 +17,9 @@ const getResources = async (req, res) => {
   try {
     // Busca os recursos, incluindo o 'System' ao qual pertencem
     const resources = await prisma.resource.findMany({
-      orderBy: { name_resource: 'asc' },
+      // ======================= INÍCIO DA ALTERAÇÃO =======================
+      orderBy: { name_resource: 'asc' }, // CORRIGIDO: O model usa 'name_resource'
+      // ======================== FIM DA ALTERAÇÃO =========================
       include: {
         system: {
           select: { name_system: true }

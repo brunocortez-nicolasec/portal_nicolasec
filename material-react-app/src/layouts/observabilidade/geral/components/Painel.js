@@ -81,9 +81,20 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
         const response = await axios.get('/systems', {
           headers: { "Authorization": `Bearer ${token}` },
         });
-        const systemNames = response.data.map(system => system.name);
-        // Adiciona "Geral" no início da lista vinda da API
+        
+        // A API /systems retorna DataSources. Precisamos extrair os *nomes dos sistemas*
+        // e garantir que sejam únicos, pois podem haver múltiplas fontes para um sistema.
+        const systemNames = new Set(
+          response.data
+            .filter(ds => ds.origem_datasource === 'SISTEMA' && ds.systemConfig?.system?.name_system)
+            .map(ds => ds.systemConfig.system.name_system)
+        );
+        
+// ======================= INÍCIO DA ALTERAÇÃO (Remoção do RH) =======================
+        // Adiciona "Geral" (que é a visão de todos os sistemas)
         setSystemOptions(["Geral", ...systemNames]);
+// ======================== FIM DA ALTERAÇÃO (Remoção do RH) =========================
+
       } catch (error) {
         console.error("Erro ao buscar a lista de sistemas:", error);
         // Mantém pelo menos a opção "Geral" em caso de erro
@@ -126,6 +137,9 @@ function Painel({ imDisplay, onPieChartClick, onPlatformChange, selectedPlatform
             onChange={handleSystemSelect}
             size="small"
             sx={{ width: 180 }}
+            // Adicione estas duas props para tratar 'options' como strings:
+            getOptionLabel={(option) => option || ""} 
+            isOptionEqualToValue={(option, value) => option === value}
             renderInput={(params) => <TextField {...params} label="Sistemas" />}
           />
           <MDButton variant="outlined" color="info" size="small" onClick={handleRedirectToImportPage}>
@@ -189,5 +203,28 @@ Painel.propTypes = {
   onPlatformChange: PropTypes.func.isRequired,
   selectedPlatform: PropTypes.string.isRequired,
 };
+
+// --- Adicionando PropTypes para os sub-componentes ---
+PillKpi.propTypes = {
+  label: PropTypes.string.isRequired,
+  count: PropTypes.number.isRequired,
+  color: PropTypes.string.isRequired,
+};
+
+DetailList.propTypes = {
+  title: PropTypes.string.isRequired,
+  items: PropTypes.arrayOf(PropTypes.shape({
+    label: PropTypes.string.isRequired,
+    value: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    color: PropTypes.string,
+  })).isRequired,
+};
+
+MiniMetricCard.propTypes = {
+  title: PropTypes.string.isRequired,
+  count: PropTypes.number.isRequired,
+  color: PropTypes.string,
+};
+// --- Fim da Adição de PropTypes ---
 
 export default Painel;

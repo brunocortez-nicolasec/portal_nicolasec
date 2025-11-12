@@ -58,7 +58,16 @@ const getImportHistory = async (req, res) => {
       orderBy: { createdAt: "desc" },
       include: { 
         user: { select: { name: true } },
-        dataSource: { select: { name_datasource: true } } 
+        dataSource: { 
+          select: { 
+            name_datasource: true,
+            systemConfig: {
+              select: {
+                systemId: true
+              }
+            }
+          } 
+        } 
       },
     });
     return res.status(200).json(importLogs);
@@ -93,10 +102,18 @@ const processAndSaveData_RH = async (tx, dataSourceId, rows, mapeamento) => {
       }
     }
     
-    // 4. Validação de ID
-    const idColumnName = "identity_id_hr";
-    if (!dataToSave[idColumnName]) {
-        warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Coluna de ID ('${idColumnName}') não foi mapeada ou está vazia.`);
+    // 4. Validação de Campos Obrigatórios (RH)
+    const requiredFields = ['identity_id_hr', 'email_hr', 'status_hr'];
+    const missingFields = [];
+    
+    for (const field of requiredFields) {
+        if (!dataToSave[field]) {
+            missingFields.push(field);
+        }
+    }
+
+    if (missingFields.length > 0) {
+        warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Campos obrigatórios não mapeados ou vazios: [${missingFields.join(', ')}].`);
         continue;
     }
 
@@ -119,11 +136,13 @@ const processAndSaveData_RH = async (tx, dataSourceId, rows, mapeamento) => {
   return { processedCount, warningsOrErrors };
 };
 
+
 /**
- * Processa e salva dados de CONTAS (SISTEMA)
+ * Processa e salva dados de CONTAS (SISTEMA) e suas ATRIBUIÇÕES
  */
-const processAndSaveData_Contas = async (tx, systemId, rows, mapeamento) => {
-  let processedCount = 0;
+const processAndSaveData_Contas = async (tx, systemId, rows, mapeamento, resourceCache) => {
+  let processedCount = 0; // Contas processadas
+  let assignmentsCreatedCount = 0; // Atribuições criadas
   const warningsOrErrors = [];
   
   // 1. Limpa os dados antigos (Assignments E Accounts) deste sistema
@@ -134,44 +153,70 @@ const processAndSaveData_Contas = async (tx, systemId, rows, mapeamento) => {
     where: { systemId: systemId } 
   });
 
-  // 2. Processa cada linha
+  // 2. Pré-busca de Recursos (REMOVIDO - Agora vem como argumento)
+  if (resourceCache.size === 0) {
+    warningsOrErrors.push("AVISO GERAL: Nenhum Recurso foi encontrado no catálogo para este sistema. Nenhuma atribuição será criada.");
+  }
+
+  // 3. Processa cada linha do CSV
   for (const [index, csvRow] of rows.entries()) {
     const linhaNum = index + 2; 
     const dataToSave = {};
-    let identityBusinessKey = null; // O ID do RH (ex: "MAT123") vindo do CSV
+    let identityBusinessKey = null; // O ID do RH (ex: "MAT123")
+    let resourceNamesString = null; // A string de recursos (ex: '"role1";"role2"')
 
-    // 3. O "TRADUTOR"
+    // 4. O "TRADUTOR"
     for (const [dbColumn, csvColumn] of Object.entries(mapeamento)) {
-      // Filtra apenas chaves de Contas
-      if (dbColumn.startsWith("accounts_") && csvColumn && csvRow[csvColumn] !== undefined) {
-        
-        // Verifica se é o campo de correlação
-        if (dbColumn === "accounts_identity_id") {
-          identityBusinessKey = csvRow[csvColumn];
-          continue; // Não salva este no dataToSave
-        }
-        
-        // Converte 'accounts_name' para 'name_account'
-        const appColumn = dbColumn.replace("accounts_", ""); 
-        dataToSave[appColumn] = csvRow[csvColumn];
+      if (!dbColumn.startsWith("accounts_") || !csvColumn || csvRow[csvColumn] === undefined) {
+        continue;
       }
+      
+      let appColumn;
+      switch (dbColumn) {
+        // Chaves Especiais (não vão para o dataToSave)
+        case "accounts_identity_id":
+          identityBusinessKey = csvRow[csvColumn];
+          continue;
+        case "accounts_resource_name":
+          resourceNamesString = csvRow[csvColumn];
+          continue;
+          
+        // Mapeamento Direto
+        case "accounts_id_in_system":
+          appColumn = "id_in_system_account";
+          break;
+        case "accounts_name":
+          appColumn = "name_account";
+          break;
+        case "accounts_email":
+          appColumn = "email_account";
+          break;
+        case "accounts_status":
+          appColumn = "status_account";
+          break;
+        default:
+          appColumn = dbColumn.replace("accounts_", "");
+      }
+      dataToSave[appColumn] = csvRow[csvColumn];
     }
     
-    // 4. Validação de ID
-    const idColumnName = "id_in_system_account";
-    if (!dataToSave[idColumnName]) {
-        warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Coluna de ID ('${idColumnName}') não foi mapeada ou está vazia.`);
+// ================== LOG DE DEBUG 2 (String Bruta) ==================
+    console.log(`[Linha ${linhaNum}] String de Recursos (Bruta): '${resourceNamesString}'`);
+// ===================================================================
+
+    // 5. Validação de Campos Obrigatórios (Contas)
+    const missingFields = [];
+    if (!dataToSave['id_in_system_account']) missingFields.push('accounts_id_in_system');
+    if (!dataToSave['email_account']) missingFields.push('accounts_email');
+    if (!identityBusinessKey) missingFields.push('accounts_identity_id');
+    
+    if (missingFields.length > 0) {
+        warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Campos obrigatórios da Conta não mapeados ou vazios: [${missingFields.join(', ')}].`);
         continue;
     }
     
-    // 5. Lógica de CORRELAÇÃO (A "Mágica")
-    if (!identityBusinessKey) {
-       warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - O campo de correlação 'accounts_identity_id' (FK do RH) não foi mapeado ou está vazio no CSV.`);
-       continue;
-    }
-    
     try {
-      // Busca a Identidade (ex: "MAT123") para encontrar a PK (ex: 42)
+      // 6. Busca a Identidade (ex: "MAT123") para encontrar a PK (ex: 42)
       const identity = await tx.identitiesHR.findUnique({
         where: { identity_id_hr: identityBusinessKey }
       });
@@ -181,17 +226,64 @@ const processAndSaveData_Contas = async (tx, systemId, rows, mapeamento) => {
          continue;
       }
       
-      // 6. Salva no banco
-      dataToSave.systemId = systemId; // Adiciona a FK do Sistema
-      dataToSave.identityId = identity.id; // Adiciona a FK da Identidade
+      // 7. Cria ou Atualiza a CONTA
+      dataToSave.systemId = systemId; 
+      dataToSave.identityId = identity.id;
       
-      await tx.accounts.create({ data: dataToSave });
-      processedCount++;
+      const account = await tx.accounts.upsert({
+        where: { id_in_system_account: dataToSave.id_in_system_account },
+        update: dataToSave,
+        create: dataToSave,
+      });
+      processedCount++; // Conta como 1 conta processada
+      
+      // 8. Processa as ATRIBUIÇÕES (Loop Interno)
+      if (resourceNamesString) {
+        // PASSO 1: Divide a string por ponto e vírgula
+        const resourceNamesArray = resourceNamesString.split(';');
+        
+        // PASSO 2: Limpa (trim e remove aspas) CADA item e filtra itens vazios
+        const cleanedNames = resourceNamesArray
+          .map(r => r.replace(/"/g, '').trim()) // Limpa aspas E espaços
+          .filter(Boolean); // Remove strings vazias (ex: "" ou " ")
+        
+        // PASSO 3: Remove duplicatas da mesma linha
+        const uniqueResourceNames = [...new Set(cleanedNames)];
+
+// ================== LOG DE DEBUG 3 (Array Limpo) ===================
+        console.log(`[Linha ${linhaNum}] Nomes de Recursos (Limp_os e Únicos):`, uniqueResourceNames);
+// ===================================================================
+
+        for (const resourceName of uniqueResourceNames) {
+          const resourceId = resourceCache.get(resourceName); // Busca no cache
+
+// ================== LOG DE DEBUG 4 (Lookup no Cache) ================
+          console.log(`[Linha ${linhaNum}] Buscando Recurso: '${resourceName}' | Encontrado ID:`, resourceId);
+// ===================================================================
+          
+          if (resourceId) {
+            // Cria a entrada na tabela de relacionamento
+            await tx.assignment.create({
+              data: {
+                accountId: account.id,
+                resourceId: resourceId,
+              }
+            });
+            assignmentsCreatedCount++;
+          } else {
+            warningsOrErrors.push(`Linha ${linhaNum}: AVISO - O recurso '${resourceName}' não foi encontrado no catálogo e não foi atribuído.`);
+          }
+        }
+      }
       
     } catch (dbError) {
-      if (dbError.code === 'P2002') {
+      if (dbError.code === 'P2002') { // Violação de constraint única
         const target = dbError.meta?.target || [];
-        warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Violação de constraint única (${target.join(', ')}).`);
+        if (target.includes('accountId') && target.includes('resourceId')) {
+            warningsOrErrors.push(`Linha ${linhaNum}: AVISO - Atribuição duplicada ignorada.`);
+        } else {
+            warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Violação de constraint única da Conta (${target.join(', ')}).`);
+        }
       } else {
         warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Erro de banco: ${dbError.message}`);
       }
@@ -222,20 +314,36 @@ const processAndSaveData_Recursos = async (tx, systemId, rows, mapeamento) => {
     const linhaNum = index + 2; 
     const dataToSave = {};
 
-    // 3. O "TRADUTOR"
+    // 3. O "TRADUTOR" (CORRIGIDO)
     for (const [dbColumn, csvColumn] of Object.entries(mapeamento)) {
       // Filtra apenas chaves de Recursos
       if (dbColumn.startsWith("resources_") && csvColumn && csvRow[csvColumn] !== undefined) {
-        // Converte 'resources_name' para 'name_resource'
-        const appColumn = dbColumn.replace("resources_", ""); 
+        
+        let appColumn;
+        // Faz a tradução correta dos campos do Mapeamento para o Schema
+        switch (dbColumn) {
+          case "resources_name":
+            appColumn = "name_resource"; // Schema usa name_resource
+            break;
+          case "resources_description":
+            appColumn = "description_resource"; // Schema usa description_resource
+            break;
+          default:
+            // Converte 'resources_permissions' -> 'permissions'
+            appColumn = dbColumn.replace("resources_", "");
+        }
+    
         dataToSave[appColumn] = csvRow[csvColumn];
       }
     }
     
-    // 4. Validação de ID
-    const idColumnName = "name_resource";
-    if (!dataToSave[idColumnName]) {
-        warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Coluna de ID ('${idColumnName}') não foi mapeada ou está vazia.`);
+    // 4. Validação de Campos Obrigatórios (Recursos)
+    const missingFields = [];
+    if (!dataToSave['name_resource']) missingFields.push('resources_name');
+    if (!dataToSave['permissions']) missingFields.push('resources_permissions');
+
+    if (missingFields.length > 0) {
+        warningsOrErrors.push(`Linha ${linhaNum}: IGNORADA - Campos obrigatórios não mapeados ou vazios: [${missingFields.join(', ')}].`);
         continue;
     }
 
@@ -266,18 +374,14 @@ const processAndSaveData_Recursos = async (tx, systemId, rows, mapeamento) => {
 // --- FUNÇÃO DE PROCESSAMENTO (FLUXO B: POR DIRETÓRIO) ---
 const handleDirectoryProcess = async (req, res) => {
   const user = req.user;
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
-  const { dataSourceId, processingTarget } = req.body; // <-- 'processingTarget' ADICIONADO
-  // ======================== FIM DA ALTERAÇÃO =========================
+  const { dataSourceId, processingTarget } = req.body; 
 
   if (!user || !dataSourceId) {
     return res.status(400).json({ message: "Dados incompletos para a importação." });
   }
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   if (!processingTarget) {
      return res.status(400).json({ message: "O 'processingTarget' (alvo do processamento) é obrigatório." });
   }
-  // ======================== FIM DA ALTERAÇÃO =========================
 
   const userIdInt = parseInt(user.id, 10);
   const dataSourceIdInt = parseInt(dataSourceId, 10);
@@ -287,16 +391,14 @@ const handleDirectoryProcess = async (req, res) => {
 
   let dataSource;
   try {
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
-    // 'include' atualizado para 'systemConfig'
     dataSource = await prisma.dataSource.findFirst({
       where: { id: dataSourceIdInt, userId: userIdInt },
       include: {
         hrConfig: true,
         idmConfig: true,
-        systemConfig: { // <-- ATUALIZADO
+        systemConfig: { 
           include: {
-            system: true // Para pegar o systemId
+            system: true 
           }
         },
         mappingRH: true,
@@ -304,7 +406,6 @@ const handleDirectoryProcess = async (req, res) => {
         mappingSystem: true,
       }
     });
-    // ======================== FIM DA ALTERAÇÃO =========================
     if (!dataSource) {
       return res.status(404).json({ message: "Fonte de Dados não encontrada." });
     }
@@ -312,27 +413,32 @@ const handleDirectoryProcess = async (req, res) => {
     return res.status(500).json({ message: `Erro ao buscar configuração da Fonte de Dados: ${e.message}`});
   }
 
+  // Determina qual alvo será salvo no log
+  const logTarget = dataSource.origem_datasource === 'SISTEMA' 
+    ? processingTarget 
+    : dataSource.origem_datasource; // Salva "RH" ou "IDM"
+
   const importLog = await prisma.importLog.create({
     data: { 
       fileName: `Processamento (Diretório) - ${dataSource.name_datasource}`, 
       status: "PENDING", 
       userId: userIdInt,
-      dataSourceId: dataSourceIdInt 
+      dataSourceId: dataSourceIdInt,
+      processingTarget: logTarget // <-- ADICIONADO
     },
   });
 
   try {
     const { origem_datasource: origem } = dataSource;
-
-    // ======================= INÍCIO DA ALTERAÇÃO (Switch Logic) =======================
-    // Variáveis movidas para dentro do 'switch'
     
     let diretorio = null;
     let mapeamento = null;
     let rows = [];
     let csvFileName = `Processamento - ${dataSource.name_datasource}`;
-    let processFunction = null; // Função de processamento a ser chamada
-    let systemId = null; // Apenas para SISTEMA
+    let processFunction = null; 
+    let systemId = null; 
+    
+    let resourceCache = new Map(); 
     
     switch (origem) {
       case "RH":
@@ -352,7 +458,7 @@ const handleDirectoryProcess = async (req, res) => {
         if (!dataSource.systemConfig.system) throw new Error("Configuração de Sistema (SystemConfig) não está ligada a um Catálogo (System).");
         if (!dataSource.mappingSystem) throw new Error("Mapeamento (DataMappingSystem) não encontrado.");
         
-        systemId = dataSource.systemConfig.systemId; // ID do Catálogo (ex: "SAP")
+        systemId = dataSource.systemConfig.systemId; 
         mapeamento = dataSource.mappingSystem;
         
         if (processingTarget === "CONTAS") {
@@ -360,11 +466,21 @@ const handleDirectoryProcess = async (req, res) => {
           if (dataSource.systemConfig.tipo_fonte_contas !== "CSV") {
             throw new Error("Processamento via diretório só é suportado para tipo de fonte 'CSV'.");
           }
-          processFunction = (tx, rows) => processAndSaveData_Contas(tx, systemId, rows, mapeamento);
+          // Constrói o cache ANTES de chamar a transação
+          const resources = await prisma.resource.findMany({
+            where: { systemId: systemId },
+            select: { id: true, name_resource: true }
+          });
+          resourceCache = new Map(resources.map(r => [r.name_resource.trim(), r.id]));
+// ================== LOG DE DEBUG 1 (Cache) =========================
+          console.log("CACHE DE RECURSOS CONSTRUÍDO (Diretório):", resourceCache);
+// ===================================================================
+          // Passa o cache como argumento
+          processFunction = (tx, rows) => processAndSaveData_Contas(tx, systemId, rows, mapeamento, resourceCache);
           
         } else if (processingTarget === "RECURSOS") {
           diretorio = dataSource.systemConfig.diretorio_recursos;
-           if (dataSource.systemConfig.tipo_fonte_recursos !== "CSV") {
+            if (dataSource.systemConfig.tipo_fonte_recursos !== "CSV") {
             throw new Error("Processamento via diretório só é suportado para tipo de fonte 'CSV'.");
           }
           processFunction = (tx, rows) => processAndSaveData_Recursos(tx, systemId, rows, mapeamento);
@@ -392,14 +508,12 @@ const handleDirectoryProcess = async (req, res) => {
     if (rows.length === 0) {
       throw new Error("O arquivo CSV encontrado está vazio.");
     }
-    // ======================== FIM DA ALTERAÇÃO (Switch Logic) =========================
 
     await prisma.importLog.update({
       where: { id: importLog.id },
       data: { status: "PROCESSING", totalRows: rows.length, fileName: csvFileName },
     });
 
-    // Chama a lógica central correta (RH, Contas, ou Recursos)
     const { processedCount, warningsOrErrors } = await prisma.$transaction(async (tx) => {
       return processFunction(tx, rows);
     });
@@ -438,19 +552,15 @@ const handleDirectoryProcess = async (req, res) => {
 // --- NOVA FUNÇÃO DE PROCESSAMENTO (FLUXO A: POR UPLOAD/DROPZONE) ---
 const handleUploadProcess = async (req, res) => {
   const user = req.user;
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
-  const { dataSourceId, processingTarget } = req.body; // <-- 'processingTarget' ADICIONADO
-  // ======================== FIM DA ALTERAÇÃO =========================
+  const { dataSourceId, processingTarget } = req.body; 
   const file = req.file;
 
   if (!user || !dataSourceId || !file) {
     return res.status(400).json({ message: "Dados incompletos (arquivo ou dataSourceId) para a importação." });
   }
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
   if (!processingTarget) {
      return res.status(400).json({ message: "O 'processingTarget' (alvo do processamento) é obrigatório." });
   }
-  // ======================== FIM DA ALTERAÇÃO =========================
 
   const userIdInt = parseInt(user.id, 10);
   const dataSourceIdInt = parseInt(dataSourceId, 10);
@@ -460,16 +570,14 @@ const handleUploadProcess = async (req, res) => {
 
   let dataSource;
   try {
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
-    // 'include' atualizado para 'systemConfig'
     dataSource = await prisma.dataSource.findFirst({
       where: { id: dataSourceIdInt, userId: userIdInt },
       include: {
         hrConfig: true,
         idmConfig: true,
-        systemConfig: { // <-- ATUALIZADO
+        systemConfig: { 
           include: {
-            system: true // Para pegar o systemId
+            system: true 
           }
         },
         mappingRH: true,
@@ -477,7 +585,6 @@ const handleUploadProcess = async (req, res) => {
         mappingSystem: true,
       }
     });
-    // ======================== FIM DA ALTERAÇÃO =========================
     if (!dataSource) {
       return res.status(404).json({ message: "Fonte de Dados não encontrada." });
     }
@@ -485,27 +592,31 @@ const handleUploadProcess = async (req, res) => {
     return res.status(500).json({ message: `Erro ao buscar configuração da Fonte de Dados: ${e.message}`});
   }
 
+  // Determina qual alvo será salvo no log
+  const logTarget = dataSource.origem_datasource === 'SISTEMA' 
+    ? processingTarget 
+    : dataSource.origem_datasource; // Salva "RH" ou "IDM"
+
   const importLog = await prisma.importLog.create({
     data: { 
-      fileName: file.originalname, // Nome do arquivo do upload
+      fileName: file.originalname, 
       status: "PENDING", 
       userId: userIdInt,
-      dataSourceId: dataSourceIdInt 
+      dataSourceId: dataSourceIdInt,
+      processingTarget: logTarget // <-- ADICIONADO
     },
   });
 
   try {
     const { origem_datasource: origem } = dataSource;
     
-    // ======================= INÍCIO DA ALTERAÇÃO (Switch Logic) =======================
-    // Variáveis movidas para dentro do 'switch'
-    
     let mapeamento = null;
     let rows = [];
-    let processFunction = null; // Função de processamento a ser chamada
-    let systemId = null; // Apenas para SISTEMA
+    let processFunction = null; 
+    let systemId = null; 
+    
+    let resourceCache = new Map(); 
 
-    // Lê o conteúdo do arquivo do buffer (upload)
     const fileContent = file.buffer.toString("utf8");
     const parsedCsv = Papa.parse(fileContent, { header: true, skipEmptyLines: true });
     rows = parsedCsv.data;
@@ -516,7 +627,7 @@ const handleUploadProcess = async (req, res) => {
     switch (origem) {
       case "RH":
         if (!dataSource.mappingRH) throw new Error("Mapeamento (DataMappingRH) não encontrado.");
-        if (!dataSource.hrConfig) throw new Error("Configuração de RH (HRConfig) não encontrada."); // (Upload precisa da config?)
+        if (!dataSource.hrConfig) throw new Error("Configuração de RH (HRConfig) não encontrada."); 
         
         mapeamento = dataSource.mappingRH; 
         processFunction = (tx, rows) => processAndSaveData_RH(tx, dataSource.id, rows, mapeamento);
@@ -530,17 +641,27 @@ const handleUploadProcess = async (req, res) => {
         if (!dataSource.systemConfig.system) throw new Error("Configuração de Sistema (SystemConfig) não está ligada a um Catálogo (System).");
         if (!dataSource.mappingSystem) throw new Error("Mapeamento (DataMappingSystem) não encontrado.");
         
-        systemId = dataSource.systemConfig.systemId; // ID do Catálogo (ex: "SAP")
+        systemId = dataSource.systemConfig.systemId; 
         mapeamento = dataSource.mappingSystem;
         
         if (processingTarget === "CONTAS") {
           if (dataSource.systemConfig.tipo_fonte_contas !== "CSV") {
             throw new Error("Processamento via upload só é suportado para tipo de fonte 'CSV'.");
           }
-          processFunction = (tx, rows) => processAndSaveData_Contas(tx, systemId, rows, mapeamento);
+          // Constrói o cache ANTES de chamar a transação
+          const resources = await prisma.resource.findMany({
+            where: { systemId: systemId },
+            select: { id: true, name_resource: true }
+          });
+          resourceCache = new Map(resources.map(r => [r.name_resource.trim(), r.id]));
+// ================== LOG DE DEBUG 1 (Cache) =========================
+          console.log("CACHE DE RECURSOS CONSTRUÍDO (Upload):", resourceCache);
+// ===================================================================
+          // Passa o cache como argumento
+          processFunction = (tx, rows) => processAndSaveData_Contas(tx, systemId, rows, mapeamento, resourceCache);
           
         } else if (processingTarget === "RECURSOS") {
-           if (dataSource.systemConfig.tipo_fonte_recursos !== "CSV") {
+            if (dataSource.systemConfig.tipo_fonte_recursos !== "CSV") {
             throw new Error("Processamento via upload só é suportado para tipo de fonte 'CSV'.");
           }
           processFunction = (tx, rows) => processAndSaveData_Recursos(tx, systemId, rows, mapeamento);
@@ -554,14 +675,12 @@ const handleUploadProcess = async (req, res) => {
       default:
         throw new Error("Origem de dados desconhecida.");
     }
-    // ======================== FIM DA ALTERAÇÃO (Switch Logic) =========================
 
     await prisma.importLog.update({
       where: { id: importLog.id },
       data: { status: "PROCESSING", totalRows: rows.length },
     });
 
-    // Chama a lógica central correta (RH, Contas, ou Recursos)
     const { processedCount, warningsOrErrors } = await prisma.$transaction(async (tx) => {
       return processFunction(tx, rows);
     });

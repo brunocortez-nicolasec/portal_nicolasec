@@ -103,11 +103,7 @@ function ImportManagement() {
         setLoadingDataSources(true);
         try {
             const response = await axios.get('/systems', { headers: { "Authorization": `Bearer ${token}` } });
-            // ======================= INÍCIO DA ALTERAÇÃO =======================
-            // REMOVIDO: Filtro .filter(ds => ds.type_datasource === "CSV")
-            // Agora passamos TODAS as fontes para o ImportCard
             setAllDataSources(response.data);
-            // ======================== FIM DA ALTERAÇÃO =========================
         } catch (error) {
             console.error("Erro ao buscar a lista de fontes de dados:", error);
             setAllDataSources([]);
@@ -149,14 +145,12 @@ function ImportManagement() {
     }, [token]);
 
 
-    // ======================= INÍCIO DA ALTERAÇÃO =======================
-    // Fluxo A: (Dropzone) - Chama o endpoint /imports/upload
     const handleProcessUpload = async (file, dataSourceId, processingTarget, callback) => {
       setIsProcessing(true);
       const formData = new FormData();
       formData.append("csvFile", file);
       formData.append("dataSourceId", dataSourceId);
-      formData.append("processingTarget", processingTarget); // <-- ADICIONADO
+      formData.append("processingTarget", processingTarget); 
 
       try {
         const response = await axios.post('/imports/upload', formData, { 
@@ -174,11 +168,9 @@ function ImportManagement() {
       }
     };
 
-    // Fluxo B: (Diretório) - Chama o endpoint /imports/process-directory
     const handleProcessDirectory = async (dataSourceId, processingTarget, callback) => {
       setIsProcessing(true);
       try {
-        // Adicionado 'processingTarget' ao corpo da requisição
         const response = await axios.post('/imports/process-directory', { dataSourceId, processingTarget }, { 
           headers: { 'Authorization': `Bearer ${token}` } 
         });
@@ -190,7 +182,6 @@ function ImportManagement() {
         setIsProcessing(false);
       }
     };
-    // ======================== FIM DA ALTERAÇÃO =========================
     
     // Funções helper para tratar a resposta
     const handleProcessSuccess = (importLog, callback) => {
@@ -259,6 +250,7 @@ function ImportManagement() {
                             onProcessUpload={handleProcessUpload}
                             onProcessDirectory={handleProcessDirectory}
                             dataSourceOptions={allDataSources} 
+                            history={history}
                             isLoading={isProcessing || loadingDataSources}
                             onOpenTemplate={handleOpenTemplateModal}
                         />

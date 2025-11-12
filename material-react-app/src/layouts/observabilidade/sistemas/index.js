@@ -227,31 +227,38 @@ function GerenciarDataSources() {
         const { origem_datasource, mappingRH, mappingIDM, mappingSystem } = dataSource;
         let isMapped = false;
 
-        // ======================= INÍCIO DA CORREÇÃO =======================
+// ======================= INÍCIO DA ALTERAÇÃO (Badge Mapeamento) =======================
         // Os nomes dos campos foram atualizados para bater com o schema (sem 'map_')
         if (origem_datasource === "RH") {
           isMapped = mappingRH && 
                      mappingRH.identity_id_hr && 
                      mappingRH.email_hr && 
                      mappingRH.status_hr;
-                     
+                      
         } else if (origem_datasource === "IDM") {
           isMapped = mappingIDM && 
                      mappingIDM.identity_id_idm && 
                      mappingIDM.email_idm && 
                      mappingIDM.status_idm;
-                     
+                      
         } else if (origem_datasource === "SISTEMA") {
           const map = mappingSystem;
+          
+          // Verifica se os campos obrigatórios de Contas estão mapeados
           const contasMapeadas = map && 
-                                 map.accounts_id_in_system && // <-- Corrigido
-                                 map.accounts_identity_id;   // <-- Corrigido
+                                 map.accounts_id_in_system &&
+                                 map.accounts_email &&        // <-- CORRIGIDO
+                                 map.accounts_identity_id;
+                                 
+          // Verifica se os campos obrigatórios de Recursos estão mapeados
           const recursosMapeados = map && 
-                                   map.resources_name;         // <-- Corrigido
+                                   map.resources_name &&
+                                   map.resources_permissions; // <-- CORRIGIDO
                                    
+          // Considera "Mapeado" se AMBOS os fluxos obrigatórios do sistema estiverem
           isMapped = contasMapeadas && recursosMapeados;
         }
-        // ======================== FIM DA CORREÇÃO =========================
+// ======================== FIM DA ALTERAÇÃO (Badge Mapeamento) =========================
 
         return (
           <MDBadge
@@ -306,7 +313,7 @@ function GerenciarDataSources() {
         );
       }
     },
-  ], [systems]); 
+  ], [systems]); // 'systems' é a dependência correta
 
   const rows = useMemo(() => systems.map(system => ({
     ...system,

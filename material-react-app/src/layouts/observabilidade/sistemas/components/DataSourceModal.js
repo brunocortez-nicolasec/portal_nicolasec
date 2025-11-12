@@ -541,12 +541,12 @@ function DataSourceModal({ open, onClose, onSave, initialData, darkMode }) {
         {/* ======================== FIM DA CORREÇÃO ========================= */}
         <MDBox>
           <Tooltip title="Testar conexão com fonte de Contas">
-            <MDButton variant="outlined" color="success" onClick={handleTestContas} disabled={isTestingContas || formData.tipo_fonte_contas !== 'CSV'} sx={{ mr: 1 }}>
+            <MDButton variant="gradient" color="success" onClick={handleTestContas} disabled={isTestingContas || formData.tipo_fonte_contas !== 'CSV'} sx={{ mr: 1 }}>
               {isTestingContas ? "..." : "Testar Contas"}
             </MDButton>
           </Tooltip>
           <Tooltip title="Testar conexão com fonte de Recursos">
-            <MDButton variant="outlined" color="success" onClick={handleTestRecursos} disabled={isTestingRecursos || formData.tipo_fonte_recursos !== 'CSV'} sx={{ mr: 2 }}>
+            <MDButton variant="gradient" color="success" onClick={handleTestRecursos} disabled={isTestingRecursos || formData.tipo_fonte_recursos !== 'CSV'} sx={{ mr: 2 }}>
               {isTestingRecursos ? "..." : "Testar Recursos"}
             </MDButton>
           </Tooltip>

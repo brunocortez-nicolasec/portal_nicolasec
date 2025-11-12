@@ -11,10 +11,6 @@ import TextField from "@mui/material/TextField";
 import FormControlLabel from "@mui/material/FormControlLabel"; 
 import Switch from "@mui/material/Switch"; 
 import CircularProgress from "@mui/material/CircularProgress"; 
-// ======================= INÍCIO DA ALTERAÇÃO =======================
-// REMOVIDO: Imports para o seletor de ToggleButton
-// ======================== FIM DA ALTERAÇÃO =========================
-
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
@@ -27,6 +23,9 @@ function ImportCard({
   onProcessUpload, 
   onProcessDirectory, 
   dataSourceOptions, // Agora contém TODAS as fontes
+// ======================= INÍCIO DA ALTERAÇÃO (Passo 4) =======================
+  history, // <-- ADICIONADO
+// ======================== FIM DA ALTERAÇÃO (Passo 4) =========================
   isLoading, 
   onOpenTemplate 
 }) {
@@ -34,7 +33,6 @@ function ImportCard({
   const [selectedDataSource, setSelectedDataSource] = useState(null); 
   const [importMode, setImportMode] = useState("directory"); // 'directory' ou 'upload'
   
-  // ======================= INÍCIO DA ALTERAÇÃO (Lógica 3 Passos) =======================
   const [selectedOrigem, setSelectedOrigem] = useState(null);
   const [processingTarget, setProcessingTarget] = useState("CONTAS"); // "CONTAS" ou "RECURSOS"
   const origemOptions = ["RH", "IDM", "SISTEMA"];
@@ -81,7 +79,6 @@ function ImportCard({
       setSelectedFile(null); 
     }
   };
-  // ======================== FIM DA ALTERAÇÃO (Lógica 3 Passos) =========================
 
 
   // Lógica de verificação de mapeamento (atualizada para o fluxo de 3 passos)
@@ -98,33 +95,77 @@ function ImportCard({
     const { origem_datasource, mappingRH, mappingIDM, mappingSystem } = selectedDataSource;
     let missing = false;
     let message = 'O mapeamento de dados para esta fonte não foi configurado.';
+    let missingFields = []; // Helper para mostrar *quais* campos estão faltando
 
-    // ======================= INÍCIO DA CORREÇÃO (Bug Mapeamento) =======================
-    // Corrigido para usar os nomes de campo corretos (sem 'map_')
     if (origem_datasource === "RH") {
-      if (!mappingRH || !mappingRH.identity_id_hr) { // Verifica campo obrigatório
+      const map = mappingRH || {};
+      if (!map.identity_id_hr) missingFields.push("identity_id_hr");
+      if (!map.email_hr) missingFields.push("email_hr");
+      if (!map.status_hr) missingFields.push("status_hr");
+      
+      if (missingFields.length > 0) {
         missing = true;
+        message = `Mapeamento de RH incompleto. Campos obrigatórios pendentes: [${missingFields.join(', ')}]`;
       }
     } else if (origem_datasource === "IDM") {
-      if (!mappingIDM || !mappingIDM.identity_id_idm) { // Verifica campo obrigatório
+      const map = mappingIDM || {};
+      if (!map.identity_id_idm) missingFields.push("identity_id_idm");
+      if (!map.email_idm) missingFields.push("email_idm");
+      if (!map.status_idm) missingFields.push("status_idm");
+      
+      if (missingFields.length > 0) {
         missing = true;
+        message = `Mapeamento de IDM incompleto. Campos obrigatórios pendentes: [${missingFields.join(', ')}]`;
       }
     } else if (origem_datasource === "SISTEMA") {
       const map = mappingSystem || {};
-      if (processingTarget === "CONTAS" && (!map.accounts_id_in_system || !map.accounts_identity_id)) {
-        missing = true;
-        message = 'O mapeamento de "Contas" para este sistema está pendente.';
-      } else if (processingTarget === "RECURSOS" && !map.resources_name) {
-        missing = true;
-        message = 'O mapeamento de "Recursos" para este sistema está pendente.';
+      
+      if (processingTarget === "CONTAS") {
+        if (!map.accounts_id_in_system) missingFields.push("accounts_id_in_system");
+        if (!map.accounts_email) missingFields.push("accounts_email");
+        if (!map.accounts_identity_id) missingFields.push("accounts_identity_id");
+        // Não verificamos 'accounts_resource_name' pois ele é opcional para o mapeamento
+        
+        if (missingFields.length > 0) {
+            missing = true;
+            message = `Mapeamento de "Contas" incompleto. Campos obrigatórios pendentes: [${missingFields.join(', ')}]`;
+        }
+      } else if (processingTarget === "RECURSOS") {
+        if (!map.resources_name) missingFields.push("resources_name");
+        if (!map.resources_permissions) missingFields.push("resources_permissions");
+        
+        if (missingFields.length > 0) {
+            missing = true;
+            message = `Mapeamento de "Recursos" incompleto. Campos obrigatórios pendentes: [${missingFields.join(', ')}]`;
+        }
       }
     }
-    // ======================== FIM DA CORREÇÃO (Bug Mapeamento) =========================
     
     setIsMappingMissing(missing);
     setMappingMissingMessage(message);
 
   }, [selectedDataSource, processingTarget]); // Agora depende do target
+
+// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - A Trava) =======================
+  // Verifica se os RECURSOS para o sistema selecionado já foram importados com sucesso
+  const hasSuccessfullyImportedResources = useMemo(() => {
+    if (!selectedDataSource || selectedDataSource.origem_datasource !== "SISTEMA") {
+      return true; // Não se aplica a RH ou IDM, então não trava
+    }
+    
+    const currentSystemId = selectedDataSource.systemConfig?.systemId;
+    if (!currentSystemId) {
+      return false; // Fonte de dados ainda não está 100% configurada
+    }
+
+    // Procura no histórico por uma importação BEM SUCEDIDA de RECURSOS para este systemId
+    return history.some(log =>
+      log.dataSource?.systemConfig?.systemId === currentSystemId &&
+      log.processingTarget === "RECURSOS" &&
+      log.status === "SUCCESS"
+    );
+  }, [selectedDataSource, history]);
+// ======================== FIM DA ALTERAÇÃO (Passo 4 - A Trava) =========================
 
 
   const handleModeChange = (event) => {
@@ -174,11 +215,15 @@ function ImportCard({
   }, [allowUploadMode]);
 
 
+// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Botão) =======================
   const isButtonDisabled = 
     isLoading || 
     !selectedDataSource || 
     (importMode === "upload" && !selectedFile) ||
-    isMappingMissing; 
+    isMappingMissing ||
+    // A TRAVA: Desabilita se o alvo for CONTAS e os RECURSOS ainda não foram importados
+    (selectedOrigem === "SISTEMA" && processingTarget === "CONTAS" && !hasSuccessfullyImportedResources);
+// ======================== FIM DA ALTERAÇÃO (Passo 4 - Botão) =========================
 
   return (
     <Card>
@@ -198,7 +243,6 @@ function ImportCard({
         <Grid container spacing={3} alignItems="flex-start">
           {/* Lado Esquerdo: Controles */}
           <Grid item xs={12} md={6}>
-            {/* ======================= INÍCIO DA ALTERAÇÃO (Layout 3 Passos) ======================= */}
             <MDBox mb={2}>
               {/* Dropdown 1: Origem */}
               <Autocomplete 
@@ -229,18 +273,35 @@ function ImportCard({
             {/* Seletor 3: Contas/Recursos (Agora é um Dropdown) */}
             {selectedOrigem === "SISTEMA" && selectedDataSource && (
               <MDBox mb={2}>
+{/* ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Dropdown) ======================= */}
                  <Autocomplete 
                     options={targetOptions}
                     value={processingTarget}
                     disabled={isLoading} 
-                    onChange={handleProcessingTargetChange} 
+                    onChange={handleProcessingTargetChange}
+                    // A TRAVA: Desabilita a *opção* "CONTAS" se os recursos não foram importados
+                    getOptionDisabled={(option) => 
+                      option === "CONTAS" && !hasSuccessfullyImportedResources
+                    }
                     renderInput={(params) => (
-                      <TextField {...params} label="3. Selecione o Alvo do Processamento" />
+                      <TextField 
+                        {...params} 
+                        label="3. Selecione o Alvo do Processamento" 
+                        // Mostra o helper text se a trava estiver ativa
+                        helperText={
+                          !hasSuccessfullyImportedResources 
+                          ? "Importe 'RECURSOS' primeiro para habilitar 'CONTAS'." 
+                          : ""
+                        }
+                        FormHelperTextProps={{ 
+                          sx: { marginLeft: 1, color: 'warning.main', fontWeight: 'bold' } 
+                        }}
+                      />
                     )} 
                   />
+{/* ======================== FIM DA ALTERAÇÃO (Passo 4 - Dropdown) ========================= */}
               </MDBox>
             )}
-            {/* ======================== FIM DA ALTERAÇÃO (Layout 3 Passos) ========================= */}
             
             {/* Alerta de Mapeamento Faltando */}
             {isMappingMissing && (
@@ -282,7 +343,7 @@ function ImportCard({
                 <>
                   <Icon>play_arrow</Icon>&nbsp;
                   {importMode === 'upload' ? "Processar Arquivo" : 
-                   (currentSourceType === "CSV" ? "Processar via Diretório" : "Processar via Conexão")}
+                    (currentSourceType === "CSV" ? "Processar via Diretório" : "Processar via Conexão")}
                 </>
               )}
             </MDButton>
@@ -338,12 +399,18 @@ ImportCard.propTypes = {
   onProcessUpload: PropTypes.func.isRequired,
   onProcessDirectory: PropTypes.func.isRequired,
   dataSourceOptions: PropTypes.arrayOf(PropTypes.object).isRequired,
+// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Props) =======================
+  history: PropTypes.arrayOf(PropTypes.object),
+// ======================== FIM DA ALTERAÇÃO (Passo 4 - Props) =========================
   isLoading: PropTypes.bool,
   onOpenTemplate: PropTypes.func.isRequired,
 };
 
 ImportCard.defaultProps = {
   isLoading: false,
+// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Props) =======================
+  history: [],
+// ======================== FIM DA ALTERAÇÃO (Passo 4 - Props) =========================
 };
 
 export default ImportCard;

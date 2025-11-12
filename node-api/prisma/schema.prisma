@@ -1,12 +1,8 @@
-// schema.prisma (Refatorado com SystemConfig + DataMapping limpo)
+// schema.prisma (Refatorado com permissions)
 
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "debian-openssl-3.0.x"]
-}
-
-generator erd {
-  provider = "prisma-erd-generator"
 }
 
 datasource db {
@@ -102,11 +98,11 @@ model Group {
 }
 
 model Platform {
-  id     Int       @id @default(autoincrement())
-  name   String    @unique
-  key    String    @unique
-  route  String    @unique
-  icon   String?
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  key      String    @unique
+  route    String    @unique
+  icon     String?
   packages Package[]
 
   @@map("platforms")
@@ -127,30 +123,30 @@ model Package {
 // --- TABELA MESTRA DE CONFIGURAÇÃO (COM SUFIXOS) ---
 
 model DataSource {
-  id                   Int                @id @default(autoincrement())
-  name_datasource      String             @unique
-  origem_datasource    DataSourceOrigem
-  type_datasource      DataSourceType
+  id                     Int                @id @default(autoincrement())
+  name_datasource        String             @unique
+  origem_datasource      DataSourceOrigem
+  type_datasource        DataSourceType
   description_datasource String?
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
-  userId               Int
-  user                 User               @relation(fields: [userId], references: [id])
-  importLogs           ImportLog[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+  userId                 Int
+  user                   User               @relation(fields: [userId], references: [id])
+  importLogs             ImportLog[]
 
   // Relações 1-para-1 (Config)
-  hrConfig             HRConfig?
-  idmConfig            IDMConfig?
-  systemConfig         SystemConfig? 
+  hrConfig               HRConfig?
+  idmConfig              IDMConfig?
+  systemConfig           SystemConfig?
 
   // Relações 1-para-1 (Mapeamento)
-  mappingRH            DataMappingRH?
-  mappingIDM           DataMappingIDM?
-  mappingSystem        DataMappingSystem?
+  mappingRH              DataMappingRH?
+  mappingIDM             DataMappingIDM?
+  mappingSystem          DataMappingSystem?
 
   // Relação 1-para-Muitos (Dados)
-  identitiesHR         IdentitiesHR[]
-  identitiesIDM        IdentitiesIDM[]
+  identitiesHR           IdentitiesHR[]
+  identitiesIDM          IdentitiesIDM[]
 
   @@map("DataSource")
 }
@@ -168,6 +164,10 @@ model ImportLog {
   user          User         @relation(fields: [userId], references: [id])
   dataSourceId  Int?
   dataSource    DataSource?  @relation(fields: [dataSourceId], references: [id])
+
+  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  processingTarget String? // Armazena "RH", "CONTAS", ou "RECURSOS"
+  // ======================== FIM DA ALTERAÇÃO =========================
 
   @@map("import_logs")
 }
@@ -202,7 +202,7 @@ model IdentitiesHR {
   dataSource     DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
   // Relação com Fluxo 3
-  accounts       Accounts[] 
+  accounts       Accounts[]
 
   @@map("IdentitiesHR")
 }
@@ -250,53 +250,53 @@ model DataMappingIDM {
 }
 
 model IdentitiesIDM {
-  id              Int                     @id @default(autoincrement())
-  identity_id_idm String                  @unique
+  id              Int                   @id @default(autoincrement())
+  identity_id_idm String                @unique
   name_idm        String?
-  email_idm       String?                 @unique
+  email_idm       String?               @unique
   status_idm      String?
   extra_data_idm  Json?
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
   roles           Identities_RolesIDM[]
   
   dataSourceId    Int
-  dataSource      DataSource              @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  dataSource      DataSource            @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
   @@map("IdentitiesIDM")
 }
 
 model RolesIDM {
-  id                   Int                   @id @default(autoincrement())
-  name_role_idm        String                @unique
-  description_role_idm String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  identities           Identities_RolesIDM[]
-  endpoints            RolesIDM_Endpoint[]
+  id                     Int                   @id @default(autoincrement())
+  name_role_idm          String                @unique
+  description_role_idm   String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  identities             Identities_RolesIDM[]
+  endpoints              RolesIDM_Endpoint[]
 
   @@map("RolesIDM")
 }
 
 model Endpoint_IDM {
-  id                       Int                   @id @default(autoincrement())
-  name_endpoint_idm        String                @unique
-  description_endpoint_idm String?
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
-  roles                    RolesIDM_Endpoint[]
-  sources                  Endpoint_Source[]
+  id                         Int                   @id @default(autoincrement())
+  name_endpoint_idm          String                @unique
+  description_endpoint_idm   String?
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  roles                      RolesIDM_Endpoint[]
+  sources                    Endpoint_Source[]
 
   @@map("Endpoint_IDM")
 }
 
 model ResourceIDM {
-  id                     Int               @id @default(autoincrement())
-  name_resource_idm      String
+  id                       Int               @id @default(autoincrement())
+  name_resource_idm        String
   description_resource_idm String?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
-  endpoints              Endpoint_Source[]
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+  endpoints                Endpoint_Source[]
 
   @@map("ResourceIDM")
 }
@@ -340,41 +340,40 @@ model Endpoint_Source {
 // ===============================================
 
 model System {
-  id          Int      @id @default(autoincrement())
-  name_system String   @unique
-  
+  id                 Int            @id @default(autoincrement())
+  name_system        String         @unique
   description_system String?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
 
   // Relação 1-para-N com as Configs de Fonte de Dados
   dataSourcesConfigs SystemConfig[]
 
   // Relações 1-para-N diretas com os dados
-  accounts  Accounts[]
-  resources Resource[]
+  accounts           Accounts[]
+  resources          Resource[]
   
   @@map("System")
 }
 
 model SystemConfig {
-  id            Int        @id @default(autoincrement())
+  id                  Int                  @id @default(autoincrement())
   
   // Relação 1-para-1 com DataSource
-  dataSourceId  Int        @unique
-  dataSource    DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  dataSourceId        Int                  @unique
+  dataSource          DataSource           @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
   // Relação N-para-1 com System (Qual sistema esta config alimenta?)
-  systemId      Int
-  system        System     @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  systemId            Int
+  system              System               @relation(fields: [systemId], references: [id], onDelete: Cascade)
 
   // Fonte 1: Contas (Accounts)
-  tipo_fonte_contas   SystemConnectionType // (CSV, DATABASE, etc.)
+  tipo_fonte_contas   SystemConnectionType 
   diretorio_contas    String?
   // (Futuramente: db_host_contas, etc.)
 
   // Fonte 2: Recursos (Resources)
-  tipo_fonte_recursos SystemConnectionType // (CSV, DATABASE, etc.)
+  tipo_fonte_recursos SystemConnectionType 
   diretorio_recursos  String?
   // (Futuramente: db_host_recursos, etc.)
 
@@ -383,67 +382,69 @@ model SystemConfig {
 
 
 model DataMappingSystem {
-  id           Int        @id @default(autoincrement())
-  dataSourceId Int        @unique
-  dataSource   DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  id                     Int        @id @default(autoincrement())
+  dataSourceId           Int        @unique
+  dataSource             DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
-  // Mapeamento para Contas (prefixos 'map_' removidos)
-  accounts_id_in_system String? 
-  accounts_name         String? 
-  accounts_email        String? 
-  accounts_status       String? 
-  accounts_identity_id  String? // O FK para o RH (Mantido, pois você pediu)
+  // Mapeamento para Contas
+  accounts_id_in_system  String? 
+  accounts_name          String? 
+  accounts_email         String? 
+  accounts_status        String? 
+  accounts_identity_id   String? // O FK para o RH
+  accounts_resource_name String? // O nome do Recurso (ex: "SAP_FIN_READ")
 
-  // Mapeamento para Recursos (prefixos 'map_' removidos)
+  // Mapeamento para Recursos
   resources_id_in_system String? 
   resources_name         String?
   resources_description  String?
-  // ======================== FIM DA ALTERAÇÃO =========================
+  resources_permissions  String? 
   
   @@map("data_mappings_system")
 }
 
 // --- Entidades Sistema---
 model Accounts {
-  id                     Int      @id @default(autoincrement())
-  id_in_system_account   String   @unique 
-  name_account           String?
-  email_account          String?
-  status_account         String?
-  user_type_account      String?
-  extra_data_account     Json?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  id                   Int          @id @default(autoincrement())
+  id_in_system_account String       @unique 
+  name_account         String?
+  email_account        String?
+  status_account       String?
+  user_type_account    String?
+  extra_data_account   Json?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
   
   // Relação 1:N com System (Obrigatória)
-  systemId Int
-  system   System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  systemId             Int
+  system               System       @relation(fields: [systemId], references: [id], onDelete: Cascade)
 
   // Relação 1:N com IdentitiesHR (Obrigatória)
-  // (Este é o campo que você mencionou)
-  identityId Int
-  identity   IdentitiesHR @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  identityId           Int
+  identity             IdentitiesHR @relation(fields: [identityId], references: [id], onDelete: Cascade)
   
   // Relação N:M com Resource (via Assignment)
-  assignments Assignment[]
+  assignments          Assignment[]
 
   @@map("Accounts")
 }
 
 model Resource {
-  id                   Int      @id @default(autoincrement())
-  name_resource        String   
+  id                   Int          @id @default(autoincrement())
+  name_resource        String       
   description_resource String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @default(now())
+  
+  permissions          String?      // Ex: "read;write;delete"
+
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @default(now())
   
   // Relação 1:N com System (Obrigatória)
-  systemId Int
-  system   System @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  systemId             Int
+  system               System       @relation(fields: [systemId], references: [id], onDelete: Cascade)
 
   // Relação N:M com Accounts (via Assignment)
-  assignments Assignment[]
+  assignments          Assignment[]
 
   @@map("Resource")
 }

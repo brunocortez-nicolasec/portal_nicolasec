@@ -7,63 +7,75 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Funções auxiliares (movidas para o topo para melhor organização)
+// Funções auxiliares
 const cleanText = (text) => text?.trim().toLowerCase();
-const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
+
+// ======================= INÍCIO DA REFATORAÇÃO (Prisma Schema) =======================
 
 const getLiveFeedData = async (req, res) => {
-    const { system } = req.query; // Pega 'system' da query string
+    const { system } = req.query; // Pega 'system' da query string (ex: "SAP", "RH", ou "Geral")
     const isGeneral = !system || system.toLowerCase() === 'geral';
-    // let targetSystemName = system; // Removido
 
-    // Garante userId Int
     const userIdInt = parseInt(req.user.id, 10);
     if (isNaN(userIdInt)) {
         return res.status(400).json({ message: "ID de usuário inválido." });
     }
 
     try {
-        // --- 1. Buscar Identidades (RH) e criar Mapas ---
-        const rhIdentities = await prisma.identity.findMany({
-            where: { sourceSystem: { equals: 'RH', mode: 'insensitive' } },
+      // Usamos uma transação para garantir que os dados sejam consistentes
+      const combinedData = await prisma.$transaction(async (tx) => {
+
+        // --- 1. Buscar Identidades (RH) e criar Mapa ---
+        const rhIdentities = await tx.identitiesHR.findMany({
+            where: { 
+                dataSource: { 
+                    userId: userIdInt,
+                    origem_datasource: 'RH'
+                }
+            },
         });
         
-        const rhMapByCpf = new Map(rhIdentities.filter(i => i.cpf).map(i => [cleanCpf(i.cpf), i]));
-        const rhMapByEmail = new Map(rhIdentities.filter(i => i.email).map(i => [cleanText(i.email), i]));
+        const rhMapById = new Map(rhIdentities.map(i => [i.id, i]));
 
         // --- 2. Buscar Contas (Accounts) dos Sistemas ---
-        const whereAccounts = {};
-        let systemRecord = null;
+        const whereAccounts = {
+            system: {
+                dataSourcesConfigs: { some: { dataSource: { userId: userIdInt } } }
+            }
+        };
+        
+        let targetSystemName = system;
+        let systemRecord = null; // Declarado aqui
 
         if (!isGeneral) {
             if (system.toUpperCase() === 'RH') {
-                // Se for RH, não busca contas (whereAccounts fica vazio)
+                // Se for RH, não busca contas
             } else {
-                systemRecord = await prisma.system.findUnique({
-                    where: { name: system },
+                systemRecord = await tx.system.findUnique({
+                    where: { name_system: system }, // Corrigido de 'name'
                     select: { id: true }
                 });
                 if (!systemRecord) {
                     console.warn(`LiveFeed: Sistema ${system} não encontrado.`);
-                    return res.status(404).json({ message: `Sistema "${system}" não encontrado.`});
+                    throw new Error(`Sistema "${system}" não encontrado.`);
                 }
-                whereAccounts.systemId = systemRecord.id;
+                whereAccounts.system.name_system = system; // Filtra as contas por nome
             }
         }
         
         let systemAccounts = [];
         
-        // Verifica se devemos buscar contas (ou seja, se NÃO for o RH)
         if (!system || system.toUpperCase() !== 'RH') { 
-            systemAccounts = await prisma.account.findMany({
-                where: whereAccounts, // Vazio se 'Geral', com systemId se 'Específico'
+            systemAccounts = await tx.accounts.findMany({
+                where: whereAccounts, 
                 include: {
-                    profiles: {
+                    identity: true, 
+                    system: { select: { id: true, name_system: true } },
+                    assignments: { 
                         include: {
-                            profile: { select: { id: true, name: true } }
+                            resource: true 
                         }
-                    },
-                    system: { select: { id: true, name: true } }
+                    }
                 },
             });
         }
@@ -71,161 +83,121 @@ const getLiveFeedData = async (req, res) => {
         // Se a métrica for específica para o RH, formatamos as identidades
         if (system && system.toUpperCase() === 'RH') {
              systemAccounts = rhIdentities.map(id => ({
-                 id: id.id,
-                 accountIdInSystem: id.identityId,
-                 name: id.name,
-                 email: id.email,
-                 status: id.status,
-                 userType: id.userType,
-                 cpf: id.cpf,
-                 extraData: id.extraData,
-                 identityId: id.id,
-                 systemId: null,
-                 system: { name: 'RH' },
-                 profiles: [], // Identidade RH não tem perfis de app
+                id: id.id,
+                id_in_system_account: id.identity_id_hr,
+                name_account: id.name_hr,
+                email_account: id.email_hr,
+                status_account: id.status_hr,
+                user_type_account: id.user_type_hr,
+                extra_data_account: id.extra_data_hr,
+                identityId: id.id,
+                systemId: null,
+                system: { name_system: 'RH', id: null },
+                identity: id, 
+                assignments: [], 
              }));
         }
         
-        // --- 3. Buscar Exceções do Usuário ---
-        const identityExceptions = await prisma.identityDivergenceException.findMany({
-            where: { userId: userIdInt },
-            select: { identityId: true, divergenceCode: true, targetSystem: true }
-        });
-        const identityExceptionsSet = new Set(
-            identityExceptions.map(ex => `${ex.identityId}_${ex.divergenceCode}_${ex.targetSystem}`)
-        );
-
-        const accountExceptions = await prisma.accountDivergenceException.findMany({
-            where: { userId: userIdInt },
-            select: { accountId: true, divergenceCode: true }
-        });
-        const accountExceptionsSet = new Set(
-            accountExceptions.map(ex => `${ex.accountId}_${ex.divergenceCode}`)
-        );
-
+        // --- 3. Buscar Exceções (Removido) ---
+        
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
         // --- 4. Processar Contas (Órfãs, Zumbis, Mismatch, Dormentes) ---
         const finalData = systemAccounts.map(account => {
-            // Se for Identity (formatada como conta), retorna
-            if (account.system.name.toUpperCase() === 'RH') {
-                 // --- INÍCIO DA CORREÇÃO (Criticidade de Identidade) ---
-                 // Define se a identidade RH é admin
-                 const isAdmin = (account.userType || '').toLowerCase().includes('admin');
-                 // --- FIM DA CORREÇÃO ---
+            
+            if (account.system.name_system.toUpperCase() === 'RH') {
+                 const isAdmin = (account.user_type_account || '').toLowerCase().includes('admin');
                  return {
-                     id: account.id,
-                     identityId: account.identityId,
-                     name: account.name,
-                     email: account.email,
-                     userType: account.userType,
-                     perfil: 'N/A (Fonte Autoritativa)', // Perfil da *identidade* (Tipo)
-                     rh_status: account.status || 'N/A',
-                     app_status: 'N/A',
-                     sourceSystem: account.system.name,
-                     divergence: false, 
-                     isCritical: isAdmin, // <<< CORREÇÃO: Um admin no RH é "crítico" por natureza
-                     divergenceDetails: [],
-                     id_user: account.accountIdInSystem,
-                     cpf: account.cpf,
-                     last_login: account.extraData?.last_login || null,
-                     rhData: account, 
+                    id: account.id,
+                    identityId: account.identityId,
+                    name: account.name_account,
+                    email: account.email_account,
+                    userType: account.user_type_account,
+                    perfil: 'N/A (Fonte Autoritativa)', 
+                    rh_status: account.status_account || 'N/A',
+                    app_status: 'N/A',
+                    sourceSystem: account.system.name_system,
+                    divergence: false, 
+                    isCritical: isAdmin, 
+                    divergenceDetails: [],
+                    id_user: account.id_in_system_account,
+                    cpf: account.identity?.cpf_hr, 
+                    last_login: account.extra_data_account?.last_login || null,
+                    rhData: account.identity, 
                  };
             }
 
-            // Para contas de APP, tenta encontrar a identidade RH correspondente
-            const rhUser = (account.cpf && rhMapByCpf.get(cleanCpf(account.cpf))) ||
-                           (account.email && rhMapByEmail.get(cleanText(account.email)));
-            
+            const rhUser = account.identity;
             const divergenceDetails = [];
             
-            // --- INÍCIO DA CORREÇÃO (Cálculo de Criticidade) ---
-            // 1. Calcula o perfil e se é admin ANTES de checar divergências
-            const perfilString = account.profiles.map(p => p.profile.name).join(', ') || 'N/A';
+            const perfilString = account.assignments.map(a => a.resource?.name_resource).filter(Boolean).join(', ') || 'N/A';
+            
             const isAdmin = perfilString.toLowerCase().includes('admin');
-            // --- FIM DA CORREÇÃO ---
-
             const isOrphan = !rhUser; 
 
             if (isOrphan) {
                 const code = 'ORPHAN_ACCOUNT';
-                const text = 'Conta Órfã: Não foi possível vincular a uma identidade do RH (sem CPF/Email correspondente).';
-                
-                if (!accountExceptionsSet.has(`${account.id}_${code}`)) {
-                    divergenceDetails.push({ 
-                        code: code, 
-                        text: text,
-                        rhData: null,
-                        appData: account
-                    });
-                }
+                const text = 'Conta Órfã: Não foi possível vincular a uma identidade do RH (identityId está nulo).';
+                divergenceDetails.push({ 
+                    code: code, 
+                    text: text,
+                    rhData: null,
+                    appData: account
+                });
             }
 
             if(rhUser) { 
-                const isZombie = account.status === 'Ativo' && rhUser.status === 'Inativo';
-                if (isZombie && !accountExceptionsSet.has(`${account.id}_ZOMBIE_ACCOUNT`)) {
+                const isZombie = account.status_account === 'Ativo' && rhUser.status_hr === 'Inativo';
+                if (isZombie) {
                     divergenceDetails.push({ code: 'ZOMBIE_ACCOUNT', text: 'Acesso Ativo Indevido: Conta ativa, mas identidade inativa no RH.', rhData: rhUser, appData: account });
                 }
-                const hasCpfDivergence = account.cpf && rhUser.cpf && cleanCpf(account.cpf) !== cleanCpf(rhUser.cpf);
-                if (hasCpfDivergence && !accountExceptionsSet.has(`${account.id}_CPF_MISMATCH`)) {
-                    divergenceDetails.push({ code: 'CPF_MISMATCH', text: 'Divergência de CPF.', rhData: rhUser, appData: account });
-                }
-                const hasNameDivergence = account.name && rhUser.name && cleanText(account.name) !== cleanText(rhUser.name);
-                if (hasNameDivergence && !accountExceptionsSet.has(`${account.id}_NAME_MISMATCH`)) {
+                
+                const hasNameDivergence = account.name_account && rhUser.name_hr && cleanText(account.name_account) !== cleanText(rhUser.name_hr);
+                if (hasNameDivergence) {
                     divergenceDetails.push({ code: 'NAME_MISMATCH', text: 'Divergência de Nome.', rhData: rhUser, appData: account });
                 }
-                const hasEmailDivergence = account.email && rhUser.email && cleanText(account.email) !== cleanText(rhUser.email);
-                if (hasEmailDivergence && !accountExceptionsSet.has(`${account.id}_EMAIL_MISMATCH`)) {
+                
+                const hasEmailDivergence = account.email_account && rhUser.email_hr && cleanText(account.email_account) !== cleanText(rhUser.email_hr);
+                if (hasEmailDivergence) {
                     divergenceDetails.push({ code: 'EMAIL_MISMATCH', text: 'Divergência de E-mail.', rhData: rhUser, appData: account });
-                }
-                const hasUserTypeDivergence = account.userType && rhUser.userType && cleanText(account.userType) !== cleanText(rhUser.userType);
-                if (hasUserTypeDivergence && !accountExceptionsSet.has(`${account.id}_USERTYPE_MISMATCH`)) {
-                    divergenceDetails.push({ code: 'USERTYPE_MISMATCH', text: 'Divergência de Tipo de Usuário.', rhData: rhUser, appData: account });
                 }
             }
 
             let hasAnyDivergence = divergenceDetails.length > 0;
             
-            // Lógica de Dormência
-            const loginDateStr = typeof account.extraData === 'object' && account.extraData !== null ? account.extraData.last_login : null;
+            const loginDateStr = typeof account.extra_data_account === 'object' && account.extra_data_account !== null ? account.extra_data_account.last_login : null;
             const loginDate = loginDateStr ? new Date(loginDateStr) : null;
             const isDormant = loginDate && !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
-            const isAdminDormente = isAdmin && account.status === 'Ativo' && isDormant;
+            const isAdminDormente = isAdmin && account.status_account === 'Ativo' && isDormant;
             
             if (isAdminDormente) {
-                if (!accountExceptionsSet.has(`${account.id}_DORMANT_ADMIN`)) {
-                    divergenceDetails.push({ 
-                        code: 'DORMANT_ADMIN', 
-                        text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).',
-                        rhData: rhUser,
-                        appData: account
-                    });
-                    hasAnyDivergence = true; 
-                }
+                divergenceDetails.push({ 
+                    code: 'DORMANT_ADMIN', 
+                    text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).',
+                    rhData: rhUser,
+                    appData: account
+                });
+                hasAnyDivergence = true; 
             }
             
-            // --- INÍCIO DA CORREÇÃO (Lógica de Criticidade) ---
-            // A regra agora é simples: é crítico se tem *qualquer* divergência E é admin.
             const isCritical = hasAnyDivergence && isAdmin;
-            // --- FIM DA CORREÇÃO ---
             
-            // Objeto final para contas de APP
             return {
                 id: account.id, 
                 identityId: account.identityId,
-                name: account.name,
-                email: account.email,
-                userType: account.userType,
-                perfil: perfilString, // <<< Usa a variável calculada
-                rh_status: rhUser?.status || (isOrphan ? 'Não encontrado' : 'N/A'),
-                app_status: account.status || 'N/A', 
-                sourceSystem: account.system.name,
+                name: account.name_account,
+                email: account.email_account,
+                userType: rhUser?.user_type_hr || 'N/A', 
+                perfil: perfilString,
+                rh_status: rhUser?.status_hr || (isOrphan ? 'Não encontrado' : 'N/A'),
+                app_status: account.status_account || 'N/A', 
+                sourceSystem: account.system.name_system,
                 divergence: hasAnyDivergence,
-                isCritical: isCritical, // <<< Usa a nova lógica
+                isCritical: isCritical,
                 divergenceDetails: divergenceDetails,
-                id_user: account.accountIdInSystem,
-                cpf: account.cpf,
+                id_user: account.id_in_system_account,
+                cpf: rhUser?.cpf_hr || null,
                 last_login: loginDateStr,
                 rhData: rhUser || null,
             };
@@ -233,7 +205,7 @@ const getLiveFeedData = async (req, res) => {
         
         // --- Etapa 5: (ACCESS_NOT_GRANTED) ---
         const missingAccessUsers = [];
-        const activeRhIdentities = rhIdentities.filter(rhId => rhId.status === 'Ativo');
+        const activeRhIdentities = rhIdentities.filter(rhId => rhId.status_hr === 'Ativo');
 
         const createMissingUserEntry = (rhUser, missingSystem) => {
             const divergenceDetails = [{ 
@@ -244,79 +216,82 @@ const getLiveFeedData = async (req, res) => {
                 targetSystem: missingSystem
             }];
             
-            // --- INÍCIO DA CORREÇÃO (Criticidade de Identidade) ---
-            // A "identidade" é admin se seu 'userType' contiver "admin"
-            const isAdmin = (rhUser.userType || '').toLowerCase().includes('admin');
-            // A divergência é 'ACCESS_NOT_GRANTED', então hasAnyDivergence = true
-            const isCritical = isAdmin; // Se é admin e falta acesso, é crítico.
-            // --- FIM DA CORREÇÃO ---
+            const isAdmin = (rhUser.user_type_hr || '').toLowerCase().includes('admin');
+            const isCritical = isAdmin; 
 
             return {
                 id: `${rhUser.id}-${missingSystem}`, 
                 identityId: rhUser.id,
-                name: rhUser.name,
-                email: rhUser.email,
-                userType: rhUser.userType,
-                perfil: 'N/A', // Não tem perfil de app
-                rh_status: rhUser.status,
+                name: rhUser.name_hr,
+                email: rhUser.email_hr,
+                userType: rhUser.user_type_hr,
+                perfil: 'N/A', 
+                rh_status: rhUser.status_hr,
                 app_status: 'Não encontrado',
                 sourceSystem: missingSystem, 
                 divergence: true, 
-                isCritical: isCritical, // <<< Usa a nova lógica
+                isCritical: isCritical, 
                 divergenceDetails: divergenceDetails,
-                id_user: rhUser.identityId,
-                cpf: rhUser.cpf,
+                id_user: rhUser.identity_id_hr,
+                cpf: rhUser.cpf_hr,
                 last_login: null,
                 rhData: rhUser, 
             };
         };
+        
+// ======================= INÍCIO DA CORREÇÃO (ReferenceError) =======================
+        // Mapeia { identityId -> Set(systemId) }
+        // CORRIGIDO: de 'allAccounts' para 'systemAccounts'
+        const identitySystemMap = systemAccounts.reduce((map, acc) => {
+// ======================== FIM DA CORREÇÃO (ReferenceError) =========================
+            if (!acc.identityId) return map; 
+            if (!map.has(acc.identityId)) {
+                map.set(acc.identityId, new Set());
+            }
+            map.get(acc.identityId).add(acc.systemId);
+            return map;
+        }, new Map());
 
         if (isGeneral) {
-            const allAppSystems = await prisma.system.findMany({ 
-                where: { name: { not: 'RH' } }, 
-                select: { id: true, name: true } 
+            const allAppSystems = await tx.system.findMany({ 
+                where: { 
+                    dataSourcesConfigs: { some: { dataSource: { userId: userIdInt } } },
+                    name_system: { not: 'RH' } 
+                }, 
+                select: { id: true, name_system: true } 
             }); 
-            const allAccounts = await prisma.account.findMany({ 
-                 where: { identityId: { not: null } },
-                 select: { identityId: true, systemId: true } 
-            });
-            
-            const identitySystemMap = allAccounts.reduce((map, acc) => {
-                if (!map.has(acc.identityId)) {
-                    map.set(acc.identityId, new Set());
-                }
-                map.get(acc.identityId).add(acc.systemId);
-                return map;
-            }, new Map());
             
             for (const sys of allAppSystems) {
                  activeRhIdentities.forEach(rhUser => {
                      const hasAccountInSystem = identitySystemMap.get(rhUser.id)?.has(sys.id);
-                      if (!hasAccountInSystem && !identityExceptionsSet.has(`${rhUser.id}_ACCESS_NOT_GRANTED_${sys.name}`)) {
-                           missingAccessUsers.push(createMissingUserEntry(rhUser, sys.name));
+                      if (!hasAccountInSystem) { 
+                           missingAccessUsers.push(createMissingUserEntry(rhUser, sys.name_system));
                        }
                  });
             }
-        } else if (system && system.toUpperCase() !== 'RH' && systemRecord) {
-             const identityIdsInThisSystem = new Set(systemAccounts.map(acc => acc.identityId).filter(id => id !== null));
-             
+        } else if (systemRecord) { // <-- USA O systemRecord (se não for "RH")
              activeRhIdentities.forEach(rhUser => {
-                  if (!identityIdsInThisSystem.has(rhUser.id) && !identityExceptionsSet.has(`${rhUser.id}_ACCESS_NOT_GRANTED_${system}`)) {
-                       missingAccessUsers.push(createMissingUserEntry(rhUser, system));
-                   }
+                const hasAccountInSystem = identitySystemMap.get(rhUser.id)?.has(systemRecord.id);
+                 if (!hasAccountInSystem) { 
+                      missingAccessUsers.push(createMissingUserEntry(rhUser, system));
+                  }
              });
         }
         
         // --- Etapa 6: Combinar os resultados ---
-        const combinedData = [...finalData, ...missingAccessUsers];
+        const combinedResult = [...finalData, ...missingAccessUsers];
         
-        return res.status(200).json(combinedData);
+        return combinedResult;
+      }); // Fim da transação
+      
+      return res.status(200).json(combinedData);
 
     } catch (error) {
         console.error(`Erro ao buscar dados do Live Feed:`, error);
         return res.status(500).json({ message: "Erro interno do servidor." });
     }
 };
+// ======================== FIM DA REFATORAÇÃO (Prisma Schema) =========================
 
 // Define a rota GET para o Live Feed
 router.get(

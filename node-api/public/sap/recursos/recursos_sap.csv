@@ -1,0 +1,7 @@
+Perfil,Permissoes,Descricao
+SAP_FIN_LEITURA,"leitura;visualizacao",Acesso de leitura ao módulo Financeiro
+SAP_FIN_ESCRITA,"leitura;escrita;modificacao",Acesso de escrita ao módulo Financeiro
+SAP_RH_ADMIN,"leitura;escrita;aprovacao",Administrador do módulo de RH
+SAP_BASIS,"leitura;escrita;modificacao;exclusao",Administrador Basis (Acesso total)
+PORTAL_COMPRAS_USER,"leitura;aprovacao",Usuário padrão do Portal de Compras
+PORTAL_COMPRAS_VIEW,"leitura",Acesso de visualização ao Portal de Compras
