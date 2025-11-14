@@ -3,6 +3,15 @@
 import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useMaterialUIController } from "context"; // Necessário para o Modo Escuro
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText"; // Para a lista de colunas
+// ======================= INÍCIO DA ALTERAÇÃO (Novos Imports) =======================
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+// ======================== FIM DA ALTERAÇÃO (Novos Imports) =========================
 
 // Componentes
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -16,11 +25,10 @@ import CircularProgress from "@mui/material/CircularProgress";
 import { Autocomplete } from "@mui/material";
 import Icon from "@mui/material/Icon";
 import MDInput from "components/MDInput";
-import DataTable from "examples/Tables/DataTable";
 import MDButton from "components/MDButton";
 import MDSnackbar from "components/MDSnackbar";
-import ToggleButton from "@mui/material/ToggleButton";
-import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+// import ToggleButton from "@mui/material/ToggleButton"; // <-- Removido
+// import ToggleButtonGroup from "@mui/material/ToggleButtonGroup"; // <-- Removido
 
 // Definição dos nossos esquemas de destino (usando nomes EXATOS do schema.prisma)
 const SCHEMA_MAP = {
@@ -30,14 +38,14 @@ const SCHEMA_MAP = {
   IDM: [
     "identity_id_idm", "name_idm", "email_idm", "status_idm", "extra_data_idm"
   ],
-  // Nomes EXATOS do model DataMappingSystem
   SISTEMA_CONTAS: [
     "accounts_id_in_system", 
     "accounts_name", 
     "accounts_email", 
+    "accounts_cpf", 
     "accounts_status", 
     "accounts_identity_id",
-    "accounts_resource_name" // <-- ADICIONADO (para lógica denormalizada)
+    "accounts_resource_name" 
   ],
   SISTEMA_RECURSOS: [
     "resources_name", 
@@ -46,25 +54,57 @@ const SCHEMA_MAP = {
   ],
 };
 
-// ======================= INÍCIO DA ALTERAÇÃO (Regra de Negócio) =======================
 // Definição dos campos obrigatórios (usando nomes EXATOS do schema.prisma)
 const REQUIRED_FIELDS_MAP = {
   RH: ["identity_id_hr", "email_hr", "status_hr"],
-  IDM: ["identity_id_idm", "email_idm", "status_idm"], // Mantido por consistência
+  IDM: ["identity_id_idm", "email_idm", "status_idm"], 
   SISTEMA_CONTAS: [
     "accounts_id_in_system", 
     "accounts_email", 
     "accounts_identity_id",
-    "accounts_resource_name" // <-- ADICIONADO AQUI
+    "accounts_resource_name" 
   ], 
   SISTEMA_RECURSOS: ["resources_name", "resources_permissions"],
 };
-// ======================== FIM DA ALTERAÇÃO (Regra de Negócio) =========================
+
+// Definição das descrições (Helper Text)
+const DESCRIPTION_MAP = {
+  // RH
+  "identity_id_hr": "Obrigatório. Chave única da identidade (ex: Matrícula, ID Único).",
+  "name_hr": "Opcional. Nome completo do colaborador.",
+  "email_hr": "Obrigatório. Email corporativo (usado para vínculo se o ID falhar).",
+  "status_hr": "Obrigatório. Situação no RH (ex: 'Ativo', 'Inativo', 'Ferias').",
+  "user_type_hr": "Opcional. Tipo de colaborador (ex: 'Funcionario', 'Terceiro').",
+  "cpf_hr": "Opcional, mas recomendado. CPF (usado para vínculo e divergências).",
+  "extra_data_hr": "Opcional. Outros dados que deseja armazenar (ex: Centro de Custo).",
+  
+  // IDM (Se for usar)
+  "identity_id_idm": "Obrigatório. ID único no IDM.",
+  "name_idm": "Opcional. Nome no IDM.",
+  "email_idm": "Obrigatório. Email no IDM.",
+  "status_idm": "Obrigatório. Status no IDM.",
+  
+  // SISTEMA_CONTAS
+  "accounts_id_in_system": "Obrigatório. Chave única da conta no sistema (ex: 'ASILVA', 'bruno.cortez').",
+  "accounts_name": "Opcional. Nome de exibição da conta (ex: 'Ana S. (SAP)').",
+  "accounts_email": "Obrigatório. Email da conta no sistema.",
+  "accounts_cpf": "Opcional. CPF registrado no sistema (usado para encontrar divergências).",
+  "accounts_status": "Opcional. Status da conta no sistema (ex: 'Ativo', 'Bloqueado').",
+  "accounts_identity_id": "Obrigatório. O ID do RH (Matrícula) para vincular esta conta à identidade correta.",
+  "accounts_resource_name": "Obrigatório. Lista de perfis/recursos, separados por ponto-e-vírgula (ex: \"PERFIL_A;PERFIL_B\").",
+
+  // SISTEMA_RECURSOS
+  "resources_name": "Obrigatório. Nome/ID único do recurso/perfil (ex: 'SAP_FIN_LEITURA').",
+  "resources_description": "Opcional. Descrição do que o recurso faz.",
+  "resources_permissions": "Obrigatório. Lista de permissões, separadas por ponto-e-vírgula (ex: \"leitura;escrita\")."
+};
 
 
 function MapeamentoDados() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [controller] = useMaterialUIController();
+  const { darkMode } = controller;
 
   const [loadingList, setLoadingList] = useState(true);
   const [loadingMapping, setLoadingMapping] = useState(false);
@@ -78,12 +118,17 @@ function MapeamentoDados() {
 
   const [mappingTarget, setMappingTarget] = useState("CONTAS"); 
   
-  const handleMappingTargetChange = (event, newTarget) => {
+  // ======================= INÍCIO DA ALTERAÇÃO (Abas) =======================
+  // O ToggleButton enviava "CONTAS" ou "RECURSOS".
+  // O Tab envia um índice (0 ou 1).
+  const handleMappingTargetChange = (event, newIndex) => {
+    const newTarget = newIndex === 0 ? "CONTAS" : "RECURSOS";
     if (newTarget !== null) {
       setMappingTarget(newTarget);
       setMappings({}); 
     }
   };
+  // ======================== FIM DA ALTERAÇÃO (Abas) =========================
 
   // Filtra a lista de fontes de dados com base na origem selecionada
   const filteredDataSources = useMemo(() => {
@@ -163,7 +208,7 @@ function MapeamentoDados() {
           
         } else if (origem === "IDM" && selectedDataSource.idmConfig) {
           savedMappingsDB = selectedDataSource.mappingIDM || {};
-          Object.assign(savedMappingsUI, savedMappingsDB); // Sem tradução
+          Object.assign(savedMappingsUI, savedMappingsDB); 
           
         } else if (origem === "SISTEMA" && selectedDataSource.systemConfig) {
           
@@ -172,9 +217,8 @@ function MapeamentoDados() {
           if (mappingTarget === "CONTAS") {
             schemaKey = "SISTEMA_CONTAS";
             diretorio = selectedDataSource.systemConfig.diretorio_contas;
-            // Filtra o map salvo para incluir apenas chaves de Contas
             Object.keys(savedMappingsDB).forEach(key => {
-              if (key.startsWith("accounts_")) { // <-- Usa o prefixo do schema
+              if (key.startsWith("accounts_")) { 
                 savedMappingsUI[key] = savedMappingsDB[key];
               }
             });
@@ -182,20 +226,18 @@ function MapeamentoDados() {
           } else if (mappingTarget === "RECURSOS") {
             schemaKey = "SISTEMA_RECURSOS";
             diretorio = selectedDataSource.systemConfig.diretorio_recursos;
-            // Filtra o map salvo para incluir apenas chaves de Recursos
             Object.keys(savedMappingsDB).forEach(key => {
-              if (key.startsWith("resources_")) { // <-- Usa o prefixo do schema
+              if (key.startsWith("resources_")) { 
                 savedMappingsUI[key] = savedMappingsDB[key];
               }
             });
           }
         }
         
-        // Limpa campos de ID (eles vêm do DB mas não são mapeáveis)
         delete savedMappingsUI.id;
         delete savedMappingsUI.dataSourceId;
         
-        setMappings(savedMappingsUI); // Salva o estado
+        setMappings(savedMappingsUI); 
         
         if (SCHEMA_MAP[schemaKey]) {
           setTargetSchema(SCHEMA_MAP[schemaKey]); 
@@ -203,7 +245,6 @@ function MapeamentoDados() {
           throw new Error(`Esquema de mapeamento '${schemaKey}' desconhecido.`);
         }
 
-        // Se a fonte for CSV (lógica de diretório)
         if (diretorio) {
           const responseHeader = await api.post("/datasources/test-csv", { diretorio });
           setCsvHeader(responseHeader.data.header.split(','));
@@ -270,14 +311,12 @@ function MapeamentoDados() {
       
       const otherTargetKeys = {};
       if (mappingTarget === "CONTAS") {
-        // Mantém as chaves de RECURSOS salvas
         Object.keys(fullSavedMap).forEach(key => {
           if (key.startsWith("resources_")) {
             otherTargetKeys[key] = fullSavedMap[key];
           }
         });
       } else {
-        // Mantém as chaves de CONTAS salvas
         Object.keys(fullSavedMap).forEach(key => {
           if (key.startsWith("accounts_")) {
             otherTargetKeys[key] = fullSavedMap[key];
@@ -285,10 +324,9 @@ function MapeamentoDados() {
         });
       }
       
-      // O payload final é o outro target (salvo) + o target atual (do estado 'mappings')
       finalMappingPayload = { 
         ...otherTargetKeys, 
-        ...mappings // 'mappings' state já tem as chaves corretas (ex: 'accounts_name')
+        ...mappings
       };
       
       delete finalMappingPayload.id;
@@ -298,7 +336,6 @@ function MapeamentoDados() {
     try {
       await api.post(`/systems/${selectedDataSource.id}/mapping`, finalMappingPayload); 
 
-      // Atualiza o 'selectedDataSource' no estado local com o payload salvo
       if (selectedDataSource.origem_datasource === "SISTEMA") {
         setSelectedDataSource(prev => ({
           ...prev,
@@ -321,24 +358,6 @@ function MapeamentoDados() {
     }
   };
   
-
-  // Formata os dados do cabeçalho do CSV para o DataTable
-  const csvTableData = useMemo(() => {
-    return {
-      columns: [
-        { Header: `Colunas de: ${selectedDataSource?.name_datasource || "CSV"}`, accessor: "columnName", width: "100%" },
-      ],
-      rows: csvHeader.map((headerName) => ({
-        columnName: (
-          <MDTypography variant="button" fontWeight="medium">
-            {headerName}
-          </MDTypography>
-        ),
-      })),
-    };
-  }, [csvHeader, selectedDataSource]);
-
-
   // Memo para verificar se o botão 'Salvar' deve ser desabilitado
   const isSaveDisabled = useMemo(() => {
     if (!selectedDataSource) return true;
@@ -360,8 +379,9 @@ function MapeamentoDados() {
   }, [mappings, selectedDataSource, mappingTarget]); 
 
 
-  // Formata os dados do esquema de destino para o DataTable
-  const targetTableData = useMemo(() => {
+  // A lógica de `targetTableData` foi movida para `mappingFields`
+  // para ser usada no novo layout de Lista.
+  const mappingFields = useMemo(() => {
     const origem = selectedDataSource?.origem_datasource;
     let schemaKey = origem;
     if (origem === "SISTEMA") {
@@ -372,46 +392,61 @@ function MapeamentoDados() {
 
     const selectedValues = Object.values(mappings).filter(Boolean); 
 
-    return {
-      columns: [
-        { Header: `Colunas da Aplicação (${origem === "SISTEMA" ? mappingTarget : origem})`, accessor: "schemaColumn", width: "50%" },
-        { Header: "Mapear para Coluna do CSV", accessor: "mappingDropdown", width: "50%" },
-      ],
-      rows: schema.map((schemaName) => { 
-        const isRequired = requiredFields.includes(schemaName);
-        const currentValue = mappings[schemaName] || null;
+    return schema.map((schemaName) => { 
+      const isRequired = requiredFields.includes(schemaName);
+      const currentValue = mappings[schemaName] || null;
+      const description = DESCRIPTION_MAP[schemaName] || null;
 
-        return {
-          schemaColumn: (
-            <MDTypography variant="button" fontWeight="medium" sx={{ pl: 1 }}>
-              {schemaName}
-              {isRequired && (
-                <MDTypography component="span" variant="button" fontWeight="medium" color="error" sx={{ ml: 0.5 }}>
-                  *
-                </MDTypography>
-              )}
-            </MDTypography>
-          ),
-          mappingDropdown: (
-            <Autocomplete
-              options={csvHeader}
-              value={currentValue} 
-              onChange={(event, newValue) => {
-                handleMappingChange(schemaName, newValue);
-              }}
-              getOptionDisabled={(option) =>
-                selectedValues.includes(option) && option !== currentValue
-              }
-              renderInput={(params) => (
-                <MDInput {...params} label="Selecionar Coluna" variant="standard" />
-              )}
-              sx={{ minWidth: "200px" }}
-            />
-          )
-        };
-      }),
-    };
-  }, [csvHeader, mappings, selectedDataSource, mappingTarget]); 
+      // Retorna os componentes JSX puros para serem usados na Lista
+      return {
+        key: schemaName,
+        label: (
+          <MDTypography variant="button" fontWeight="medium" color="text">
+            {schemaName}
+            {isRequired && (
+              <MDTypography component="span" variant="button" fontWeight="medium" color="error" sx={{ ml: 0.5 }}>
+                *
+              </MDTypography>
+            )}
+          </MDTypography>
+        ),
+        dropdown: (
+          <Autocomplete
+            options={csvHeader}
+            value={currentValue} 
+            onChange={(event, newValue) => {
+              handleMappingChange(schemaName, newValue);
+            }}
+            getOptionDisabled={(option) =>
+              selectedValues.includes(option) && option !== currentValue
+            }
+            // Adiciona suporte ao Modo Escuro
+            ListboxProps={{
+              sx: {
+                backgroundColor: darkMode ? "grey.800" : "white",
+              },
+            }}
+            renderInput={(params) => (
+              <MDInput 
+                {...params} 
+                label="Selecionar Coluna do CSV" 
+                variant="outlined" // 1. Variante corrigida para 'outlined'
+                helperText={description} // 2. Helper text adicionado
+                FormHelperTextProps={{ // 3. Estilo para o helper text
+                  sx: { 
+                    color: (theme) => theme.palette.text.secondary,
+                    fontSize: '0.75rem',
+                    marginLeft: 0 // Remove o recuo padrão do helper text
+                  } 
+                }}
+              /> 
+            )}
+            sx={{ minWidth: "200px" }}
+          />
+        )
+      };
+    });
+  }, [csvHeader, mappings, selectedDataSource, mappingTarget, darkMode]);
 
   const closeNotification = () => setNotification({ ...notification, open: false });
 
@@ -421,6 +456,7 @@ function MapeamentoDados() {
       <MDBox py={3}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
+            {/* Card 1: Seleção (Topo da Página) */}
             <Card>
               <MDBox
                 mx={2} mt={-3} py={3} px={2}
@@ -448,8 +484,14 @@ function MapeamentoDados() {
                           options={origemOptions}
                           value={selectedOrigem}
                           onChange={handleOrigemChange} 
+                          // Adiciona suporte ao Modo Escuro
+                          ListboxProps={{
+                            sx: {
+                              backgroundColor: darkMode ? "grey.800" : "white",
+                            },
+                          }}
                           renderInput={(params) => (
-                            <MDInput {...params} label="1. Selecionar Tipo de Origem" />
+                            <MDInput {...params} label="1. Selecionar Tipo de Origem" variant="outlined" />
                           )}
                           fullWidth
                         />
@@ -461,8 +503,14 @@ function MapeamentoDados() {
                           value={selectedDataSource}
                           disabled={!selectedOrigem || filteredDataSources.length === 0} 
                           onChange={handleDropdownChange} 
+                          // Adiciona suporte ao Modo Escuro
+                          ListboxProps={{
+                            sx: {
+                              backgroundColor: darkMode ? "grey.800" : "white",
+                            },
+                          }}
                           renderInput={(params) => (
-                            <MDInput {...params} label="2. Selecionar Fonte de Dados" />
+                            <MDInput {...params} label="2. Selecionar Fonte de Dados" variant="outlined" />
                           )}
                           fullWidth
                         />
@@ -471,98 +519,135 @@ function MapeamentoDados() {
                   )}
                 </MDBox>
 
-                {/* A condição agora é (origem é SISTEMA E uma fonte de dados foi selecionada) */}
+                {/* Seletor de Alvo (Contas/Recursos) (Passo 2) */}
                 {selectedOrigem === "SISTEMA" && selectedDataSource && (
+// ======================= INÍCIO DA ALTERAÇÃO (Troca por Abas) =======================
+                  // 1. O MDBox agora contém as Abas
                   <MDBox mb={3}>
-                    <MDTypography variant="h6" fontSize="0.875rem">3. Selecionar Tipo de Mapeamento</MDTypography>
-                    <ToggleButtonGroup
-                      color="info"
-                      value={mappingTarget}
-                      exclusive
+                    <MDTypography variant="h6" fontSize="0.875rem" mb={1}>3. Selecionar Tipo de Mapeamento</MDTypography>
+                    <Tabs
+                      value={mappingTarget === "CONTAS" ? 0 : 1} // Controla a aba ativa
                       onChange={handleMappingTargetChange}
+                      textColor="inherit"
+                      indicatorColor="info" // Usa a cor 'info' para a linha
                       aria-label="Tipo de Mapeamento"
-                      sx={{ mt: 1 }}
                     >
-                      <ToggleButton value="CONTAS">Contas</ToggleButton>
-                      <ToggleButton value="RECURSOS">Recursos</ToggleButton>
-                    </ToggleButtonGroup>
+                      <Tab
+                        label="Contas"
+                        icon={<Icon fontSize="small" sx={{ mr: 1 }}>person</Icon>}
+                        iconPosition="start"
+                      />
+                      <Tab
+                        label="Recursos"
+                        icon={<Icon fontSize="small" sx={{ mr: 1 }}>workspaces</Icon>}
+                        iconPosition="start"
+                      />
+                    </Tabs>
                   </MDBox>
+// ======================== FIM DA ALTERAÇÃO (Troca por Abas) =========================
                 )}
 
-
+                {/* Alerta de Erro */}
                 {error && (
                   <MDAlert color="error" sx={{ mb: 2 }}>
                     <MDTypography variant="body2" color="white">{error}</MDTypography>
                   </MDAlert>
                 )}
-                
-                {!loadingList && selectedDataSource && selectedOrigem && (
-                  <MDBox mt={3}>
-                    {loadingMapping ? (
-                      <MDBox display="flex" justifyContent="center" alignItems="center" minHeight="20vh">
-                        <CircularProgress color="info" />
-                      </MDBox>
-                    ) : (
-                      <Grid container spacing={3}>
-                        <Grid item xs={12} md={5}>
-                          <DataTable
-                            table={csvTableData}
-                            isSorted={false}
-                            entriesPerPage={false}
-                            showTotalEntries={false}
-                            noEndBorder
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={2} sx={{ textAlign: "center", alignSelf: "center" }}>
-                          <Icon fontSize="large" color="info">arrow_forward</Icon>
-                        </Grid>
-                        <Grid item xs={12} md={5}>
-                          <DataTable
-                            table={targetTableData}
-                            isSorted={false}
-                            entriesPerPage={false}
-                            showTotalEntries={false}
-                            noEndBorder
-                          />
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <MDBox display="flex" justifyContent="flex-end" mt={3}>
-{/* ======================= INÍCIO DA ALTERAÇÃO (Erro de Sintaxe) ======================= */}
-                            <MDButton 
-                              variant="gradient" 
-                              color="info" 
-                              onClick={handleSaveMapping}
-                              disabled={isSaveDisabled || loadingMapping}
-                            >
-                              {loadingMapping ? "Salvando..." : "Salvar Mapeamento"}
-                            </MDButton> 
-{/* ======================== FIM DA ALTERAÇÃO (Erro de Sintaxe) ========================= */}
-                          </MDBox>
-                        </Grid>
-
-                      </Grid>
-                    )}
-                  </MDBox>
-                )}
-                
               </MDBox>
             </Card>
           </Grid>
+          
+          {/* Seção de Mapeamento (Passo 3) - SÓ APARECE SE TUDO ESTIVER OK */}
+          {!loadingList && selectedDataSource && selectedOrigem && (
+            <Grid item xs={12} mt={3}> 
+              {loadingMapping ? (
+                <MDBox display="flex" justifyContent="center" alignItems="center" minHeight="20vh">
+                  <CircularProgress color="info" />
+                </MDBox>
+              ) : (
+                <Grid container spacing={3}>
+                  
+                  {/* Card ÚNICO de Mapeamento */}
+                  <Grid item xs={12}>
+                    <Card sx={{ height: "100%" }}>
+                      <MDBox
+                        variant="gradient"
+                        bgColor="info" // Mudado para 'info' para combinar com o topo
+                        borderRadius="lg"
+                        coloredShadow="info" // Mudado para 'info'
+                        p={2}
+                        mx={2}
+                        mt={-3}
+                      >
+                        <MDTypography variant="h6" color="white">
+                          Colunas da Aplicação ({selectedDataSource?.origem_datasource === "SISTEMA" ? mappingTarget : selectedDataSource?.origem_datasource})
+                        </MDTypography>
+                      </MDBox>
+                      <MDBox pt={3} px={3}>
+                        <MDTypography variant="body2" color="text" mb={2}>
+                          Mapeie as colunas do seu arquivo (disponíveis no dropdown) para os campos obrigatórios (*) e opcionais da aplicação.
+                        </MDTypography>
+                        <List>
+                          {mappingFields.map((field) => (
+                            <ListItem 
+                              key={field.key} 
+                              sx={{ 
+                                display: 'flex', 
+                                flexDirection: { xs: 'column', sm: 'row' }, // Empilha em telas pequenas
+                                justifyContent: 'space-between', 
+                                alignItems: 'center', 
+                                py: 1.5, 
+                                px: 0, 
+                                borderBottom: '1px solid', 
+                                borderColor: 'divider' 
+                              }}
+                            >
+                              <MDBox flex="1 1 40%" pr={2} mb={{ xs: 1.5, sm: 0 }} sx={{width: '100%'}}>
+                                {field.label}
+                              </MDBox>
+                              <MDBox flex="1 1 60%" sx={{width: '100%'}}>
+                                {field.dropdown}
+                              </MDBox>
+                            </ListItem>
+                          ))}
+                        </List>
+                      </MDBox>
+                    </Card>
+                  </Grid>
+
+                  {/* Botão Salvar */}
+                  <Grid item xs={12}>
+                    <MDBox display="flex" justifyContent="flex-end" mt={3}>
+                      <MDButton 
+                        variant="gradient" 
+                        color="info" 
+                        onClick={handleSaveMapping}
+                        disabled={isSaveDisabled || loadingMapping}
+                      >
+                        {loadingMapping ? "Salvando..." : "Salvar Mapeamento"}
+                      </MDButton> 
+                    </MDBox>
+                  </Grid>
+
+                </Grid>
+              )}
+            </Grid>
+          )}
+          
         </Grid>
-        
-        <MDSnackbar
-          color={notification.color}
-          icon={notification.color === "success" ? "check" : "notifications"}
-          title="Mapeamento de Dados"
-          content={notification.message}
-          dateTime="agora"
-          open={notification.open}
-          onClose={closeNotification}
-          close={closeNotification}
-        />
-        
       </MDBox>
+      
+      <MDSnackbar
+        color={notification.color}
+        icon={notification.color === "success" ? "check" : "notifications"}
+        title="Mapeamento de Dados"
+        content={notification.message}
+        dateTime="agora"
+        open={notification.open}
+        onClose={closeNotification}
+        close={closeNotification}
+      />
+      
     </DashboardLayout>
   );
 }

@@ -1,4 +1,4 @@
-// schema.prisma (Refatorado com permissions)
+// schema.prisma
 
 generator client {
   provider      = "prisma-client-js"
@@ -40,20 +40,28 @@ enum SystemConnectionType {
 // ===============================================
 
 model User {
-  id              Int            @id @default(autoincrement())
+  id              Int      @id @default(autoincrement())
   name            String
-  email           String         @unique
+  email           String   @unique
   password        String
   profile_image   String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
   profileId       Int
-  profile         Profile        @relation(fields: [profileId], references: [id])
+  profile         Profile  @relation(fields: [profileId], references: [id])
   groups          Group[]
   packageId       Int?
-  package         Package?       @relation(fields: [packageId], references: [id])
+  package         Package? @relation(fields: [packageId], references: [id])
   importLogs      ImportLog[]
   dataSources     DataSource[]
+
+  // Relações com Exceções
+  accountExceptions  AccountDivergenceException[]
+  identityExceptions IdentityDivergenceException[]
+
+  // Relações com Políticas
+  sodRules        SodRule[] // <-- ADICIONADO
+  rbacRules       RbacRule[] // <-- ADICIONADO
 
   @@map("users")
 }
@@ -123,51 +131,48 @@ model Package {
 // --- TABELA MESTRA DE CONFIGURAÇÃO (COM SUFIXOS) ---
 
 model DataSource {
-  id                     Int                @id @default(autoincrement())
-  name_datasource        String             @unique
-  origem_datasource      DataSourceOrigem
-  type_datasource        DataSourceType
+  id                   Int              @id @default(autoincrement())
+  name_datasource      String           @unique
+  origem_datasource    DataSourceOrigem
+  type_datasource      DataSourceType
   description_datasource String?
-  createdAt              DateTime           @default(now())
-  updatedAt              DateTime           @updatedAt
-  userId                 Int
-  user                   User               @relation(fields: [userId], references: [id])
-  importLogs             ImportLog[]
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  userId               Int
+  user                 User             @relation(fields: [userId], references: [id])
+  importLogs           ImportLog[]
 
   // Relações 1-para-1 (Config)
-  hrConfig               HRConfig?
-  idmConfig              IDMConfig?
-  systemConfig           SystemConfig?
+  hrConfig             HRConfig?
+  idmConfig            IDMConfig?
+  systemConfig         SystemConfig?
 
   // Relações 1-para-1 (Mapeamento)
-  mappingRH              DataMappingRH?
-  mappingIDM             DataMappingIDM?
-  mappingSystem          DataMappingSystem?
+  mappingRH            DataMappingRH?
+  mappingIDM           DataMappingIDM?
+  mappingSystem        DataMappingSystem?
 
   // Relação 1-para-Muitos (Dados)
-  identitiesHR           IdentitiesHR[]
-  identitiesIDM          IdentitiesIDM[]
+  identitiesHR         IdentitiesHR[]
+  identitiesIDM        IdentitiesIDM[]
 
   @@map("DataSource")
 }
 
 model ImportLog {
-  id            Int          @id @default(autoincrement())
-  fileName      String
-  status        ImportStatus @default(PENDING)
-  processedRows Int          @default(0)
-  totalRows     Int          @default(0)
-  errorDetails  String?
-  createdAt     DateTime     @default(now())
-  completedAt   DateTime?
-  userId        Int
-  user          User         @relation(fields: [userId], references: [id])
-  dataSourceId  Int?
-  dataSource    DataSource?  @relation(fields: [dataSourceId], references: [id])
-
-  // ======================= INÍCIO DA ALTERAÇÃO =======================
+  id               Int          @id @default(autoincrement())
+  fileName         String
+  status           ImportStatus @default(PENDING)
+  processedRows    Int          @default(0)
+  totalRows        Int          @default(0)
+  errorDetails     String?
+  createdAt        DateTime     @default(now())
+  completedAt      DateTime?
+  userId           Int
+  user             User         @relation(fields: [userId], references: [id])
+  dataSourceId     Int?
+  dataSource       DataSource?  @relation(fields: [dataSourceId], references: [id])
   processingTarget String? // Armazena "RH", "CONTAS", ou "RECURSOS"
-  // ======================== FIM DA ALTERAÇÃO =========================
 
   @@map("import_logs")
 }
@@ -186,23 +191,26 @@ model HRConfig {
 }
 
 model IdentitiesHR {
-  id             Int        @id @default(autoincrement())
-  identity_id_hr String     @unique
+  id             Int      @id @default(autoincrement())
+  identity_id_hr String   @unique
   name_hr        String?
-  email_hr       String?    @unique
+  email_hr       String?  @unique
   status_hr      String?
   user_type_hr   String?
-  cpf_hr         String?    @unique
+  cpf_hr         String?  @unique
   extra_data_hr  Json?
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt
-  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
   // "Etiqueta" de qual DataSource estes dados pertencem
   dataSourceId   Int
   dataSource     DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
   // Relação com Fluxo 3
   accounts       Accounts[]
+
+  // Relação com Exceções
+  exceptions     IdentityDivergenceException[]
 
   @@map("IdentitiesHR")
 }
@@ -237,31 +245,30 @@ model IDMConfig {
 }
 
 model DataMappingIDM {
-  id              Int        @id @default(autoincrement())
-  dataSourceId    Int        @unique
-  dataSource      DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
-  identity_id_idm String?
-  name_idm        String?
-  email_idm       String?
-  status_idm      String?
-  extra_data_idm  String?
+  id                Int        @id @default(autoincrement())
+  dataSourceId      Int        @unique
+  dataSource        DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  identity_id_idm   String?
+  name_idm          String?
+  email_idm         String?
+  status_idm        String?
+  extra_data_idm    String?
 
   @@map("data_mappings_idm")
 }
 
 model IdentitiesIDM {
-  id              Int                   @id @default(autoincrement())
-  identity_id_idm String                @unique
-  name_idm        String?
-  email_idm       String?               @unique
-  status_idm      String?
-  extra_data_idm  Json?
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  roles           Identities_RolesIDM[]
-  
-  dataSourceId    Int
-  dataSource      DataSource            @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  id                Int                   @id @default(autoincrement())
+  identity_id_idm   String                @unique
+  name_idm          String?
+  email_idm         String?               @unique
+  status_idm        String?
+  extra_data_idm    Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  roles             Identities_RolesIDM[]
+  dataSourceId      Int
+  dataSource        DataSource            @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
   @@map("IdentitiesIDM")
 }
@@ -353,12 +360,16 @@ model System {
   accounts           Accounts[]
   resources          Resource[]
   
+  // Relações com Políticas
+  sodRules           SodRule[] // <-- ADICIONADO
+  rbacRules          RbacRule[] // <-- ADICIONADO
+
   @@map("System")
 }
 
 model SystemConfig {
   id                  Int                  @id @default(autoincrement())
-  
+
   // Relação 1-para-1 com DataSource
   dataSourceId        Int                  @unique
   dataSource          DataSource           @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
@@ -368,12 +379,12 @@ model SystemConfig {
   system              System               @relation(fields: [systemId], references: [id], onDelete: Cascade)
 
   // Fonte 1: Contas (Accounts)
-  tipo_fonte_contas   SystemConnectionType 
+  tipo_fonte_contas   SystemConnectionType
   diretorio_contas    String?
   // (Futuramente: db_host_contas, etc.)
 
   // Fonte 2: Recursos (Resources)
-  tipo_fonte_recursos SystemConnectionType 
+  tipo_fonte_recursos SystemConnectionType
   diretorio_recursos  String?
   // (Futuramente: db_host_recursos, etc.)
 
@@ -387,64 +398,71 @@ model DataMappingSystem {
   dataSource             DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
 
   // Mapeamento para Contas
-  accounts_id_in_system  String? 
-  accounts_name          String? 
-  accounts_email         String? 
-  accounts_status        String? 
+  accounts_id_in_system  String?
+  accounts_name          String?
+  accounts_email         String?
+  accounts_cpf           String?
+  accounts_status        String?
   accounts_identity_id   String? // O FK para o RH
   accounts_resource_name String? // O nome do Recurso (ex: "SAP_FIN_READ")
 
   // Mapeamento para Recursos
-  resources_id_in_system String? 
+  resources_id_in_system String?
   resources_name         String?
   resources_description  String?
-  resources_permissions  String? 
-  
+  resources_permissions  String?
+
   @@map("data_mappings_system")
 }
 
 // --- Entidades Sistema---
 model Accounts {
-  id                   Int          @id @default(autoincrement())
-  id_in_system_account String       @unique 
+  id                   Int       @id @default(autoincrement())
+  id_in_system_account String    @unique
   name_account         String?
   email_account        String?
+  cpf_account          String? 
   status_account       String?
   user_type_account    String?
   extra_data_account   Json?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
-  
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
   // Relação 1:N com System (Obrigatória)
   systemId             Int
-  system               System       @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  system               System    @relation(fields: [systemId], references: [id], onDelete: Cascade)
 
   // Relação 1:N com IdentitiesHR (Obrigatória)
   identityId           Int
   identity             IdentitiesHR @relation(fields: [identityId], references: [id], onDelete: Cascade)
-  
+
   // Relação N:M com Resource (via Assignment)
   assignments          Assignment[]
+
+  // Relação com Exceções
+  exceptions           AccountDivergenceException[]
 
   @@map("Accounts")
 }
 
 model Resource {
-  id                   Int          @id @default(autoincrement())
-  name_resource        String       
+  id                 Int          @id @default(autoincrement())
+  name_resource      String
   description_resource String?
-  
-  permissions          String?      // Ex: "read;write;delete"
+  permissions        String? // Ex: "read;write;delete"
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @default(now())
 
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @default(now())
-  
   // Relação 1:N com System (Obrigatória)
-  systemId             Int
-  system               System       @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  systemId           Int
+  system             System       @relation(fields: [systemId], references: [id], onDelete: Cascade)
 
   // Relação N:M com Accounts (via Assignment)
-  assignments          Assignment[]
+  assignments        Assignment[]
+  
+  // Relações com Políticas
+  rbacRulesGranted   RbacRule[] @relation("GrantedResource") // <-- ADICIONADO
+  rbacRulesRequired  RbacRule[] @relation("RequiredResource") // <-- ADICIONADO
 
   @@map("Resource")
 }
@@ -455,7 +473,134 @@ model Assignment {
   resourceId Int
   resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
   assignedAt DateTime @default(now())
-  
+
   @@id([accountId, resourceId])
-  @@map("Assignment") 
+  @@map("Assignment")
+}
+
+// ======================================================
+// Modelos de Exceção (Ignorar Divergência)
+// ======================================================
+
+model AccountDivergenceException {
+  id             Int      @id @default(autoincrement())
+  accountId      Int
+  divergenceCode String // Ex: "NAME_MISMATCH", "ZOMBIE_ACCOUNT"
+  justification  String
+  createdAt      DateTime @default(now())
+  userId         Int // O admin que criou a exceção
+
+  account Accounts @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, divergenceCode]) 
+  @@map("account_divergence_exceptions")
+}
+
+model IdentityDivergenceException {
+  id             Int      @id @default(autoincrement())
+  identityId     Int
+  divergenceCode String // Apenas "ACCESS_NOT_GRANTED"
+  targetSystem   String // Ex: "SAP"
+  justification  String
+  createdAt      DateTime @default(now())
+  userId         Int // O admin que criou a exceção
+
+  identity IdentitiesHR @relation(fields: [identityId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([identityId, divergenceCode, targetSystem])
+  @@map("identity_divergence_exceptions")
+}
+
+// ======================================================
+// ADIÇÃO: Modelos de Políticas (SOD e RBAC)
+// ======================================================
+
+model SodRule {
+  id              Int      @id @default(autoincrement())
+  name            String
+  description     String?
+  areaNegocio     String?
+  processoNegocio String?
+  owner           String?
+  ruleType        String // "ROLE_X_ROLE" (Resource vs Resource) ou "ATTR_X_ROLE" (IdentityHR vs Resource)
+
+  systemId        Int? // Nulo = Global (aplica-se apenas a ATTR_X_ROLE)
+  system          System?  @relation(fields: [systemId], references: [id], onDelete: SetNull)
+
+  // Estes são Strings, pois a lógica de validação é feita no backend
+  // Isso corresponde ao seu código 'sod-rules/index.js'
+  valueAType      String // "ATTRIBUTE" (ex: user_type_hr) ou "PROFILE" (ID de um Resource)
+  valueAId        String // Se ATTRIBUTE, "user_type_hr". Se PROFILE, o ID do Resource
+  valueAOperator  String? // "equals", "contains", etc.
+  valueAValue     String? // "Finance"
+
+  valueBType      String // "PROFILE" (ID de um Resource)
+  valueBId        String // ID do Resource
+
+  userId          Int
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, systemId, valueAType, valueAId, valueAOperator, valueAValue, valueBType, valueBId], name: "UniqueSodRuleCombination")
+  @@map("sod_rules")
+}
+
+model RbacRule {
+  id                  Int      @id @default(autoincrement())
+  name                String
+  description         String?
+  areaNegocio         String?  // <-- Adicionado (baseado no seu sod-rules)
+  processoNegocio     String?  // <-- Adicionado (baseado no seu sod-rules)
+  owner               String?  // <-- Adicionado (baseado no seu sod-rules)
+  
+  // Lógica: SE (condição) ENTÃO (conceder Recurso)
+  
+  // THEN (ENTÃO)
+  systemId            Int     // Em qual sistema
+  system              System  @relation(fields: [systemId], references: [id], onDelete: Cascade)
+  grantedResourceId   Int     // Conceder este Recurso (Perfil)
+  grantedResource     Resource @relation("GrantedResource", fields: [grantedResourceId], references: [id], onDelete: Cascade)
+
+  // IF (SE)
+  conditionType       String // "BY_PROFILE", "BY_SINGLE_ATTRIBUTE", "BY_MULTIPLE_ATTRIBUTES"
+  
+  // IF BY_PROFILE
+  requiredResourceId  Int?     // Requer este Recurso (Perfil)
+  requiredResource    Resource? @relation("RequiredResource", fields: [requiredResourceId], references: [id], onDelete: SetNull) // SetNull para não quebrar a regra se o perfil requerido for deletado
+
+  // IF BY_SINGLE_ATTRIBUTE
+  attributeName       String? // ex: "user_type_hr"
+  attributeOperator   String? // ex: "equals"
+  attributeValue      String? // ex: "Funcionario"
+
+  // IF BY_MULTIPLE_ATTRIBUTES
+  logicalOperator     String? // "AND" or "OR"
+  attributeConditions RbacAttributeCondition[] // Relação para a tabela de condições
+
+  userId              Int
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  // Uma regra deve ser única para o usuário, sistema e o que ela concede
+  @@unique([userId, systemId, grantedResourceId, conditionType, requiredResourceId, attributeName, attributeOperator, attributeValue, logicalOperator], name: "UniqueRbacRuleCombination")
+  @@map("rbac_rules")
+}
+
+model RbacAttributeCondition {
+  id              Int      @id @default(autoincrement())
+  rbacRuleId      Int
+  
+  attributeName   String   // O ID/Chave do atributo (ex: "user_type_hr")
+  operator        String   // "equals", "contains", etc.
+  attributeValue  String   // O valor a comparar (ex: "Funcionario")
+  
+  rbacRule        RbacRule @relation(fields: [rbacRuleId], references: [id], onDelete: Cascade)
+  
+  @@map("rbac_attribute_conditions")
 }

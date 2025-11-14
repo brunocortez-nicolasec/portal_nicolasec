@@ -1,3 +1,5 @@
+// material-react-app/src/layouts/observabilidade/excecoes/index.js
+
 import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { useMaterialUIController } from "context";
@@ -54,11 +56,11 @@ function DetailItem({ icon, label, value, children, darkMode }) {
         </MDTypography>
       )}
       {/* Render N/A if value is null/undefined/empty and no children are provided */}
-       {!value && value !== 0 && value !== false && !children && ( // Added checks for 0 and false
-         <MDTypography variant="button" fontWeight="regular" color={valueColor}>
-           N/A
-         </MDTypography>
-       )}
+        {!value && value !== 0 && value !== false && !children && ( // Added checks for 0 and false
+          <MDTypography variant="button" fontWeight="regular" color={valueColor}>
+            N/A
+          </MDTypography>
+        )}
       {/* Render children if provided */}
       {children}
     </MDBox>
@@ -88,7 +90,7 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
   const renderDetailsContent = () => {
     // Should not happen if guarded correctly, but good practice
     if (!details) {
-       return <MDTypography>Não foi possível carregar os detalhes.</MDTypography>;
+        return <MDTypography>Não foi possível carregar os detalhes.</MDTypography>;
     }
 
     // Determina se é uma exceção de Conta ou Identidade (NOW SAFE)
@@ -96,6 +98,7 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
     const isIdentityException = details.type === 'Identity';
 
     // Pega os dados corretos (NOW SAFE)
+    // O backend já envia os dados da identidade aninhados em 'account' se for o caso
     const identityData = isIdentityException ? details.identity : details.account?.identity;
     const accountData = isAccountException ? details.account : null;
 
@@ -108,45 +111,47 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
         const { rhData, appData, targetSystem } = divergenceDetails; // Destructure safely now
 
         // Helper function to safely get system name
-        const getSystemName = (data) => data?.system?.name ?? 'Sistema';
+// ======================= INÍCIO DA CORREÇÃO 1 (Schema) =======================
+        const getSystemName = (data) => data?.system?.name_system ?? 'Sistema'; // Corrigido para name_system
 
         switch (divergenceCode) {
             case "CPF_MISMATCH":
               return (
                 <>
-                  <DetailItem icon="badge" label={`CPF no RH`} value={rhData?.cpf} darkMode={darkMode} />
-                  <DetailItem icon="badge" label={`CPF em ${getSystemName(appData)}`} value={appData?.cpf} darkMode={darkMode} />
+                  <DetailItem icon="badge" label={`CPF no RH`} value={rhData?.cpf_hr} darkMode={darkMode} />
+                  <DetailItem icon="badge" label={`CPF em ${getSystemName(appData)}`} value={appData?.cpf_account} darkMode={darkMode} />
                 </>
               );
             case "NAME_MISMATCH":
               return (
                 <>
-                  <DetailItem icon="person" label={`Nome no RH`} value={rhData?.name} darkMode={darkMode} />
-                  <DetailItem icon="person" label={`Nome em ${getSystemName(appData)}`} value={appData?.name} darkMode={darkMode} />
+                  <DetailItem icon="person" label={`Nome no RH`} value={rhData?.name_hr} darkMode={darkMode} />
+                  <DetailItem icon="person" label={`Nome em ${getSystemName(appData)}`} value={appData?.name_account} darkMode={darkMode} />
                 </>
               );
             case "EMAIL_MISMATCH":
               return (
                 <>
-                  <DetailItem icon="email" label={`Email no RH`} value={rhData?.email} darkMode={darkMode} />
-                  <DetailItem icon="email" label={`Email em ${getSystemName(appData)}`} value={appData?.email} darkMode={darkMode} />
+                  <DetailItem icon="email" label={`Email no RH`} value={rhData?.email_hr} darkMode={darkMode} />
+                  <DetailItem icon="email" label={`Email em ${getSystemName(appData)}`} value={appData?.email_account} darkMode={darkMode} />
                 </>
               );
             case "ZOMBIE_ACCOUNT":
               return (
                 <>
-                  <DetailItem icon="toggle_off" label={`Status no RH`} value={rhData?.status} darkMode={darkMode} />
-                  <DetailItem icon="toggle_on" label={`Status em ${getSystemName(appData)}`} value={appData?.status} darkMode={darkMode} />
+                  <DetailItem icon="toggle_off" label={`Status no RH`} value={rhData?.status_hr} darkMode={darkMode} />
+                  <DetailItem icon="toggle_on" label={`Status em ${getSystemName(appData)}`} value={appData?.status_account} darkMode={darkMode} />
                 </>
               );
+// ======================== FIM DA CORREÇÃO 1 (Schema) =========================
             case "ACCESS_NOT_GRANTED":
               // targetSystem comes directly from divergenceDetails
               return <DetailItem icon="link_off" label={`Acesso esperado em`} value={targetSystem} darkMode={darkMode} />;
             case "ORPHAN_ACCOUNT":
-               return <DetailItem icon="no_accounts" label={`Conta Órfã em`} value={appData?.system?.name || 'Sistema desconhecido'} darkMode={darkMode} />;
+               return <DetailItem icon="no_accounts" label={`Conta Órfã em`} value={appData?.system?.name_system || 'Sistema desconhecido'} darkMode={darkMode} />; // Corrigido
             // Add case for DORMANT_ADMIN if needed
             case "DORMANT_ADMIN":
-                return <DetailItem icon="timer_off" label={`Admin dormente em`} value={appData?.system?.name || 'Sistema desconhecido'} darkMode={darkMode} />;
+               return <DetailItem icon="timer_off" label={`Admin dormente em`} value={appData?.system?.name_system || 'Sistema desconhecido'} darkMode={darkMode} />; // Corrigido
             default:
               return <DetailItem icon="help_outline" label="Detalhes" value="Nenhuma informação adicional." darkMode={darkMode} />;
         }
@@ -161,14 +166,16 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
             {!identityData ? (
                 <MDTypography variant="caption" color="textSecondary">Esta conta (Órfã) não está vinculada a nenhuma identidade do RH.</MDTypography>
             ) : (
+// ======================= INÍCIO DA CORREÇÃO 2 (Schema) =======================
                  <>
-                   <DetailItem icon="person_outline" label="Nome" value={identityData?.name} darkMode={darkMode} />
-                   <DetailItem icon="email" label="Email" value={identityData?.email} darkMode={darkMode} />
-                   <DetailItem icon="badge" label="CPF" value={identityData?.cpf} darkMode={darkMode} />
-                   <DetailItem icon="vpn_key" label="ID RH" value={identityData?.identityId} darkMode={darkMode} />
-                   <DetailItem icon="engineering" label="Tipo" value={identityData?.userType} darkMode={darkMode} />
-                   <DetailItem icon={identityData?.status === 'Ativo' ? "check_circle" : "cancel"} label="Status RH" value={identityData?.status} darkMode={darkMode} />
+                   <DetailItem icon="person_outline" label="Nome" value={identityData?.name_hr} darkMode={darkMode} />
+                   <DetailItem icon="email" label="Email" value={identityData?.email_hr} darkMode={darkMode} />
+                   <DetailItem icon="badge" label="CPF" value={identityData?.cpf_hr} darkMode={darkMode} />
+                   <DetailItem icon="vpn_key" label="ID RH" value={identityData?.identity_id_hr} darkMode={darkMode} />
+                   <DetailItem icon="engineering" label="Tipo" value={identityData?.user_type_hr} darkMode={darkMode} />
+                   <DetailItem icon={identityData?.status_hr === 'Ativo' ? "check_circle" : "cancel"} label="Status RH" value={identityData?.status_hr} darkMode={darkMode} />
                  </>
+// ======================== FIM DA CORREÇÃO 2 (Schema) =========================
             )}
         </MDBox>
     );
@@ -180,12 +187,16 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
          return (
             <MDBox>
               <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Conta (Sistema)</MDTypography>
-              <DetailItem icon="computer" label="Sistema" value={accountData?.system?.name} darkMode={darkMode} />
-              <DetailItem icon="vpn_key" label="ID no Sistema" value={accountData?.accountIdInSystem} darkMode={darkMode} />
-              <DetailItem icon="person_outline" label="Nome na Conta" value={accountData?.name} darkMode={darkMode} />
-              <DetailItem icon="email" label="Email na Conta" value={accountData?.email} darkMode={darkMode} />
-              <DetailItem icon="admin_panel_settings" label="Perfis na Conta" value={accountData?.profiles?.map(p => p?.profile?.name).filter(Boolean).join(', ') || 'Nenhum'} darkMode={darkMode} />
-              <DetailItem icon={accountData?.status === 'Ativo' ? "toggle_on" : "toggle_off"} label="Status Conta" value={accountData?.status} darkMode={darkMode} />
+// ======================= INÍCIO DA CORREÇÃO 3 (Schema) =======================
+              <DetailItem icon="computer" label="Sistema" value={accountData?.system?.name_system} darkMode={darkMode} />
+              <DetailItem icon="vpn_key" label="ID no Sistema" value={accountData?.id_in_system_account} darkMode={darkMode} />
+              <DetailItem icon="person_outline" label="Nome na Conta" value={accountData?.name_account} darkMode={darkMode} />
+              <DetailItem icon="email" label="Email na Conta" value={accountData?.email_account} darkMode={darkMode} />
+              <DetailItem icon="badge" label="CPF na Conta" value={accountData?.cpf_account} darkMode={darkMode} /> {/* CAMPO ADICIONADO */}
+              {/* O backend envia 'profileNames' como uma string pré-formatada */}
+              <DetailItem icon="admin_panel_settings" label="Perfis na Conta" value={accountData?.profileNames || 'Nenhum'} darkMode={darkMode} />
+              <DetailItem icon={accountData?.status_account === 'Ativo' ? "toggle_on" : "toggle_off"} label="Status Conta" value={accountData?.status_account} darkMode={darkMode} />
+// ======================== FIM DA CORREÇÃO 3 (Schema) =========================
            </MDBox>
          );
     };
@@ -267,8 +278,8 @@ const ExceptionDetailsModal = ({ open, onClose, isLoading, details, getDivergenc
         {/* Corpo - Conditionally render based on loading/details */}
         <MDBox p={3} pt={1}>
           {isLoading
-              ? <MDBox display="flex" justifyContent="center" py={5}><CircularProgress color="info" /></MDBox>
-              : renderDetailsContent() // Render details only when not loading
+             ? <MDBox display="flex" justifyContent="center" py={5}><CircularProgress color="info" /></MDBox>
+             : renderDetailsContent() // Render details only when not loading
           }
         </MDBox>
       </Card>
@@ -474,13 +485,16 @@ function GerenciarExcecoes() {
         const headers = ["Tipo_Excecao", "Nome_Item", "Email_Item", "Sistema_Alvo", "Tipo_Divergencia", "Justificativa", "Aprovado_Por", "Data"];
         csvContent += headers.map(escapeCsv).join(",") + "\r\n";
 
+// ======================= INÍCIO DA CORREÇÃO 4 (Export CSV) =======================
         exceptions.forEach(ex => {
             const isIdentityEx = ex.type === 'Identity';
             const item = isIdentityEx ? ex.identity : ex.account;
-            // Use fallback identifiers if name is missing
-            const itemName = item?.name || (isIdentityEx ? `ID_RH:${ex.identity?.identityId}` : `ID_Sistema:${ex.account?.accountIdInSystem}`) || "N/A";
-            const itemEmail = item?.email || "N/A";
-            const systemName = ex.targetSystem || item?.system?.name || "N/A"; // Use targetSystem or account's system name
+            
+            // Define os campos corretos do schema
+            const itemName = item?.name_hr || item?.name_account || (isIdentityEx ? `ID_RH:${ex.identity?.identity_id_hr}` : `ID_Sistema:${ex.account?.id_in_system_account}`) || "Item Desconhecido";
+            const itemEmail = item?.email_hr || item?.email_account || "N/A";
+            const itemCpf = item?.cpf_hr || item?.cpf_account || "N/A";
+            const systemName = ex.targetSystem || item?.system?.name_system || "N/A"; // Corrigido
 
             const row = [
                 ex.type,
@@ -494,6 +508,7 @@ function GerenciarExcecoes() {
             ];
             csvContent += row.map(escapeCsv).join(",") + "\r\n";
         });
+// ======================== FIM DA CORREÇÃO 4 (Export CSV) =========================
 
         const encodedUri = encodeURI(csvContent);
         const link = document.createElement("a");
@@ -516,12 +531,14 @@ function GerenciarExcecoes() {
         const tableColumns = ["Item", "Sistema", "Tipo Divergência", "Aprovado Por", "Data"];
         const tableRows = [];
 
+// ======================= INÍCIO DA CORREÇÃO 5 (Export PDF) =======================
         exceptions.forEach(ex => {
             const isIdentityEx = ex.type === 'Identity';
             const item = isIdentityEx ? ex.identity : ex.account;
-            const itemName = item?.name || (isIdentityEx ? `ID_RH:${ex.identity?.identityId}` : `ID_Sistema:${ex.account?.accountIdInSystem}`) || "N/A";
-            const itemIdentifier = item?.email || item?.cpf || (isIdentityEx ? ex.identity?.identityId : ex.account?.accountIdInSystem) || "N/A";
-            const systemName = ex.targetSystem || item?.system?.name || "N/A";
+            
+            const itemName = item?.name_hr || item?.name_account || (isIdentityEx ? `ID_RH:${ex.identity?.identity_id_hr}` : `ID_Sistema:${ex.account?.id_in_system_account}`) || "Item Desconhecido";
+            const itemIdentifier = item?.email_hr || item?.email_account || item?.cpf_hr || item?.cpf_account || (isIdentityEx ? ex.identity?.identity_id_hr : ex.account?.id_in_system_account) || "N/A";
+            const systemName = ex.targetSystem || item?.system?.name_system || "N/A"; // Corrigido
             
             const row = [
                 `${itemName}\n(${itemIdentifier})`, // Combine name and identifier
@@ -532,6 +549,7 @@ function GerenciarExcecoes() {
             ];
             tableRows.push(row);
         });
+// ======================== FIM DA CORREÇÃO 5 (Export PDF) =========================
 
         doc.text("Relatório de Exceções de Divergência", 14, 15);
         autoTable(doc, {
@@ -552,22 +570,24 @@ function GerenciarExcecoes() {
             accessor: row => { // Custom accessor for combined data
                  const isIdentityEx = row.type === 'Identity';
                  const item = isIdentityEx ? row.identity : row.account;
-                 return item?.name || item?.email || row.id; // Fallback sort value
+                 return item?.name_hr || item?.name_account || item?.email_hr || item?.email_account || row.id; // Fallback sort value
             },
             id: 'itemDetail', // Unique ID for the column
             width: "25%",
             align: "left",
             Cell: ({ row: { original: ex } }) => {
+// ======================= INÍCIO DA CORREÇÃO 6 (Tabela Principal) =======================
                 const isIdentityEx = ex.type === 'Identity';
                 const item = isIdentityEx ? ex.identity : ex.account;
-                // Use fallback identifiers clearly
-                const itemName = item?.name || (isIdentityEx ? `ID_RH:${ex.identity?.identityId}` : `ID_Sistema:${ex.account?.accountIdInSystem}`) || "Item Desconhecido";
-                const itemEmail = item?.email;
-                const itemCpf = item?.cpf; // Get CPF if available
-                const systemName = ex.targetSystem || item?.system?.name || "N/A"; // System name from account or targetSystem
+                
+                // Define os campos corretos do schema
+                const itemName = item?.name_hr || item?.name_account || (isIdentityEx ? `ID_RH:${ex.identity?.identity_id_hr}` : `ID_Sistema:${ex.account?.id_in_system_account}`) || "Item Desconhecido";
+                const itemEmail = item?.email_hr || item?.email_account;
+                const itemCpf = item?.cpf_hr || item?.cpf_account; // Get CPF if available
+                const systemName = ex.targetSystem || item?.system?.name_system || "N/A"; // Corrigido
                 
                 // Choose secondary identifier: email or CPF or ID
-                let secondaryIdentifier = itemEmail || itemCpf || (isIdentityEx ? ex.identity?.identityId : ex.account?.accountIdInSystem) || "";
+                let secondaryIdentifier = itemEmail || itemCpf || (isIdentityEx ? ex.identity?.identity_id_hr : ex.account?.id_in_system_account) || "";
 
                 return (
                     <MDBox 
@@ -585,6 +605,7 @@ function GerenciarExcecoes() {
                         )}
                     </MDBox>
                 );
+// ======================== FIM DA CORREÇÃO 6 (Tabela Principal) =========================
             },
         },
         { Header: "Tipo de Divergência", accessor: "divergenceCode", align: "center", Cell: ({ value }) => <MDTypography variant="caption" fontWeight="medium">{getDivergenceLabel(value)}</MDTypography> },
@@ -674,10 +695,10 @@ function GerenciarExcecoes() {
                     <DialogContentText>
                         Você tem certeza que deseja reativar o monitoramento para a divergência em "
                         <strong>
-                           {exceptionToDelete?.type === 'Identity' 
-                               ? (exceptionToDelete?.identity?.name || exceptionToDelete?.identity?.email || `ID ${exceptionToDelete?.identity?.id}`) 
-                               : (exceptionToDelete?.account?.name || exceptionToDelete?.account?.accountIdInSystem || `Conta ID ${exceptionToDelete?.account?.id}`)
-                           }
+                            {exceptionToDelete?.type === 'Identity' 
+                                ? (exceptionToDelete?.identity?.name_hr || exceptionToDelete?.identity?.email_hr || `ID ${exceptionToDelete?.identity?.id}`) // Corrigido
+                                : (exceptionToDelete?.account?.name_account || exceptionToDelete?.account?.id_in_system_account || `Conta ID ${exceptionToDelete?.account?.id}`) // Corrigido
+                            }
                         </strong>
                         "?
                         <br/><br/>

@@ -1,3 +1,5 @@
+// material-react-app/src/layouts/observabilidade/politicas/components/SodTab.js
+
 import { useState, useEffect } from "react";
 import axios from "axios";
 import PropTypes from 'prop-types'; // <<< ADICIONADO: Para validar as novas props
@@ -19,8 +21,8 @@ import SodTable from "./sod/SodTable";
 import SodModal from "./sod/SodModal";
 
 // --- Componente Principal SodTab ---
-// <<< 1. Aceitar as props do GerenciarPoliticas (pai) >>>
-function SodTab({ allSystems, allProfiles, allAttributes }) {
+function SodTab({ allSystems, allResources, allAttributes }) { // Corrigido de allProfiles para allResources
+// ======================== FIM DA CORREÇÃO (Props) =========================
   const [controller] = useMaterialUIController();
   const { token } = controller;
 
@@ -106,7 +108,7 @@ function SodTab({ allSystems, allProfiles, allAttributes }) {
       <SodTable
         loading={loadingData}
         rules={sodRules}
-        profiles={allProfiles}     // Passa a prop recebida
+        resources={allResources}   // Passa a prop correta
         systems={allSystems}       // Passa a prop recebida
         attributes={allAttributes} // Passa a prop recebida
         onEdit={handleOpenModal}
@@ -123,7 +125,7 @@ function SodTab({ allSystems, allProfiles, allAttributes }) {
         token={token}
         ruleToEdit={editingRule}
         // Passa todas as listas necessárias para os Autocompletes
-        profiles={allProfiles}
+        resources={allResources} // Passa a prop correta
         systems={allSystems}
         attributes={allAttributes}
       />
@@ -146,7 +148,7 @@ function SodTab({ allSystems, allProfiles, allAttributes }) {
 // --- 6. Adicionar PropTypes para as novas props ---
 SodTab.propTypes = {
   allSystems: PropTypes.arrayOf(PropTypes.object).isRequired,
-  allProfiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  allResources: PropTypes.arrayOf(PropTypes.object).isRequired, // Corrigido
   allAttributes: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 // --- Fim da Adição ---

@@ -9,8 +9,7 @@ const router = express.Router();
 
 // Funções auxiliares
 const cleanText = (text) => text?.trim().toLowerCase();
-
-// ======================= INÍCIO DA REFATORAÇÃO (Prisma Schema) =======================
+const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
 
 const getLiveFeedData = async (req, res) => {
     const { system } = req.query; // Pega 'system' da query string (ex: "SAP", "RH", ou "Geral")
@@ -36,6 +35,23 @@ const getLiveFeedData = async (req, res) => {
         });
         
         const rhMapById = new Map(rhIdentities.map(i => [i.id, i]));
+
+        // --- 1.5. Buscar Exceções ---
+        const accountExceptions = await tx.accountDivergenceException.findMany({
+            where: { userId: userIdInt },
+            select: { accountId: true, divergenceCode: true }
+        });
+        const accountExceptionsSet = new Set(
+            accountExceptions.map(ex => `${ex.accountId}_${ex.divergenceCode}`)
+        );
+
+        const identityExceptions = await tx.identityDivergenceException.findMany({
+            where: { userId: userIdInt, divergenceCode: 'ACCESS_NOT_GRANTED' },
+            select: { identityId: true, targetSystem: true }
+        });
+        const identityExceptionsSet = new Set(
+            identityExceptions.map(ex => `${ex.identityId}_ACCESS_NOT_GRANTED_${ex.targetSystem}`)
+        );
 
         // --- 2. Buscar Contas (Accounts) dos Sistemas ---
         const whereAccounts = {
@@ -87,6 +103,7 @@ const getLiveFeedData = async (req, res) => {
                 id_in_system_account: id.identity_id_hr,
                 name_account: id.name_hr,
                 email_account: id.email_hr,
+                cpf_account: id.cpf_hr, // <-- ADICIONADO
                 status_account: id.status_hr,
                 user_type_account: id.user_type_hr,
                 extra_data_account: id.extra_data_hr,
@@ -97,8 +114,6 @@ const getLiveFeedData = async (req, res) => {
                 assignments: [], 
              }));
         }
-        
-        // --- 3. Buscar Exceções (Removido) ---
         
         const ninetyDaysAgo = new Date();
         ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
@@ -137,30 +152,45 @@ const getLiveFeedData = async (req, res) => {
             const isOrphan = !rhUser; 
 
             if (isOrphan) {
-                const code = 'ORPHAN_ACCOUNT';
-                const text = 'Conta Órfã: Não foi possível vincular a uma identidade do RH (identityId está nulo).';
-                divergenceDetails.push({ 
-                    code: code, 
-                    text: text,
-                    rhData: null,
-                    appData: account
-                });
+                if (!accountExceptionsSet.has(`${account.id}_ORPHAN_ACCOUNT`)) {
+                    const code = 'ORPHAN_ACCOUNT';
+                    const text = 'Conta Órfã: Não foi possível vincular a uma identidade do RH (identityId está nulo).';
+                    divergenceDetails.push({ 
+                        code: code, 
+                        text: text,
+                        rhData: null,
+                        appData: account
+                    });
+                }
             }
 
             if(rhUser) { 
                 const isZombie = account.status_account === 'Ativo' && rhUser.status_hr === 'Inativo';
                 if (isZombie) {
-                    divergenceDetails.push({ code: 'ZOMBIE_ACCOUNT', text: 'Acesso Ativo Indevido: Conta ativa, mas identidade inativa no RH.', rhData: rhUser, appData: account });
+                    if (!accountExceptionsSet.has(`${account.id}_ZOMBIE_ACCOUNT`)) {
+                        divergenceDetails.push({ code: 'ZOMBIE_ACCOUNT', text: 'Acesso Ativo Indevido: Conta ativa, mas identidade inativa no RH.', rhData: rhUser, appData: account });
+                    }
                 }
                 
                 const hasNameDivergence = account.name_account && rhUser.name_hr && cleanText(account.name_account) !== cleanText(rhUser.name_hr);
                 if (hasNameDivergence) {
-                    divergenceDetails.push({ code: 'NAME_MISMATCH', text: 'Divergência de Nome.', rhData: rhUser, appData: account });
+                    if (!accountExceptionsSet.has(`${account.id}_NAME_MISMATCH`)) {
+                        divergenceDetails.push({ code: 'NAME_MISMATCH', text: 'Divergência de Nome.', rhData: rhUser, appData: account });
+                    }
                 }
                 
                 const hasEmailDivergence = account.email_account && rhUser.email_hr && cleanText(account.email_account) !== cleanText(rhUser.email_hr);
                 if (hasEmailDivergence) {
-                    divergenceDetails.push({ code: 'EMAIL_MISMATCH', text: 'Divergência de E-mail.', rhData: rhUser, appData: account });
+                    if (!accountExceptionsSet.has(`${account.id}_EMAIL_MISMATCH`)) {
+                        divergenceDetails.push({ code: 'EMAIL_MISMATCH', text: 'Divergência de E-mail.', rhData: rhUser, appData: account });
+                    }
+                }
+
+                const hasCpfDivergence = account.cpf_account && rhUser.cpf_hr && cleanCpf(account.cpf_account) !== cleanCpf(rhUser.cpf_hr);
+                if (hasCpfDivergence) {
+                    if (!accountExceptionsSet.has(`${account.id}_CPF_MISMATCH`)) {
+                         divergenceDetails.push({ code: 'CPF_MISMATCH', text: 'Divergência de CPF.', rhData: rhUser, appData: account });
+                    }
                 }
             }
 
@@ -172,13 +202,15 @@ const getLiveFeedData = async (req, res) => {
             const isAdminDormente = isAdmin && account.status_account === 'Ativo' && isDormant;
             
             if (isAdminDormente) {
-                divergenceDetails.push({ 
-                    code: 'DORMANT_ADMIN', 
-                    text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).',
-                    rhData: rhUser,
-                    appData: account
-                });
-                hasAnyDivergence = true; 
+                if (!accountExceptionsSet.has(`${account.id}_DORMANT_ADMIN`)) {
+                    divergenceDetails.push({ 
+                        code: 'DORMANT_ADMIN', 
+                        text: 'Conta de Administrador Dormente (sem login há mais de 90 dias).',
+                        rhData: rhUser,
+                        appData: account
+                    });
+                    hasAnyDivergence = true; 
+                }
             }
             
             const isCritical = hasAnyDivergence && isAdmin;
@@ -188,6 +220,9 @@ const getLiveFeedData = async (req, res) => {
                 identityId: account.identityId,
                 name: account.name_account,
                 email: account.email_account,
+// ======================= INÍCIO DA ALTERAÇÃO =======================
+                cpf_account: account.cpf_account, // <-- ADICIONADO AQUI
+// ======================== FIM DA ALTERAÇÃO =========================
                 userType: rhUser?.user_type_hr || 'N/A', 
                 perfil: perfilString,
                 rh_status: rhUser?.status_hr || (isOrphan ? 'Não encontrado' : 'N/A'),
@@ -197,7 +232,7 @@ const getLiveFeedData = async (req, res) => {
                 isCritical: isCritical,
                 divergenceDetails: divergenceDetails,
                 id_user: account.id_in_system_account,
-                cpf: rhUser?.cpf_hr || null,
+                cpf: rhUser?.cpf_hr || null, 
                 last_login: loginDateStr,
                 rhData: rhUser || null,
             };
@@ -239,11 +274,7 @@ const getLiveFeedData = async (req, res) => {
             };
         };
         
-// ======================= INÍCIO DA CORREÇÃO (ReferenceError) =======================
-        // Mapeia { identityId -> Set(systemId) }
-        // CORRIGIDO: de 'allAccounts' para 'systemAccounts'
         const identitySystemMap = systemAccounts.reduce((map, acc) => {
-// ======================== FIM DA CORREÇÃO (ReferenceError) =========================
             if (!acc.identityId) return map; 
             if (!map.has(acc.identityId)) {
                 map.set(acc.identityId, new Set());
@@ -265,16 +296,22 @@ const getLiveFeedData = async (req, res) => {
                  activeRhIdentities.forEach(rhUser => {
                      const hasAccountInSystem = identitySystemMap.get(rhUser.id)?.has(sys.id);
                       if (!hasAccountInSystem) { 
-                           missingAccessUsers.push(createMissingUserEntry(rhUser, sys.name_system));
-                       }
+                        const isExcepted = identityExceptionsSet.has(`${rhUser.id}_ACCESS_NOT_GRANTED_${sys.name_system}`);
+                        if (!isExcepted) {
+                            missingAccessUsers.push(createMissingUserEntry(rhUser, sys.name_system));
+                        }
+                      }
                  });
             }
         } else if (systemRecord) { // <-- USA O systemRecord (se não for "RH")
              activeRhIdentities.forEach(rhUser => {
                 const hasAccountInSystem = identitySystemMap.get(rhUser.id)?.has(systemRecord.id);
                  if (!hasAccountInSystem) { 
-                      missingAccessUsers.push(createMissingUserEntry(rhUser, system));
-                  }
+                    const isExcepted = identityExceptionsSet.has(`${rhUser.id}_ACCESS_NOT_GRANTED_${system}`);
+                    if (!isExcepted) {
+                        missingAccessUsers.push(createMissingUserEntry(rhUser, system));
+                    }
+                 }
              });
         }
         

@@ -36,7 +36,7 @@ function DetailItem({ icon, label, value, children, darkMode }) {
       {/* Render value if it exists and is not empty */}
       {value != null && value !== '' && (<MDTypography variant="button" fontWeight="regular" color={valueColor}>{value}</MDTypography>)}
       {/* Render N/A if value is null/undefined/empty/false/0 and no children */}
-       {!value && value !== 0 && value !== false && !children && (<MDTypography variant="button" fontWeight="regular" color={valueColor}>N/A</MDTypography>)}
+        {!value && value !== 0 && value !== false && !children && (<MDTypography variant="button" fontWeight="regular" color={valueColor}>N/A</MDTypography>)}
       {/* Render children if provided */}
       {children}
     </MDBox>
@@ -94,38 +94,39 @@ const DivergenceModal = React.forwardRef(({ user, onClose, darkMode, getDivergen
       let specificDetails = null;
 
       // Use the account's sourceSystem if appData is not available in divergence (e.g., ORPHAN)
-      const appSystemName = divAppData?.system?.name || accountData?.sourceSystem || 'Sistema App';
+      // Corrigido para ler 'name_system' do backend
+      const appSystemName = divAppData?.system?.name_system || accountData?.sourceSystem || 'Sistema App';
 
       switch (code) {
         case "CPF_MISMATCH":
           specificDetails = (
             <>
-              <DetailItem icon="badge" label={`CPF no RH`} value={divRhData?.cpf} darkMode={darkMode} />
-              <DetailItem icon="badge" label={`CPF em ${appSystemName}`} value={divAppData?.cpf} darkMode={darkMode} />
+              <DetailItem icon="badge" label={`CPF no RH`} value={divRhData?.cpf_hr} darkMode={darkMode} />
+              <DetailItem icon="badge" label={`CPF em ${appSystemName}`} value={divAppData?.cpf_account || "N/A"} darkMode={darkMode} />
             </>
           );
           break;
         case "NAME_MISMATCH":
           specificDetails = (
             <>
-              <DetailItem icon="person" label={`Nome no RH`} value={divRhData?.name} darkMode={darkMode} />
-              <DetailItem icon="person" label={`Nome em ${appSystemName}`} value={divAppData?.name} darkMode={darkMode} />
+              <DetailItem icon="person" label={`Nome no RH`} value={divRhData?.name_hr} darkMode={darkMode} />
+              <DetailItem icon="person" label={`Nome em ${appSystemName}`} value={divAppData?.name_account} darkMode={darkMode} />
             </>
           );
           break;
         case "EMAIL_MISMATCH":
           specificDetails = (
             <>
-              <DetailItem icon="email" label={`Email no RH`} value={divRhData?.email} darkMode={darkMode} />
-              <DetailItem icon="email" label={`Email em ${appSystemName}`} value={divAppData?.email} darkMode={darkMode} />
+              <DetailItem icon="email" label={`Email no RH`} value={divRhData?.email_hr} darkMode={darkMode} />
+              <DetailItem icon="email" label={`Email em ${appSystemName}`} value={divAppData?.email_account} darkMode={darkMode} />
             </>
           );
           break;
         case "ZOMBIE_ACCOUNT":
           specificDetails = (
            <>
-             <DetailItem icon="toggle_off" label={`Status no RH`} value={divRhData?.status} darkMode={darkMode} />
-             <DetailItem icon="toggle_on" label={`Status em ${appSystemName}`} value={divAppData?.status} darkMode={darkMode} />
+             <DetailItem icon="toggle_off" label={`Status no RH`} value={divRhData?.status_hr} darkMode={darkMode} />
+             <DetailItem icon="toggle_on" label={`Status em ${appSystemName}`} value={divAppData?.status_account} darkMode={darkMode} />
            </>
           );
           break;
@@ -141,8 +142,8 @@ const DivergenceModal = React.forwardRef(({ user, onClose, darkMode, getDivergen
         case "USERTYPE_MISMATCH":
           specificDetails = (
            <>
-             <DetailItem icon="work_outline" label={`Tipo no RH`} value={divRhData?.userType} darkMode={darkMode} />
-             <DetailItem icon="work" label={`Tipo em ${appSystemName}`} value={divAppData?.userType} darkMode={darkMode} />
+             <DetailItem icon="work_outline" label={`Tipo no RH`} value={divRhData?.user_type_hr} darkMode={darkMode} />
+             <DetailItem icon="work" label={`Tipo em ${appSystemName}`} value={divAppData?.user_type_account} darkMode={darkMode} />
            </>
           );
           break;
@@ -194,23 +195,21 @@ const DivergenceModal = React.forwardRef(({ user, onClose, darkMode, getDivergen
             {/* Coluna 1: Dados da Identidade (RH) */}
             <Grid item xs={12} md={6}>
               <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>
-                  {/* Title depends on whether identityData was found */}
-                  {identityData ? "Identidade Vinculada (RH)" : "Identidade (RH)"}
+                {/* Title depends on whether identityData was found */}
+                {identityData ? "Identidade Vinculada (RH)" : "Identidade (RH)"}
               </MDTypography>
               {/* Show details if identityData exists, otherwise show Orphan message */}
               {identityData ? (
-                 <>
-                   <DetailItem icon="person" label="Nome" value={identityData.name} darkMode={darkMode} />
-                   <DetailItem icon="email" label="Email" value={identityData.email} darkMode={darkMode} />
-                   <DetailItem icon="badge" label="CPF" value={identityData.cpf} darkMode={darkMode} />
-                   {/* Use id_user for business ID from RH */}
-                   <DetailItem icon="vpn_key" label="ID RH" value={identityData.id_user} darkMode={darkMode} />
-                   <DetailItem icon="work" label="Tipo" value={identityData.userType} darkMode={darkMode} />
-                   {/* Use rh_status for RH status */}
-                   <DetailItem icon="approval" label="Status RH" value={identityData.rh_status || identityData.status} darkMode={darkMode} />
-                 </>
+                <>
+                  <DetailItem icon="person" label="Nome" value={identityData.name_hr} darkMode={darkMode} />
+                  <DetailItem icon="email" label="Email" value={identityData.email_hr} darkMode={darkMode} />
+                  <DetailItem icon="badge" label="CPF" value={identityData.cpf_hr} darkMode={darkMode} />
+                  <DetailItem icon="vpn_key" label="ID RH" value={identityData.identity_id_hr} darkMode={darkMode} />
+                  <DetailItem icon="work" label="Tipo" value={identityData.user_type_hr} darkMode={darkMode} />
+                  <DetailItem icon="approval" label="Status RH" value={identityData.status_hr} darkMode={darkMode} />
+                </>
               ) : (
-                 <MDTypography variant="caption" color="textSecondary">Conta não vinculada (Órfã).</MDTypography>
+                <MDTypography variant="caption" color="textSecondary">Conta não vinculada (Órfã).</MDTypography>
               )}
             </Grid>
             
@@ -218,22 +217,23 @@ const DivergenceModal = React.forwardRef(({ user, onClose, darkMode, getDivergen
             <Grid item xs={12} md={6}>
               {/* If it's identity only (ACCESS_NOT_GRANTED), show the divergence comparison */}
               {isIdentityOnly ? (
-                  <MDBox>
-                    <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Inconsistência</MDTypography>
-                    {renderComparisonSection()}
-                  </MDBox>
+                <MDBox>
+                  <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Inconsistência</MDTypography>
+                  {renderComparisonSection()}
+                </MDBox>
               ) : (
                 // Otherwise, show Account details
-                 <MDBox>
-                   <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Conta (Sistema)</MDTypography>
-                   {/* Use accountData safely */}
-                   <DetailItem icon="computer" label="Sistema" value={accountData?.sourceSystem} darkMode={darkMode} /> 
-                   <DetailItem icon="vpn_key" label="ID no Sistema" value={accountData?.id_user} darkMode={darkMode} />
-                   <DetailItem icon="person_outline" label="Nome na Conta" value={accountData?.name} darkMode={darkMode} />
-                   <DetailItem icon="admin_panel_settings" label="Perfil App" value={accountData?.perfil} darkMode={darkMode} />
-                   <DetailItem icon="apps" label="Status App" value={accountData?.app_status} darkMode={darkMode} />
-                   <DetailItem icon="login" label="Último Login" value={accountData?.last_login ? new Date(accountData.last_login).toLocaleDateString('pt-BR') : ''} darkMode={darkMode} />
-                 </MDBox>
+                <MDBox>
+                  <MDTypography variant="h6" fontWeight="medium" sx={{ mb: 2 }}>Conta (Sistema)</MDTypography>
+                  {/* Use accountData safely */}
+                  <DetailItem icon="computer" label="Sistema" value={accountData?.sourceSystem} darkMode={darkMode} /> 
+                  <DetailItem icon="vpn_key" label="ID no Sistema" value={accountData?.id_user} darkMode={darkMode} />
+                  <DetailItem icon="person_outline" label="Nome na Conta" value={accountData?.name} darkMode={darkMode} />
+                  <DetailItem icon="badge" label="CPF na Conta" value={accountData?.cpf_account} darkMode={darkMode} />
+                  <DetailItem icon="admin_panel_settings" label="Perfil App" value={accountData?.perfil} darkMode={darkMode} />
+                  <DetailItem icon="apps" label="Status App" value={accountData?.app_status} darkMode={darkMode} />
+                  <DetailItem icon="login" label="Último Login" value={accountData?.last_login ? new Date(accountData.last_login).toLocaleDateString('pt-BR') : ''} darkMode={darkMode} />
+                </MDBox>
               )}
             </Grid>
           </Grid>
@@ -299,24 +299,32 @@ function LiveFeed({ data, isLoading }) { // Added isLoading prop
     const { token, darkMode } = controller;
     const [systemOptions, setSystemOptions] = useState([]);
 
+// ======================= INÍCIO DA CORREÇÃO (fetchSystems) =======================
     useEffect(() => {
         const fetchSystems = async () => {
             if (!token) return;
             try {
-                const response = await axios.get('/systems', {
+                const response = await axios.get('/systems', { // 1. Busca DataSources
                     headers: { "Authorization": `Bearer ${token}` },
                 });
-                // Include RH in options for filtering? Assuming not for now.
-                const systemNames = response.data
-                    .filter(system => system.name.toUpperCase() !== 'RH') 
-                    .map(system => system.name);
-                setSystemOptions(systemNames);
+                
+                // 2. Mapeia a resposta para extrair nomes de sistemas únicos
+                const systemNamesSet = new Set(
+                    response.data
+                        // 3. Filtra apenas fontes do tipo "SISTEMA" que têm um sistema vinculado
+                        .filter(ds => ds.origem_datasource === 'SISTEMA' && ds.systemConfig?.system?.name_system)
+                        // 4. Pega o nome do sistema (name_system)
+                        .map(ds => ds.systemConfig.system.name_system)
+                );
+                
+                setSystemOptions(Array.from(systemNamesSet)); // 5. Define as opções com os nomes corretos
             } catch (error) {
                 console.error("Erro ao buscar a lista de sistemas para os filtros:", error);
             }
         };
         fetchSystems();
     }, [token]);
+// ======================== FIM DA CORREÇÃO (fetchSystems) =========================
 
 
     const [searchTerm, setSearchTerm] = useState("");
@@ -530,10 +538,12 @@ function LiveFeed({ data, isLoading }) { // Added isLoading prop
                         <MDBox mt={2}><TextField label="Perfil" name="perfil" value={tempFilters.perfil} onChange={handleTempFilterChange} fullWidth size="small" /></MDBox>
                         <MDBox mt={2}>
                             <Autocomplete 
-                                options={['', ...systemOptions]} // Add empty option to clear
+// ======================= INÍCIO DA CORREÇÃO (Opção em Branco) =======================
+                                options={systemOptions} // 1. Remove o ['', ...systemOptions]
                                 getOptionLabel={(option) => option || ""}
                                 value={tempFilters.sistema}
-                                onChange={(event, newValue) => handleTempAutocompleteChange('sistema', newValue === '' ? null : newValue)} // Set null on empty
+                                onChange={(event, newValue) => handleTempAutocompleteChange('sistema', newValue)} // 2. Simplificado
+// ======================== FIM DA CORREÇÃO (Opção em Branco) =========================
                                 renderInput={(params) => <TextField {...params} label="Sistema" size="small"/>} 
                             />
                         </MDBox>

@@ -1,37 +1,44 @@
 // material-react-app/src/layouts/observabilidade/geral/index.js
 
 import React, { useEffect, useState, useMemo } from "react";
+import PropTypes from "prop-types";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import axios from "axios";
-import Grid from "@mui/material/Grid";
+import { useMaterialUIController } from "context"; // Importação original
+
+// Componentes do Template
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
-import { Box } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import Modal from "@mui/material/Modal";
+import Divider from "@mui/material/Divider";
+import Menu from "@mui/material/Menu";
+import { Box } from "@mui/material";
+import Autocomplete from "@mui/material/Autocomplete";
+import TextField from "@mui/material/TextField";
+import CircularProgress from "@mui/material/CircularProgress";
+import MDBox from "components/MDBox";
+import MDTypography from "components/MDTypography";
+import MDInput from "components/MDInput";
+import MDButton from "components/MDButton";
+import DataTable from "examples/Tables/DataTable";
+import colors from "assets/theme/base/colors";
+import MDBadge from "components/MDBadge";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogContentText from "@mui/material/DialogContentText";
 import DialogTitle from "@mui/material/DialogTitle";
-import TextField from "@mui/material/TextField";
-import CircularProgress from "@mui/material/CircularProgress";
-// --- INÍCIO DA ADIÇÃO DE IMPORTS ---
-import Menu from "@mui/material/Menu";
 import MenuItem from "@mui/material/MenuItem";
 import MDSnackbar from "components/MDSnackbar";
-import MDBadge from "components/MDBadge";
-import PropTypes from 'prop-types';
-// --- FIM DA ADIÇÃO DE IMPORTS ---
 
 // Componentes do Template
-import MDBox from "components/MDBox";
-import MDTypography from "components/MDTypography";
-import MDButton from "components/MDButton";
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
 import DashboardNavbar from "examples/Navbars/DashboardNavbar";
-import DataTable from "examples/Tables/DataTable";
 
 // Hook do Contexto Principal
-import { useMaterialUIController } from "context";
+// (Linha duplicada removida)
 
 // Componentes locais
 import LiveFeed from "./components/LiveFeed";
@@ -85,19 +92,36 @@ const DrillDownModal = React.forwardRef(({ title, data, isLoading, onIgnore, onI
     
     // Colunas agora são dinâmicas baseadas no 'divergenceCode'
     const columns = useMemo(() => {
+        // Colunas Base
         let cols = [
             { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
-            { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
             { Header: "Sistema", accessor: "sourceSystem", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
         ];
 
         if (divergenceCode === 'ACCESS_NOT_GRANTED') {
-            // Dados da 'Identity'
-            cols.push({ Header: "Tipo (RH)", accessor: "userType", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> });
-            cols.push({ Header: "Status (RH)", accessor: "status", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> });
+            // Caso especial: Acesso Não Concedido (mostra dados do RH)
+            cols = [
+                { Header: "Nome", accessor: "name", Cell: ({ value }) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
+                { Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value || '-'}</MDTypography> },
+                { Header: "Sistema (Acesso Faltante)", accessor: "sourceSystem", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value}</MDTypography> },
+                { Header: "Tipo (RH)", accessor: "userType", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> },
+                { Header: "Status (RH)", accessor: "status", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> },
+            ];
+        } else if (divergenceCode === 'NAME_MISMATCH') {
+            cols.push({ Header: "Nome (RH)", accessor: "rhData.name_hr", Cell: ({ value }) => <MDTypography variant="caption">{value || 'N/A'}</MDTypography> });
+            cols.push({ Header: "Nome (App)", accessor: "appData.name_account", Cell: ({ value }) => <MDTypography variant="caption" color="error">{value || 'N/A'}</MDTypography> });
+        
+        } else if (divergenceCode === 'EMAIL_MISMATCH') {
+            cols.push({ Header: "Email (RH)", accessor: "rhData.email_hr", Cell: ({ value }) => <MDTypography variant="caption">{value || 'N/A'}</MDTypography> });
+            cols.push({ Header: "Email (App)", accessor: "appData.email_account", Cell: ({ value }) => <MDTypography variant="caption" color="error">{value || 'N/A'}</MDTypography> });
+
+        } else if (divergenceCode === 'CPF_MISMATCH') {
+            cols.push({ Header: "CPF (RH)", accessor: "rhData.cpf_hr", Cell: ({ value }) => <MDTypography variant="caption">{value || 'N/A'}</MDTypography> });
+            cols.push({ Header: "CPF (App)", accessor: "appData.cpf_account", Cell: ({ value }) => <MDTypography variant="caption" color="error">{value || 'N/A'}</MDTypography> });
+        
         } else {
-            // Dados da 'Account' (Zumbi, Órfã, Mismatch, etc.)
-            // 'profile' vem como string formatada do backend /by-code/
+            // Default (Zumbi, Órfã, Dormente, etc.)
+            cols.push({ Header: "Email", accessor: "email", Cell: ({ value }) => <MDTypography variant="caption">{value || '-'}</MDTypography> });
             cols.push({ Header: "Perfil (App)", accessor: "profile", align: "center", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography> });
             cols.push({ 
                 Header: "Status (App)", 
@@ -470,11 +494,13 @@ function VisaoGeral() {
                  
                  // Define colunas com base no endpoint (o backend já formatou)
                  columns = [
-                    { Header: "Sistema", accessor: "sourceSystem" },
-                    { Header: "ID no Sistema", accessor: "accountIdInSystem" }, 
-                    { Header: "Nome", accessor: "name" }, 
-                    { Header: "Email", accessor: "email" },
-                    { Header: "Perfis", accessor: "profile" } 
+                     { Header: "Sistema", accessor: "sourceSystem" },
+// ======================= INÍCIO DA CORREÇÃO (Accessor) =======================
+                     { Header: "ID no Sistema", accessor: "id_in_system_account" }, // Corrigido
+// ======================== FIM DA CORREÇÃO (Accessor) =========================
+                     { Header: "Nome", accessor: "name" }, 
+                     { Header: "Email", accessor: "email" },
+                     { Header: "Perfis", accessor: "profile" } 
                  ];
 
                  // Se for SOD, muda o label da última coluna
@@ -491,6 +517,17 @@ function VisaoGeral() {
         }
     };
     // --- FIM DA MODIFICAÇÃO ---
+
+    // ======================= INÍCIO DA CORREÇÃO (Cálculo hasRisk) =======================
+    // Esta constante agora calcula se há algum risco nos dados do gráfico de barras
+    const hasRiskInChart = useMemo(() => {
+        if (!displayData || !displayData.riscosConsolidadosChart.datasets[0]) {
+            return false;
+        }
+        // Verifica se algum valor no array 'data' do gráfico é maior que 0
+        return displayData.riscosConsolidadosChart.datasets[0].data.some(value => value > 0);
+    }, [displayData]);
+    // ======================== FIM DA CORREÇÃO (Cálculo hasRisk) =========================
 
     const convertToCSV = (objArray) => {
       const array = typeof objArray !== 'object' ? JSON.parse(objArray) : objArray;
@@ -628,7 +665,16 @@ function VisaoGeral() {
                                          <Card sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
                                              <MDBox p={1} textAlign="center">
                                                  <MDTypography variant="h6" fontWeight="bold" sx={{ mb: 1 }}>Índice de Conformidade</MDTypography>
-                                                 <MDTypography variant="h2" fontWeight="bold" color={displayData.indiceConformidade < 100 ? "warning" : "success"}> {displayData.indiceConformidade}%</MDTypography>
+                                                 <MDTypography 
+                                                    variant="h2" 
+                                                    fontWeight="bold" 
+                                                    color={
+                                                        displayData.indiceConformidade == 100 ? "success" : 
+                                                        displayData.indiceConformidade < 90 ? "error" : "warning"
+                                                    }
+                                                 > 
+                                                    {displayData.indiceConformidade}%
+                                                 </MDTypography>
                                                  <MDTypography variant="body2" color="text" sx={{mb: 3}}>das identidades estão íntegras.</MDTypography>
                                              </MDBox>
                                          </Card>
@@ -694,6 +740,7 @@ function VisaoGeral() {
                         <RisksChartCard 
                             chart={displayData.riscosConsolidadosChart}
                             onClick={handleBarChartClick}
+                            hasRisk={hasRiskInChart} // <-- Passa o flag calculado
                         />
                     </Grid>
                 </Grid>

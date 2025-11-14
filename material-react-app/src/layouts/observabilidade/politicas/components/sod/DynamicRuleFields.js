@@ -1,5 +1,8 @@
+// material-react-app/src/layouts/observabilidade/politicas/components/sod/DynamicRuleFields.js
+
 import React from "react";
 import PropTypes from 'prop-types'; // <<< Adicionado
+
 // @mui material components
 import TextField from "@mui/material/TextField";
 import Autocomplete from "@mui/material/Autocomplete";
@@ -7,6 +10,8 @@ import Grid from "@mui/material/Grid";
 
 // Material Dashboard 2 React components
 import MDTypography from "components/MDTypography";
+import MDInput from "components/MDInput"; // <-- ADICIONADO: Usar MDInput
+import { useMaterialUIController } from "context"; // <-- ADICIONADO: Para Modo Escuro
 
 // Config (para operadores)
 import { comparisonOperators } from "./sodConfig";
@@ -14,13 +19,18 @@ import { comparisonOperators } from "./sodConfig";
 // Componente ATUALIZADO para renderizar campos dinâmicos com operador/valor
 function DynamicRuleFields({
   ruleType,
-  profiles,
+  resources, // <-- Corrigido de 'profiles'
+// ======================== FIM DA CORREÇÃO (Props) =========================
   systems,
   attributes,
   values, // Espera { valueASelection, valueAOperator, valueAValue, valueBSelection }
   onChange, // Handler unificado vindo do Modal
   isDisabled, // <<< 1. Recebe a nova prop
 }) {
+// ======================= INÍCIO DA CORREÇÃO (Modo Escuro) =======================
+  const [controller] = useMaterialUIController();
+  const { darkMode } = controller;
+// ======================== FIM DA CORREÇÃO (Modo Escuro) =========================
 
   // Função interna para renderizar os campos de Atributo (Seleção, Operador, Valor)
   const renderAttributeFields = (valueField, operatorField, valueValueField) => (
@@ -32,8 +42,9 @@ function DynamicRuleFields({
           value={values[valueField]} // Ex: values.valueASelection
           onChange={(event, newValue) => onChange(valueField, newValue)}
           isOptionEqualToValue={(option, value) => option.id === value?.id}
-          renderInput={(params) => <TextField {...params} label="Atributo *" required />}
           disabled={isDisabled} // <<< 2. Aplica a prop
+          ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+          renderInput={(params) => <MDInput {...params} label="Atributo *" required variant="outlined" />}
         />
       </Grid>
       <Grid item xs={12} sm={3}> {/* Ajuste de tamanho */}
@@ -43,13 +54,14 @@ function DynamicRuleFields({
           value={values[operatorField]} // Ex: values.valueAOperator
           onChange={(event, newValue) => onChange(operatorField, newValue)}
           isOptionEqualToValue={(option, value) => option.id === value?.id}
-          renderInput={(params) => <TextField {...params} label="Operador *" required />}
           disableClearable
           disabled={isDisabled} // <<< 2. Aplica a prop
+          ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+          renderInput={(params) => <MDInput {...params} label="Operador *" required variant="outlined" />}
         />
       </Grid>
       <Grid item xs={12} sm={5}> {/* Ajuste de tamanho */}
-        <TextField
+        <MDInput
           label="Valor do Atributo *"
           name={valueValueField} // Ex: valueAValue
           value={values[valueValueField]} // Ex: values.valueAValue
@@ -57,6 +69,7 @@ function DynamicRuleFields({
           fullWidth
           required
           disabled={isDisabled} // <<< 2. Aplica a prop
+          variant="outlined"
         />
       </Grid>
     </>
@@ -66,13 +79,15 @@ function DynamicRuleFields({
   const renderProfileField = (valueField, label = "Perfil *") => (
     <Grid item xs={12} sm={6}>
       <Autocomplete
-        options={profiles} // Recebe os perfis JÁ FILTRADOS
-        getOptionLabel={(option) => option.name || ""}
+        options={resources} // 2. Usa a prop 'resources'
+        // 3. Lê o nome do recurso e o sistema
+        getOptionLabel={(option) => `${option.name_resource} (${option.system?.name_system || 'Global'})` || ""}
         value={values[valueField]} // Ex: values.valueASelection
         onChange={(event, newValue) => onChange(valueField, newValue)}
         isOptionEqualToValue={(option, value) => option.id === value?.id}
-        renderInput={(params) => <TextField {...params} label={label} required />}
         disabled={isDisabled} // <<< 2. Aplica a prop
+        ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+        renderInput={(params) => <MDInput {...params} label={label} required variant="outlined" />}
       />
     </Grid>
   );
@@ -86,8 +101,9 @@ function DynamicRuleFields({
         value={values[valueField]} // Ex: values.valueBSelection
         onChange={(event, newValue) => onChange(valueField, newValue)}
         isOptionEqualToValue={(option, value) => option.id === value?.id}
-        renderInput={(params) => <TextField {...params} label={label} required />}
         disabled={isDisabled} // <<< 2. Aplica a prop
+        ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+        renderInput={(params) => <MDInput {...params} label={label} required variant="outlined" />}
       />
     </Grid>
   );
@@ -98,8 +114,8 @@ function DynamicRuleFields({
     case "ROLE_X_ROLE":
       return (
         <>
-          {renderProfileField("valueASelection", "Perfil Conflitante A *")}
-          {renderProfileField("valueBSelection", "Perfil Conflitante B *")}
+          {renderProfileField("valueASelection", "Recurso Conflitante A *")}
+          {renderProfileField("valueBSelection", "Recurso Conflitante B *")}
         </>
       );
     case "ATTR_X_ROLE":
@@ -108,7 +124,7 @@ function DynamicRuleFields({
           {/* Campos para Atributo A (com operador e valor) */}
           {renderAttributeFields("valueASelection", "valueAOperator", "valueAValue")}
           {/* Campo para Perfil B */}
-          {renderProfileField("valueBSelection", "Perfil Conflitante *")}
+          {renderProfileField("valueBSelection", "Recurso Conflitante *")}
         </>
       );
     case "ATTR_X_SYSTEM":
@@ -124,10 +140,10 @@ function DynamicRuleFields({
     default:
       return (
           <Grid item xs={12}>
-              <MDTypography variant="caption" color="text">
-                  {/* Mensagem atualizada */}
-                  Selecione um Sistema Alvo e um Tipo de Regra...
-              </MDTypography>
+            <MDTypography variant="caption" color="text">
+                {/* Mensagem atualizada */}
+                Selecione um Sistema Alvo e um Tipo de Regra...
+            </MDTypography>
           </Grid>
       );
   }
@@ -136,7 +152,7 @@ function DynamicRuleFields({
 // --- 3. Adicionar PropTypes ---
 DynamicRuleFields.propTypes = {
   ruleType: PropTypes.object,
-  profiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  resources: PropTypes.arrayOf(PropTypes.object).isRequired, // 4. Corrigido
   systems: PropTypes.arrayOf(PropTypes.object).isRequired,
   attributes: PropTypes.arrayOf(PropTypes.object).isRequired,
   values: PropTypes.object.isRequired,

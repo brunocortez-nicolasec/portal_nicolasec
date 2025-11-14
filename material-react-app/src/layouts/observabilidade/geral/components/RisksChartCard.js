@@ -7,11 +7,19 @@ import PropTypes from "prop-types";
 import Card from "@mui/material/Card";
 import VerticalBarChart from "examples/Charts/BarCharts/VerticalBarChart";
 
-function RisksChartCard({ chart, onClick }) {
+// (A definição da animação 'pulse' que está no VerticalBarChart.js está correta, não precisamos dela aqui)
+
+function RisksChartCard({ chart, onClick, hasRisk }) { // <-- 1. Recebe a nova prop 'hasRisk'
   return (
     <Card sx={{ height: "100%" }}>
       <VerticalBarChart
-        icon={{ color: "error", component: "warning" }}
+// ======================= INÍCIO DA ALTERAÇÃO (Ícone Dinâmico) =======================
+        // 2. O ícone agora é dinâmico com base no 'hasRisk'
+        icon={{
+          color: hasRisk ? "error" : "success", // Se houver risco = error (vermelho), senão = success (verde)
+          component: hasRisk ? "warning" : "check_circle", // Se houver risco = warning (triângulo), senão = check
+        }}
+// ======================== FIM DA ALTERAÇÃO (Ícone Dinâmico) =========================
         title="Visão Geral de Riscos"
         description="Principais pontos de atenção consolidados"
         chart={chart}
@@ -21,10 +29,11 @@ function RisksChartCard({ chart, onClick }) {
   );
 }
 
-// Definição de PropTypes para o novo componente
+// 3. Atualiza os PropTypes
 RisksChartCard.propTypes = {
   chart: PropTypes.object.isRequired,
   onClick: PropTypes.func.isRequired,
+  hasRisk: PropTypes.bool.isRequired, // <-- Adiciona a nova prop
 };
 
 export default RisksChartCard;

@@ -28,7 +28,10 @@ function SidenavCollapse({ icon, name, active, collapse, ...rest }) {
 
   useEffect(() => {
     // Abre o menu se a rota atual for uma das filhas
-    if (collapse && collapse.find((item) => item.route === pathname)) {
+// ======================= INÍCIO DA CORREÇÃO (Item Ativo) =======================
+    // Corrigido para 'startsWith' para que rotas filhas (ex: /mapeamento-dados/3) ativem o menu
+    if (collapse && collapse.find((item) => pathname.startsWith(item.route))) {
+// ======================== FIM DA CORREÇÃO (Item Ativo) =========================
       setOpen(true);
     }
   }, [pathname, collapse]);
@@ -43,22 +46,36 @@ function SidenavCollapse({ icon, name, active, collapse, ...rest }) {
     <Collapse in={open} timeout="auto" unmountOnExit>
       <List component="div" disablePadding>
         {collapse.map(({ key, name: subName, route, icon: subIcon }) => { // 1. Lendo o ícone do sub-item
-          const isSubActive = pathname === route;
+// ======================= INÍCIO DA CORREÇÃO (Subitem Ativo) =======================
+          // A lógica 'isSubActive' agora usa 'pathname.startsWith(route)'
+          const isSubActive = pathname.startsWith(route);
+// ======================== FIM DA CORREÇÃO (Subitem Ativo) =========================
           return (
             <NavLink key={key} to={route} style={{ textDecoration: "none" }}>
               <ListItem component="li" sx={{ my: 0.5 }}>
                 <MDBox
                   sx={(theme) =>
-                    collapseItem(theme, {
-                      active: isSubActive,
-                      transparentSidenav,
-                      whiteSidenav,
-                      darkMode,
-                      sidenavColor,
-                    })
+                    {
+                      const baseStyles = collapseItem(theme, {
+                        active: isSubActive,
+                        transparentSidenav,
+                        whiteSidenav,
+                        darkMode,
+                        sidenavColor,
+                      });
+
+                      // Se o sidenav estiver 'mini', usa os estilos base (sem recuo)
+                      if (miniSidenav) {
+                        return baseStyles;
+                      }
+
+                      // Se o sidenav estiver expandido, aplica o recuo
+                      return {
+                        ...baseStyles,
+                        paddingLeft: "2rem",
+                      };
+                    }
                   }
-                  // Adiciona um recuo menor, pois o ícone já cria espaço
-                  style={{ paddingLeft: "2rem" }}
                 >
                   <ListItemIcon
                     sx={(theme) =>
@@ -113,7 +130,7 @@ function SidenavCollapse({ icon, name, active, collapse, ...rest }) {
             primary={name}
             sx={(theme) => collapseText(theme, { miniSidenav, transparentSidenav, whiteSidenav, active })}
           />
-          {collapse && (
+          {collapse && !miniSidenav && (
             <Icon
               sx={{
                 color: active ? "inherit" : ({ palette: { white } }) => white.main,

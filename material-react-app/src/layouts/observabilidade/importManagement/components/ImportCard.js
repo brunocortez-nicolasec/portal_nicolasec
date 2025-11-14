@@ -7,7 +7,7 @@ import Grid from "@mui/material/Grid";
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
 import Autocomplete from "@mui/material/Autocomplete";
-import TextField from "@mui/material/TextField";
+import TextField from "@mui/material/TextField"; // (Necessário para o Autocomplete)
 import FormControlLabel from "@mui/material/FormControlLabel"; 
 import Switch from "@mui/material/Switch"; 
 import CircularProgress from "@mui/material/CircularProgress"; 
@@ -16,19 +16,22 @@ import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import MDButton from "components/MDButton";
 import MDAlert from "components/MDAlert"; 
+import MDInput from "components/MDInput"; 
+import { useMaterialUIController } from "context"; 
 import Dropzone from "./Dropzone";
 
 
 function ImportCard({ 
   onProcessUpload, 
   onProcessDirectory, 
-  dataSourceOptions, // Agora contém TODAS as fontes
-// ======================= INÍCIO DA ALTERAÇÃO (Passo 4) =======================
-  history, // <-- ADICIONADO
-// ======================== FIM DA ALTERAÇÃO (Passo 4) =========================
+  dataSourceOptions,
+  history, 
   isLoading, 
   onOpenTemplate 
 }) {
+  const [controller] = useMaterialUIController();
+  const { darkMode } = controller;
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [selectedDataSource, setSelectedDataSource] = useState(null); 
   const [importMode, setImportMode] = useState("directory"); // 'directory' ou 'upload'
@@ -50,8 +53,8 @@ function ImportCard({
         if (selectedOrigem === "RH") return ds.hrConfig?.diretorio_hr;
         if (selectedOrigem === "IDM") return false; // IDM não é CSV
         if (selectedOrigem === "SISTEMA") {
-           // Inclui se *qualquer* uma das configs for CSV
-           return ds.systemConfig?.tipo_fonte_contas === "CSV" || ds.systemConfig?.tipo_fonte_recursos === "CSV";
+          // Inclui se *qualquer* uma das configs for CSV
+          return ds.systemConfig?.tipo_fonte_contas === "CSV" || ds.systemConfig?.tipo_fonte_recursos === "CSV";
         }
         return false;
     });
@@ -146,7 +149,6 @@ function ImportCard({
 
   }, [selectedDataSource, processingTarget]); // Agora depende do target
 
-// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - A Trava) =======================
   // Verifica se os RECURSOS para o sistema selecionado já foram importados com sucesso
   const hasSuccessfullyImportedResources = useMemo(() => {
     if (!selectedDataSource || selectedDataSource.origem_datasource !== "SISTEMA") {
@@ -165,7 +167,6 @@ function ImportCard({
       log.status === "SUCCESS"
     );
   }, [selectedDataSource, history]);
-// ======================== FIM DA ALTERAÇÃO (Passo 4 - A Trava) =========================
 
 
   const handleModeChange = (event) => {
@@ -215,7 +216,6 @@ function ImportCard({
   }, [allowUploadMode]);
 
 
-// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Botão) =======================
   const isButtonDisabled = 
     isLoading || 
     !selectedDataSource || 
@@ -223,7 +223,6 @@ function ImportCard({
     isMappingMissing ||
     // A TRAVA: Desabilita se o alvo for CONTAS e os RECURSOS ainda não foram importados
     (selectedOrigem === "SISTEMA" && processingTarget === "CONTAS" && !hasSuccessfullyImportedResources);
-// ======================== FIM DA ALTERAÇÃO (Passo 4 - Botão) =========================
 
   return (
     <Card>
@@ -250,8 +249,17 @@ function ImportCard({
                 value={selectedOrigem}
                 disabled={isLoading} 
                 onChange={handleOrigemChange} 
+                ListboxProps={{
+                  sx: {
+                    backgroundColor: darkMode ? "grey.800" : "white", // Cor de fundo do menu
+                  },
+                }}
                 renderInput={(params) => (
-                  <TextField {...params} label="1. Selecione a Origem" />
+                  <MDInput 
+                    {...params} 
+                    label="1. Selecione a Origem" 
+                    variant="outlined" // Mantém o estilo original do template
+                  />
                 )} 
               />
             </MDBox>
@@ -264,8 +272,17 @@ function ImportCard({
                 value={selectedDataSource}
                 disabled={isLoading || !selectedOrigem} 
                 onChange={handleDataSourceChange} 
+                ListboxProps={{
+                  sx: {
+                    backgroundColor: darkMode ? "grey.800" : "white",
+                  },
+                }}
                 renderInput={(params) => (
-                  <TextField {...params} label="2. Selecione a Fonte de Dados" />
+                  <MDInput 
+                    {...params} 
+                    label="2. Selecione a Fonte de Dados" 
+                    variant="outlined" // Mantém o estilo original do template
+                  />
                 )} 
               />
             </MDBox>
@@ -273,33 +290,35 @@ function ImportCard({
             {/* Seletor 3: Contas/Recursos (Agora é um Dropdown) */}
             {selectedOrigem === "SISTEMA" && selectedDataSource && (
               <MDBox mb={2}>
-{/* ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Dropdown) ======================= */}
-                 <Autocomplete 
-                    options={targetOptions}
-                    value={processingTarget}
-                    disabled={isLoading} 
-                    onChange={handleProcessingTargetChange}
-                    // A TRAVA: Desabilita a *opção* "CONTAS" se os recursos não foram importados
-                    getOptionDisabled={(option) => 
-                      option === "CONTAS" && !hasSuccessfullyImportedResources
-                    }
-                    renderInput={(params) => (
-                      <TextField 
-                        {...params} 
-                        label="3. Selecione o Alvo do Processamento" 
-                        // Mostra o helper text se a trava estiver ativa
-                        helperText={
-                          !hasSuccessfullyImportedResources 
-                          ? "Importe 'RECURSOS' primeiro para habilitar 'CONTAS'." 
-                          : ""
-                        }
-                        FormHelperTextProps={{ 
-                          sx: { marginLeft: 1, color: 'warning.main', fontWeight: 'bold' } 
-                        }}
-                      />
-                    )} 
-                  />
-{/* ======================== FIM DA ALTERAÇÃO (Passo 4 - Dropdown) ========================= */}
+                <Autocomplete 
+                  options={targetOptions}
+                  value={processingTarget}
+                  disabled={isLoading} 
+                  onChange={handleProcessingTargetChange}
+                  getOptionDisabled={(option) => 
+                    option === "CONTAS" && !hasSuccessfullyImportedResources
+                  }
+                  ListboxProps={{
+                    sx: {
+                      backgroundColor: darkMode ? "grey.800" : "white",
+                    },
+                  }}
+                  renderInput={(params) => (
+                    <MDInput 
+                      {...params} 
+                      label="3. Selecione o Alvo do Processamento" 
+                      variant="outlined" // Mantém o estilo original do template
+                      helperText={
+                        !hasSuccessfullyImportedResources 
+                        ? "Importe 'RECURSOS' primeiro para habilitar 'CONTAS'." 
+                        : ""
+                      }
+                      FormHelperTextProps={{ 
+                        sx: { marginLeft: 1, color: 'warning.main', fontWeight: 'bold' } 
+                      }}
+                    />
+                  )} 
+                />
               </MDBox>
             )}
             
@@ -324,9 +343,21 @@ function ImportCard({
                       checked={importMode === "upload"} 
                       onChange={handleModeChange} 
                       disabled={isLoading}
+                      sx={{
+                        "& .MuiSwitch-thumb": {
+                          backgroundColor: darkMode ? "white" : "white", // Cor da bolinha
+                        },
+                        "& .Mui-checked+.MuiSwitch-track": {
+                          backgroundColor: darkMode ? "info" : "info", // Cor do trilho (ligado)
+                        },
+                      }}
                     />
                   }
-                  label="Fazer upload manual de arquivo"
+                  label={
+                    <MDTypography variant="button" color="text">
+                      Fazer upload manual de arquivo
+                    </MDTypography>
+                  }
                 />
               </MDBox>
             )}
@@ -360,24 +391,34 @@ function ImportCard({
                 disabledText="Selecione uma fonte de dados primeiro"
               />
             ) : (
-              <MDBox 
-                display="flex" 
-                flexDirection="column" 
-                justifyContent="center" 
-                alignItems="center" 
-                p={3} 
-                sx={{ 
-                  border: "2px dashed", 
-                  borderColor: "grey.400", 
-                  borderRadius: "md", 
-                  minHeight: "150px", 
-                  backgroundColor: "grey.100" 
-                }}
+// ======================= INÍCIO DA CORREÇÃO (Estilo do Bloco) =======================
+              <MDBox
+                // Adiciona flex para centralizar o conteúdo, imitando o Dropzone
+                display="flex"
+                flexDirection="column"
+                justifyContent="center"
+                alignItems="center"
+                sx={(theme) => ({
+                  // Estilos copiados diretamente do Dropzone.js
+                  border: "2px dashed",
+                  borderColor: theme.palette.grey[500],
+                  borderRadius: "10px",
+                  textAlign: "center",
+                  padding: "24px",
+                  cursor: "default",
+                  transition: "all 0.3s ease-in-out",
+                  backgroundColor: "transparent", // <-- A CHAVE: usa o fundo do Card
+                  minHeight: "150px", // Garante altura mínima
+                })}
               >
-                <Icon fontSize="large" color="secondary">
+                <Icon
+                  fontSize="large"
+                  // Corrigido para "info" para corresponder ao ícone de upload
+                  sx={{ color: 'info.main' }}
+                >
                   {currentSourceType === "CSV" ? "folder_open" : "settings_ethernet"}
                 </Icon>
-                <MDTypography variant="h6" color="secondary" mt={1}>
+                <MDTypography variant="h6" mt={1} fontSize="1rem" color="text"> {/* Corrigido para color="text" */}
                   {currentSourceType === "CSV" ? "Processamento via Diretório" : "Processamento via Conexão"}
                 </MDTypography>
                 <MDTypography variant="body2" color="text" align="center" mt={1}>
@@ -386,6 +427,7 @@ function ImportCard({
                     : "Os dados serão buscados da conexão de banco de dados configurada."}
                 </MDTypography>
               </MDBox>
+// ======================== FIM DA CORREÇÃO (Estilo do Bloco) =========================
             )}
           </Grid>
         </Grid>
@@ -399,18 +441,14 @@ ImportCard.propTypes = {
   onProcessUpload: PropTypes.func.isRequired,
   onProcessDirectory: PropTypes.func.isRequired,
   dataSourceOptions: PropTypes.arrayOf(PropTypes.object).isRequired,
-// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Props) =======================
   history: PropTypes.arrayOf(PropTypes.object),
-// ======================== FIM DA ALTERAÇÃO (Passo 4 - Props) =========================
   isLoading: PropTypes.bool,
   onOpenTemplate: PropTypes.func.isRequired,
 };
 
 ImportCard.defaultProps = {
   isLoading: false,
-// ======================= INÍCIO DA ALTERAÇÃO (Passo 4 - Props) =======================
   history: [],
-// ======================== FIM DA ALTERAÇÃO (Passo 4 - Props) =========================
 };
 
 export default ImportCard;

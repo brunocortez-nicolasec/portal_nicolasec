@@ -1,8 +1,8 @@
-// src/layouts/observabilidade/politicas/index.js
+// material-react-app/src/layouts/observabilidade/politicas/index.js
 
-import { useState, useEffect } from "react"; // <<< Adicionado useEffect
-import axios from "axios"; // <<< Adicionado axios
-import { useMaterialUIController } from "context"; // <<< Adicionado context
+import { useState, useEffect, useMemo } from "react"; // <<< useMemo adicionado
+import axios from "axios"; 
+import { useMaterialUIController } from "context"; 
 
 // @mui material components
 import Grid from "@mui/material/Grid";
@@ -10,12 +10,12 @@ import Card from "@mui/material/Card";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Icon from "@mui/material/Icon";
-import CircularProgress from "@mui/material/CircularProgress"; // <<< Adicionado CircularProgress
+import CircularProgress from "@mui/material/CircularProgress"; 
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
-import MDSnackbar from "components/MDSnackbar"; // <<< Adicionado MDSnackbar
+import MDSnackbar from "components/MDSnackbar"; 
 
 // Material Dashboard 2 React example components
 import DashboardLayout from "examples/LayoutContainers/DashboardLayout";
@@ -36,26 +36,36 @@ function TabPanel(props) {
       aria-labelledby={`politicas-tab-${index}`}
       {...other}
     >
-      {/* Agora renderizamos o MDBox sempre, mas o children (RbacTab/SodTab) 
-        só será passado quando os dados estiverem prontos (ver abaixo).
-        A lógica de value === index ainda oculta o conteúdo.
-      */}
       {value === index && <MDBox sx={{ p: 3 }}>{children}</MDBox>}
     </div>
   );
 }
 
+// ======================= INÍCIO DA CORREÇÃO (Atributos Estáticos) =======================
+// Não precisamos de uma chamada de API para isso, 
+// são os campos do modelo IdentitiesHR do Prisma.
+const allAttributes = [
+  { id: "name_hr", name: "Nome" },
+  { id: "email_hr", name: "Email" },
+  { id: "status_hr", name: "Status" },
+  { id: "user_type_hr", name: "Tipo de Usuário" },
+  { id: "cpf_hr", name: "CPF" },
+  // Adicione outros campos de IdentitiesHR se necessário
+];
+// ======================== FIM DA CORREÇÃO (Atributos Estáticos) =========================
+
+
 function GerenciarPoliticas() {
-  const [controller] = useMaterialUIController(); // <<< Adicionado
-  const { token } = controller; // <<< Adicionado
+  const [controller] = useMaterialUIController(); 
+  const { token } = controller; 
 
   const [activeTab, setActiveTab] = useState(0);
 
   // --- 1. Estados para carregar dados compartilhados ---
   const [isLoading, setIsLoading] = useState(true);
   const [allSystems, setAllSystems] = useState([]);
-  const [allProfiles, setAllProfiles] = useState([]);
-  const [allAttributes, setAllAttributes] = useState([]);
+  const [allResources, setAllResources] = useState([]); // <-- Corrigido de allProfiles
+  // const [allAttributes, setAllAttributes] = useState([]); // <-- Agora é uma constante (acima)
   const [snackbar, setSnackbar] = useState({ open: false, color: "info", title: "", message: "" });
   // --- Fim da Adição ---
 
@@ -68,37 +78,43 @@ function GerenciarPoliticas() {
       if (!token) return;
       setIsLoading(true);
       try {
-          // Busca sistemas (e seus perfis associados)
-          const systemsPromise = axios.get('/systems?includeProfiles=true', { 
+// ======================= INÍCIO DA CORREÇÃO (Endpoints) =======================
+          // 1. Busca DataSources (que contêm os Sistemas)
+          const systemsPromise = axios.get('/systems', { 
               headers: { "Authorization": `Bearer ${token}` }
           });
-          // Busca atributos da identidade (usados em RBAC e SoD)
-          const attributesPromise = axios.get('/identity-attributes', { 
-              headers: { "Authorization": `Bearer ${token}` }
-          });
-          // Busca TODOS os perfis (pode ser redundante se /systems?includeProfiles=true for suficiente)
-          // Vamos usar a rota /profiles que já retorna o systemId
-           const profilesPromise = axios.get('/profiles', { 
+          
+          // 2. Busca TODOS os Recursos (Perfis de Sistema) da nova rota
+          const resourcesPromise = axios.get('/systems/all-resources', { 
               headers: { "Authorization": `Bearer ${token}` }
           });
 
-
-          const [systemsRes, attributesRes, profilesRes] = await Promise.all([
+          const [systemsRes, resourcesRes] = await Promise.all([
               systemsPromise,
-              attributesPromise,
-              profilesPromise
+              resourcesPromise
           ]);
 
-          // Sistemas que NÃO SÃO RH (para dropdowns de regras)
-          setAllSystems(systemsRes.data.filter(s => s.id !== 'rh')); 
-          // Todos os perfis (já vêm com systemId)
-          setAllProfiles(profilesRes.data); 
-          // Todos os atributos da Identity
-          setAllAttributes(attributesRes.data); 
+          // Processa a lista de Sistemas (extrai da DataSource e remove duplicatas)
+          const systemsMap = new Map();
+          systemsRes.data
+            .filter(ds => ds.origem_datasource === 'SISTEMA' && ds.systemConfig?.system)
+            .forEach(ds => {
+              const sys = ds.systemConfig.system;
+              if (!systemsMap.has(sys.id)) {
+                // Armazena o objeto de Sistema do schema
+                systemsMap.set(sys.id, { id: sys.id, name: sys.name_system }); 
+              }
+            });
+          
+          setAllSystems(Array.from(systemsMap.values()));
+          setAllResources(resourcesRes.data); // Salva os Recursos
+          // setAllAttributes não é mais necessário
+          
+// ======================== FIM DA CORREÇÃO (Endpoints) =========================
           
       } catch (error) {
           console.error("Erro ao buscar dados compartilhados para Políticas:", error);
-          setSnackbar({ open: true, color: "error", title: "Erro de Rede", message: "Não foi possível carregar os dados necessários (Sistemas, Perfis, Atributos)." });
+          setSnackbar({ open: true, color: "error", title: "Erro de Rede", message: "Não foi possível carregar os dados necessários (Sistemas, Recursos)." });
       } finally {
           setIsLoading(false);
       }
@@ -159,10 +175,10 @@ function GerenciarPoliticas() {
               <MDBox>
                 {isLoading ? (
                     // Mostra loading centralizado
-                    <MDBox p={5} display="flex" justifyContent="center" alignItems="center">
+                    <MDBox p={5} display="flex" justifyContent="center" alignItems="center" minHeight="300px">
                         <CircularProgress color="info" />
                         <MDTypography variant="body2" color="text" sx={{ ml: 2 }}>
-                            Carregando dados (Sistemas, Perfis, Atributos)...
+                            Carregando dados (Sistemas, Recursos)...
                         </MDTypography>
                     </MDBox>
                 ) : (
@@ -173,8 +189,8 @@ function GerenciarPoliticas() {
                         <RbacTab 
                           // Passa os dados compartilhados como props
                           allSystems={allSystems}
-                          allProfiles={allProfiles}
-                          allAttributes={allAttributes}
+                          allResources={allResources} // <-- Corrigido
+                          allAttributes={allAttributes} // <-- Corrigido
                         />
                       </TabPanel>
 
@@ -183,8 +199,8 @@ function GerenciarPoliticas() {
                         <SodTab 
                           // Passa os dados compartilhados como props
                           allSystems={allSystems}
-                          allProfiles={allProfiles}
-                          allAttributes={allAttributes}
+                          allResources={allResources} // <-- Corrigido
+                          allAttributes={allAttributes} // <-- Corrigido
                         />
                       </TabPanel>
                     </>

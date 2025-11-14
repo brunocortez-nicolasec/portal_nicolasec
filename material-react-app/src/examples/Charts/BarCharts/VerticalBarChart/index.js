@@ -1,9 +1,4 @@
-/**
-=========================================================
-* Material Dashboard 2 React - v2.1.0
-=========================================================
-* The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-*/
+// material-react-app/src/examples/Charts/BarCharts/VerticalBarChart/index.js
 
 import { useMemo, useRef } from "react";
 import PropTypes from "prop-types";
@@ -20,12 +15,32 @@ import {
 
 import Card from "@mui/material/Card";
 import Icon from "@mui/material/Icon";
+import { keyframes } from "@mui/material"; // Importa o keyframes
 import MDBox from "components/MDBox";
 import MDTypography from "components/MDTypography";
 import configs from "examples/Charts/BarCharts/VerticalBarChart/configs";
 import colors from "assets/theme/base/colors";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
+
+// ======================= INÍCIO DA ALTERAÇÃO (Animação Sutil) =======================
+// 1. Definir a animação @keyframes
+// Mantido o efeito sutil que definimos (scale 1.1 e sombra 10px)
+const pulse = keyframes`
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.7);
+  }
+  50% { 
+    transform: scale(1.1);
+    box-shadow: 0 0 0 10px rgba(229, 62, 62, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(229, 62, 62, 0);
+  }
+`;
+// ======================== FIM DA ALTERAÇÃO (Animação Sutil) =========================
 
 function VerticalBarChart({ icon, title, description, height, chart, onClick }) {
   const chartRef = useRef();
@@ -70,6 +85,14 @@ function VerticalBarChart({ icon, title, description, height, chart, onClick }) 
               color="white"
               mt={-5}
               mr={2}
+// ======================= INÍCIO DA ALTERAÇÃO (Aplicar Animação) =======================
+              // 2. Aplicar a animação APENAS se a cor for "error"
+              // Trocado "ease-in-out" por uma curva "cubic-bezier" ultra-fluida
+              // Trocado 2s para 1.7s para um ritmo mais natural
+              sx={icon.color === "error" ? {
+                animation: `${pulse} 1.7s cubic-bezier(0.45, 0, 0.55, 1) infinite`
+              } : {}}
+// ======================== FIM DA ALTERAÇÃO (Aplicar Animação) =========================
             >
               <Icon fontSize="medium">{icon.component}</Icon>
             </MDBox>

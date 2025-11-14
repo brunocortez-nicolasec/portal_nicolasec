@@ -1,6 +1,7 @@
-// src/layouts/observabilidade/politicas/components/sod/SodTable.js
+// material-react-app/src/layouts/observabilidade/politicas/components/sod/SodTable.js
 
 import React from "react";
+import PropTypes from 'prop-types'; // Adicionado para validação
 
 // @mui material components
 import CircularProgress from "@mui/material/CircularProgress";
@@ -18,7 +19,9 @@ import DataTable from "examples/Tables/DataTable";
 // Configs - Importa também os operadores
 import { ruleTypes, comparisonOperators } from "./sodConfig";
 
-function SodTable({ loading, rules, profiles, systems, attributes, onEdit, onDelete }) {
+// 1. A prop 'profiles' foi renomeada para 'resources'
+function SodTable({ loading, rules, resources, systems, attributes, onEdit, onDelete }) {
+// ======================== FIM DA CORREÇÃO (Props) =========================
 
   // Função helper refatorada: Retorna APENAS o nome (string) ou null/undefined
   const findItemName = (type, id) => {
@@ -28,10 +31,12 @@ function SodTable({ loading, rules, profiles, systems, attributes, onEdit, onDel
       let idToCompare = id;
 
       switch (type) {
+// ======================= INÍCIO DA CORREÇÃO (Lógica findItemName) =======================
           case 'PROFILE':
-              list = profiles;
+              list = resources; // 2. Usa a prop 'resources'
               idToCompare = parseInt(id, 10);
               break;
+// ======================== FIM DA CORREÇÃO (Lógica findItemName) =========================
           case 'SYSTEM':
               list = systems;
               idToCompare = parseInt(id, 10);
@@ -48,7 +53,17 @@ function SodTable({ loading, rules, profiles, systems, attributes, onEdit, onDel
           console.error(`Lista para tipo ${type} não é um array válido.`);
           return `${id} (lista inválida)`;
       }
+      
       const found = list.find(item => item && item[keyField] === idToCompare);
+      
+// ======================= INÍCIO DA CORREÇÃO (Lógica findItemName) =======================
+      // 3. Formata o nome do Recurso para "NOME_RECURSO (NOME_SISTEMA)"
+      if (type === 'PROFILE' && found) {
+          // O backend (all-resources) envia { name_resource: "...", system: { name_system: "..." } }
+          return `${found.name_resource} (${found.system?.name_system || 'Sistema Desconhecido'})`;
+      }
+// ======================== FIM DA CORREÇÃO (Lógica findItemName) =========================
+
       return found ? found.name : `${id} (não encontrado)`;
   };
 
@@ -63,9 +78,9 @@ function SodTable({ loading, rules, profiles, systems, attributes, onEdit, onDel
         // Usar Tooltip para nomes longos
         return (
            <Tooltip title={type?.label || value}>
-              <MDTypography variant="caption" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {type?.label || value}
-              </MDTypography>
+             <MDTypography variant="caption" sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                 {type?.label || value}
+             </MDTypography>
            </Tooltip>
         );
       }
@@ -83,12 +98,12 @@ function SodTable({ loading, rules, profiles, systems, attributes, onEdit, onDel
            const opLabel = comparisonOperators.find(op => op.id === valueAOperator)?.label || valueAOperator || '(?)';
            const displayValue = valueAValue !== null && typeof valueAValue !== 'undefined' ? `"${valueAValue}"` : '';
            return (
-              <MDTypography variant="caption" title={`${nameA} ${opLabel} ${displayValue}`}> {/* Adiciona title completo */}
+             <MDTypography variant="caption" title={`${nameA} ${opLabel} ${displayValue}`}> {/* Adiciona title completo */}
                  {`${nameA} ${opLabel} ${displayValue}`}
-              </MDTypography>
+             </MDTypography>
            );
         }
-        // Caso contrário, mostra apenas o nome (Perfil)
+        // Caso contrário, mostra apenas o nome (Perfil/Recurso)
         return <MDTypography variant="caption">{nameA}</MDTypography>;
       }
     },
@@ -102,7 +117,14 @@ function SodTable({ loading, rules, profiles, systems, attributes, onEdit, onDel
         return <MDTypography variant="caption">{nameB}</MDTypography>;
        }
     },
-    { Header: "Owner", accessor: "owner", Cell: ({ value }) => <MDTypography variant="caption">{value || "N/A"}</MDTypography>, width: "10%" }, // Ajuste de largura
+// ======================= INÍCIO DA CORREÇÃO (Coluna Sistema) =======================
+    { 
+      Header: "Sistema", 
+      accessor: "system.name_system", // 4. Lê o nome do sistema aninhado
+      Cell: ({ value }) => <MDTypography variant="caption">{value || "Global"}</MDTypography>, 
+      width: "10%" 
+    },
+// ======================== FIM DA CORREÇÃO (Coluna Sistema) =========================
     {
       Header: "Ações",
       accessor: "actions",
@@ -149,5 +171,18 @@ function SodTable({ loading, rules, profiles, systems, attributes, onEdit, onDel
     />
   );
 }
+
+// ======================= INÍCIO DA CORREÇÃO (PropTypes) =======================
+// 5. Atualiza os PropTypes
+SodTable.propTypes = {
+  loading: PropTypes.bool.isRequired,
+  rules: PropTypes.arrayOf(PropTypes.object).isRequired,
+  resources: PropTypes.arrayOf(PropTypes.object).isRequired, // Corrigido
+  systems: PropTypes.arrayOf(PropTypes.object).isRequired,
+  attributes: PropTypes.arrayOf(PropTypes.object).isRequired,
+  onEdit: PropTypes.func.isRequired,
+  onDelete: PropTypes.func.isRequired,
+};
+// ======================== FIM DA CORREÇÃO (PropTypes) =========================
 
 export default SodTable;

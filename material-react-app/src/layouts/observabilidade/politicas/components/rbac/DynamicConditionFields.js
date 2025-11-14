@@ -1,3 +1,5 @@
+// material-react-app/src/layouts/observabilidade/politicas/components/rbac/DynamicConditionFields.js
+
 import React from "react";
 import PropTypes from 'prop-types'; // <<< Adicionado
 // @mui material components
@@ -14,6 +16,8 @@ import Icon from "@mui/material/Icon";
 
 // Material Dashboard 2 React components
 import MDTypography from "components/MDTypography";
+import MDInput from "components/MDInput"; // <-- ADICIONADO
+import { useMaterialUIController } from "context"; // <-- ADICIONADO
 
 // Importa as configs
 import { comparisonOperators, logicalOperators } from "./rbacConfig";
@@ -21,7 +25,9 @@ import { comparisonOperators, logicalOperators } from "./rbacConfig";
 // Componente para campos dinâmicos
 function DynamicConditionFields({
   conditionType,
-  profiles,
+// ======================= INÍCIO DA CORREÇÃO (Props) =======================
+  resources, // <-- Corrigido de 'profiles'
+// ======================== FIM DA CORREÇÃO (Props) =========================
   attributes,
   values,
   onChange,
@@ -31,18 +37,27 @@ function DynamicConditionFields({
   onRemoveCondition,
   isDisabled, // <<< 1. Recebe a nova prop
 }) {
+// ======================= INÍCIO DA CORREÇÃO (Modo Escuro) =======================
+  const [controller] = useMaterialUIController();
+  const { darkMode } = controller;
+// ======================== FIM DA CORREÇÃO (Modo Escuro) =========================
+
   switch (conditionType?.id) {
     case "BY_PROFILE":
       return (
         <Grid item xs={12}>
           <Autocomplete
-            options={profiles} // Recebe os perfis JÁ FILTRADOS
-            getOptionLabel={(option) => option.name || ""}
+// ======================= INÍCIO DA CORREÇÃO (Props) =======================
+            options={resources} // Recebe os perfis JÁ FILTRADOS (Corrigido)
+            // 3. Lê o nome do recurso e o sistema
+            getOptionLabel={(option) => `${option.name_resource} (${option.system?.name_system || 'Global'})` || ""}
+// ======================== FIM DA CORREÇÃO (Props) =========================
             value={values.requiredProfile}
             onChange={(event, newValue) => onChange(event, "requiredProfile", newValue)}
             isOptionEqualToValue={(option, value) => option?.id === value?.id}
-            renderInput={(params) => <TextField {...params} label="Perfil Requerido *" required />}
             disabled={isDisabled} // <<< 2. Aplica a prop
+            ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+            renderInput={(params) => <MDInput {...params} label="Recurso Requerido *" required variant="outlined" />}
           />
         </Grid>
       );
@@ -56,10 +71,11 @@ function DynamicConditionFields({
               value={values.singleAttributeCondition.attribute}
               onChange={(event, newValue) => onSingleAttrChange("attribute", newValue)}
               isOptionEqualToValue={(option, value) => option?.id === value?.id}
-              renderInput={(params) => (
-                <TextField {...params} label="Atributo Requerido *" required />
-              )}
               disabled={isDisabled} // <<< 2. Aplica a prop
+              ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+              renderInput={(params) => (
+                <MDInput {...params} label="Atributo Requerido *" required variant="outlined" />
+              )}
             />
           </Grid>
 
@@ -70,20 +86,22 @@ function DynamicConditionFields({
               value={values.singleAttributeCondition.operator}
               onChange={(event, newValue) => onSingleAttrChange("operator", newValue)}
               isOptionEqualToValue={(option, value) => option?.id === value?.id}
-              renderInput={(params) => <TextField {...params} label="Operador *" required />}
               disableClearable
               disabled={isDisabled} // <<< 2. Aplica a prop
+              ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+              renderInput={(params) => <MDInput {...params} label="Operador *" required variant="outlined" />}
             />
           </Grid>
 
           <Grid item xs={12} sm={4}>
-            <TextField
+            <MDInput
               label="Valor do Atributo *"
               value={values.singleAttributeCondition.value}
               onChange={(e) => onSingleAttrChange("value", e.target.value)}
               fullWidth
               required
               disabled={isDisabled} // <<< 2. Aplica a prop
+              variant="outlined"
             />
           </Grid>
         </>
@@ -98,9 +116,10 @@ function DynamicConditionFields({
               value={values.logicalOperator}
               onChange={(event, newValue) => onChange(event, "logicalOperator", newValue)}
               isOptionEqualToValue={(option, value) => option?.id === value?.id}
-              renderInput={(params) => <TextField {...params} label="Lógica das Condições *" required />}
               disableClearable
               disabled={isDisabled} // <<< 2. Aplica a prop
+              ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+              renderInput={(params) => <MDInput {...params} label="Lógica das Condições *" required variant="outlined" />}
             />
           </Grid>
           <MDTypography variant="subtitle2" gutterBottom>
@@ -119,11 +138,12 @@ function DynamicConditionFields({
                   value={condition.attribute}
                   onChange={(event, newValue) => onListChange(index, "attribute", newValue)}
                   isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                  disabled={isDisabled} // <<< 2. Aplica a prop
+                  ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
                   renderInput={(params) => (
-                    <TextField {...params} label={`Atributo ${index + 1} *`} required />
+                    <MDInput {...params} label={`Atributo ${index + 1} *`} required variant="outlined" />
                   )}
                   sx={{ width: { xs: "100%", sm: "calc(35% - 8px)" } }}
-                  disabled={isDisabled} // <<< 2. Aplica a prop
                 />
 
                 <Autocomplete
@@ -132,19 +152,21 @@ function DynamicConditionFields({
                   value={condition.operator}
                   onChange={(event, newValue) => onListChange(index, "operator", newValue)}
                   isOptionEqualToValue={(option, value) => option?.id === value?.id}
-                  renderInput={(params) => <TextField {...params} label="Operador *" required />}
                   disableClearable
-                  sx={{ width: { xs: "100%", sm: "calc(25% - 8px)" } }}
                   disabled={isDisabled} // <<< 2. Aplica a prop
+                  ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+                  renderInput={(params) => <MDInput {...params} label="Operador *" required variant="outlined" />}
+                  sx={{ width: { xs: "100%", sm: "calc(25% - 8px)" } }}
                 />
 
-                <TextField
+                <MDInput
                   label={`Valor ${index + 1} *`}
                   value={condition.value}
                   onChange={(e) => onListChange(index, "value", e.target.value)}
                   required
-                  sx={{ width: { xs: "calc(100% - 40px)", sm: "calc(40% - 12px)" } }}
                   disabled={isDisabled} // <<< 2. Aplica a prop
+                  variant="outlined"
+                  sx={{ width: { xs: "calc(100% - 40px)", sm: "calc(40% - 12px)" } }}
                 />
                 <Tooltip title="Remover Condição">
                   <IconButton
@@ -180,7 +202,9 @@ function DynamicConditionFields({
 // --- 3. Adicionar PropTypes ---
 DynamicConditionFields.propTypes = {
   conditionType: PropTypes.object,
-  profiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+// ======================= INÍCIO DA CORREÇÃO (PropTypes) =======================
+  resources: PropTypes.arrayOf(PropTypes.object).isRequired, // 4. Corrigido
+// ======================== FIM DA CORREÇÃO (PropTypes) =========================
   attributes: PropTypes.arrayOf(PropTypes.object).isRequired,
   values: PropTypes.object.isRequired,
   onChange: PropTypes.func.isRequired,

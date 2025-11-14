@@ -93,13 +93,16 @@ const validateAndPrepareSodData = async (body, isUpdate = false) => {
         throw new Error("Não é permitido usar Perfil (PROFILE) como critério em uma regra Global.");
       }
       // --- FIM DA CORREÇÃO ---
-      const profileA = await prisma.profile.findFirst({
+      
+// ======================= INÍCIO DA CORREÇÃO LÓGICA (Profile -> Resource) =======================
+      const resourceA = await prisma.resource.findFirst({ // Corrigido de 'profile' para 'resource'
           where: { id: parseInt(valueAId, 10), systemId: finalSystemId } // Usa finalSystemId
       });
-      if (!profileA) {
-          throw new Error(`Perfil A (ID: ${valueAId}) não encontrado ou não pertence ao Sistema (ID: ${finalSystemId}).`);
+      if (!resourceA) {
+          throw new Error(`Recurso A (ID: ${valueAId}) não encontrado ou não pertence ao Sistema (ID: ${finalSystemId}).`); // Corrigido
       }
-      valueAId = String(profileA.id);
+      valueAId = String(resourceA.id);
+// ======================== FIM DA CORREÇÃO LÓGICA (Profile -> Resource) =========================
   }
   else if (mapping.a === "ATTRIBUTE") {
       if (!valueAOperator || !validComparisonOperators.includes(valueAOperator)) {
@@ -119,13 +122,16 @@ const validateAndPrepareSodData = async (body, isUpdate = false) => {
         throw new Error("Não é permitido usar Perfil (PROFILE) como critério em uma regra Global.");
       }
       // --- FIM DA CORREÇÃO ---
-      const profileB = await prisma.profile.findFirst({
+      
+// ======================= INÍCIO DA CORREÇÃO LÓGICA (Profile -> Resource) =======================
+      const resourceB = await prisma.resource.findFirst({ // Corrigido de 'profile' para 'resource'
           where: { id: parseInt(valueBId, 10), systemId: finalSystemId } // Usa finalSystemId
       });
-      if (!profileB) {
-          throw new Error(`Perfil B (ID: ${valueBId}) não encontrado ou não pertence ao Sistema (ID: ${finalSystemId}).`);
+      if (!resourceB) {
+          throw new Error(`Recurso B (ID: ${valueBId}) não encontrado ou não pertence ao Sistema (ID: ${finalSystemId}).`); // Corrigido
       }
-      valueBId = String(profileB.id);
+      valueBId = String(resourceB.id);
+// ======================== FIM DA CORREÇÃO LÓGICA (Profile -> Resource) =========================
   }
   else if (mapping.b === "SYSTEM") {
       valueBId = String(valueBIdRaw);
@@ -173,7 +179,7 @@ const findExistingRule = async (prismaArgs) => {
              valueBId: prismaArgs.valueBId,
              id: prismaArgs.id // Usado para checagem de atualização (ex: id: { not: ruleId })
          }
-       });
+        });
 };
 
 
@@ -199,14 +205,14 @@ const getSodRules = async (req, res) => {
          if (!isNaN(systemIdInt)) {
              // --- INÍCIO DA CORREÇÃO: Permite buscar regras globais (null) E específicas ---
              whereClause.OR = [
-                { systemId: systemIdInt },
-                { systemId: null }
+                 { systemId: systemIdInt },
+                 { systemId: null }
              ];
              // --- FIM DA CORREÇÃO ---
          } else {
               return res.status(400).json({ message: "systemId inválido." });
          }
-     }
+       }
      // Se 'systemId' não for fornecido (Visão Geral), 'whereClause' só tem 'userId',
      // buscando todas as regras (globais e específicas), o que está correto.
 
@@ -233,7 +239,9 @@ const getSodRules = async (req, res) => {
            system: { // <<< INCLUÍDO
                select: {
                    id: true,
-                   name: true
+// ======================= INÍCIO DA CORREÇÃO (Schema) =======================
+                   name_system: true // <<< CORRIGIDO de 'name' para 'name_system'
+// ======================== FIM DA CORREÇÃO (Schema) =========================
                }
            }
        },

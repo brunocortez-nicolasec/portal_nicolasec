@@ -80,7 +80,10 @@ function useDashboardData(metrics, isLoading) {
         riscosConsolidadosChart,
         prejuizoPotencial: metrics.riscos?.prejuizoPotencial || "R$ 0,00",
         prejuizoMitigado: metrics.riscos?.valorMitigado || "R$ 0,00",
-        indiceConformidade: metrics.riscos?.indiceConformidade || "100.0",
+// ======================= INÍCIO DA CORREÇÃO (Bug do 100%) =======================
+        // Altera '||' (OU) para '??' (Nullish Coalescing) para aceitar '0' como um valor válido
+        indiceConformidade: metrics.riscos?.indiceConformidade ?? "100.0",
+// ======================== FIM DA CORREÇÃO (Bug do 100%) =========================
         riscosEmContasPrivilegiadas: metrics.riscos?.riscosEmContasPrivilegiadas || 0,
     };
   }, [metrics, isLoading]);

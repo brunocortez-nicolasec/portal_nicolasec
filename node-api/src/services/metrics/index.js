@@ -10,8 +10,12 @@ const router = express.Router();
 // Função auxiliar para limpar texto
 const cleanText = (text) => text?.trim().toLowerCase();
 
-// Esta função auxiliar NÃO é mais necessária para SoD, pois o schema não possui as regras.
-// Mantida caso você queira reutilizar a lógica de atributo no futuro.
+// ======================= INÍCIO DA ADIÇÃO (Clean CPF) =======================
+// Adicionado para a nova divergência de CPF
+const cleanCpf = (cpf) => cpf?.replace(/[^\d]/g, '');
+// ======================== FIM DA ADIÇÃO (Clean CPF) =========================
+
+// Esta função auxiliar AGORA É USADA para SoD
 const checkAttributeMatch = (operator, userValue, ruleValue) => {
   if (userValue === null || userValue === undefined || ruleValue === null || ruleValue === undefined) {
     return false;
@@ -49,7 +53,6 @@ const getSystemMetrics = async (req, res) => {
       const metrics = await prisma.$transaction(async (tx) => {
 
         // 1. Buscar TODAS as Identidades (RH) do usuário
-        // Esta é a nossa "Fonte da Verdade"
         const rhIdentities = await tx.identitiesHR.findMany({
             where: { 
                 dataSource: { 
@@ -59,24 +62,20 @@ const getSystemMetrics = async (req, res) => {
             },
         });
         
-        // Mapeia identidades pelo ID (PK) para buscas rápidas
         const rhMapById = new Map(rhIdentities.map(i => [i.id, i]));
 
         // 2. Definir o filtro do sistema
         const systemFilter = {};
-        let systemRecord = null; // Armazena dados do sistema específico
+        let systemRecord = null; 
 
         if (!isGeneral && system.toUpperCase() !== 'RH') {
-// ======================= INÍCIO DA CORREÇÃO (Bug 500) =======================
             systemRecord = await tx.system.findUnique({
-                where: { name_system: system }, // CORRIGIDO: de 'name' para 'name_system'
+                where: { name_system: system }, 
                 select: { id: true }
             });
-// ======================== FIM DA CORREÇÃO (Bug 500) =========================
             
             if (!systemRecord) {
                 console.warn(`Sistema ${system} não encontrado para métricas.`);
-                // Retornamos 404, mas o front-end trata como "Erro de Rede"
                 throw new Error(`Sistema "${system}" não encontrado.`);
             }
             
@@ -91,14 +90,14 @@ const getSystemMetrics = async (req, res) => {
                     system: {
                         dataSourcesConfigs: { some: { dataSource: { userId: userIdInt } } },
                     },
-                    ...systemFilter // Aplica o filtro de systemId (ex: "SAP")
+                    ...systemFilter 
                 },
                 include: {
-                    identity: true, // Inclui a IdentidadeHR (RH) vinculada
+                    identity: true, 
                     system: { select: { name_system: true, id: true } },
-                    assignments: { // Inclui as atribuições
+                    assignments: { 
                         include: {
-                            resource: true // Inclui os Recursos (Perfis)
+                            resource: true
                         }
                     }
                 },
@@ -112,20 +111,20 @@ const getSystemMetrics = async (req, res) => {
                 id_in_system_account: id.identity_id_hr,
                 name_account: id.name_hr,
                 email_account: id.email_hr,
+                cpf_account: id.cpf_hr, // <-- ADICIONADO PARA CONSISTÊNCIA
                 status_account: id.status_hr,
                 user_type_account: id.user_type_hr,
                 extra_data_account: id.extra_data_hr,
                 identityId: id.id,
                 systemId: null,
                 system: { name_system: 'RH', id: null },
-                identity: id, // A identidade é ela mesma
-                assignments: [], // RH não tem "recursos" neste contexto
+                identity: id, 
+                assignments: [], 
             }));
         }
         
-        // Se não for "Geral" e não for "RH" e não achou contas, retorna zerado
         if (!isGeneral && system.toUpperCase() !== 'RH' && allAccounts.length === 0) {
-            const zeroMetrics = {
+             const zeroMetrics = {
                 pills: { total: 0, ativos: 0, inativos: 0, desconhecido: 0 },
                 tiposDeUsuario: [],
                 kpisAdicionais: { contasDormentes: 0, acessoPrivilegiado: 0, adminsDormentes: 0 },
@@ -135,6 +134,42 @@ const getSystemMetrics = async (req, res) => {
             };
             return zeroMetrics;
         }
+        
+        // 3.5. Buscar TODAS as exceções relevantes
+        const accountExceptions = await tx.accountDivergenceException.findMany({
+            where: { userId: userIdInt },
+            select: { accountId: true, divergenceCode: true }
+        });
+        const accountExceptionsSet = new Set(
+            accountExceptions.map(ex => `${ex.accountId}_${ex.divergenceCode}`)
+        );
+
+        const identityExceptions = await tx.identityDivergenceException.findMany({
+            where: { userId: userIdInt, divergenceCode: 'ACCESS_NOT_GRANTED' },
+            select: { identityId: true, targetSystem: true }
+        });
+        const identityExceptionsSet = new Set(
+            identityExceptions.map(ex => `${ex.identityId}_ACCESS_NOT_GRANTED_${ex.targetSystem}`)
+        );
+
+// ======================= INÍCIO DA ADIÇÃO (Buscar Regras SoD) =======================
+        // 3.6. Buscar TODAS as Regras de SoD
+        const allSodRules = await tx.sodRule.findMany({
+            where: { userId: userIdInt }
+        });
+
+        // Organiza as regras por sistema para consulta rápida
+        const sodRulesBySystem = allSodRules.reduce((acc, rule) => {
+            // 'global' para regras com systemId = null
+            const key = rule.systemId || 'global'; 
+            if (!acc[key]) {
+                acc[key] = [];
+            }
+            acc[key].push(rule);
+            return acc;
+        }, {});
+        const globalSodRules = sodRulesBySystem['global'] || [];
+// ======================== FIM DA ADIÇÃO (Buscar Regras SoD) =========================
 
         // 4. Calcular Métricas de Visão Geral (Pills e Gráfico de Pizza)
         const total = allAccounts.length;
@@ -156,6 +191,7 @@ const getSystemMetrics = async (req, res) => {
         let adminsDormentes = 0;
         const adminsComDivergencia = new Set();
         const divergentAccountIds = new Set();
+        const divergentIdentityIds = new Set();
 
         const acessoPrivilegiado = allAccounts.filter(acc =>
             acc.status_account === 'Ativo' &&
@@ -164,9 +200,14 @@ const getSystemMetrics = async (req, res) => {
 
         // 6. Calcular Divergências (Loop Principal)
         let inativosRHAtivosAppCount = 0; // Zumbi
-// ======================= INÍCIO DA CORREÇÃO (Bug Lógica) =======================
-        let naoEncontradosRHCount = 0; // Contas Órfãs (declarado como 'let')
-// ======================== FIM DA CORREÇÃO (Bug Lógica) =========================
+        let naoEncontradosRHCount = 0; // Contas Órfãs
+        let divergenciaNomeCount = 0;
+        let divergenciaEmailCount = 0;
+        let divergenciaCpfCount = 0;
+        let acessoPrevistoNaoConcedidoCount = 0;
+// ======================= INÍCIO DA ADIÇÃO (Contador SoD) =======================
+        let sodViolationCount = 0; // <-- ADICIONADO AQUI
+// ======================== FIM DA ADIÇÃO (Contador SoD) =========================
         
         for (const account of allAccounts) {
             if (account.system.name_system.toUpperCase() === 'RH') continue;
@@ -177,38 +218,128 @@ const getSystemMetrics = async (req, res) => {
             const isAdmin = account.assignments.some(a => a.resource.name_resource.toLowerCase().includes('admin'));
             
             if (rhEquivalent) {
-                const { status_hr: rhStatus } = rhEquivalent;
+                const { status_hr: rhStatus, name_hr: rhName, email_hr: rhEmail, cpf_hr: rhCpf } = rhEquivalent;
                 
+                // --- ZUMBI ---
                 if (account.status_account === 'Ativo' && rhStatus === 'Inativo') {
-                    inativosRHAtivosAppCount++;
-                    hasDivergence = true;
+                    if (!accountExceptionsSet.has(`${account.id}_ZOMBIE_ACCOUNT`)) {
+                        inativosRHAtivosAppCount++;
+                        hasDivergence = true;
+                    }
                 }
                 
+                // --- NOME ---
+                const hasNameDivergence = rhName && account.name_account && cleanText(rhName) !== cleanText(account.name_account);
+                if (hasNameDivergence) {
+                    if (!accountExceptionsSet.has(`${account.id}_NAME_MISMATCH`)) {
+                        divergenciaNomeCount++;
+                        hasDivergence = true;
+                    }
+                }
+
+                // --- EMAIL ---
+                const hasEmailDivergence = rhEmail && account.email_account && cleanText(rhEmail) !== cleanText(account.email_account);
+                if (hasEmailDivergence) {
+                    if (!accountExceptionsSet.has(`${account.id}_EMAIL_MISMATCH`)) {
+                        divergenciaEmailCount++;
+                        hasDivergence = true;
+                    }
+                }
+
+                // --- CPF (NOVO) ---
+                const hasCpfDivergence = rhCpf && account.cpf_account && cleanCpf(rhCpf) !== cleanCpf(account.cpf_account);
+                if (hasCpfDivergence) {
+                    if (!accountExceptionsSet.has(`${account.id}_CPF_MISMATCH`)) {
+                        divergenciaCpfCount++;
+                        hasDivergence = true;
+                    }
+                }
+
+                // --- ADMIN DORMENTE ---
                 const loginDateStr = account.extra_data_account?.last_login;
                 if (account.status_account === 'Ativo' && loginDateStr) {
                     const loginDate = new Date(loginDateStr);
                     if (!isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo) {
                         contasDormentes++;
                         if (isAdmin) {
-                            adminsDormentes++;
-                            hasDivergence = true;
+                            if (!accountExceptionsSet.has(`${account.id}_DORMANT_ADMIN`)) {
+                                adminsDormentes++;
+                                hasDivergence = true;
+                            }
                         }
                     }
                 }
 
             } else {
-                // CONTA ÓRFÃ: (naoEncontradosRHCount)
-// ======================= INÍCIO DA CORREÇÃO (Bug Lógica) =======================
-                // Nossa lógica de importação previne isso, mas é seguro contar.
-                naoEncontradosRHCount++; 
-                hasDivergence = true;
-// ======================== FIM DA CORREÇÃO (Bug Lógica) =========================
+                // --- CONTA ÓRFÃ ---
+                if (!accountExceptionsSet.has(`${account.id}_ORPHAN_ACCOUNT`)) {
+                    naoEncontradosRHCount++; 
+                    hasDivergence = true;
+                }
             }
             
-            // Lógica de SoD removida (tabela SodRule não existe no schema.prisma)
+// ======================= INÍCIO DA ADIÇÃO (Lógica de SoD) =======================
+            // 8. Verificar Violações de SoD
+            
+            // Pega as regras globais + regras específicas do sistema desta conta
+            const systemRules = sodRulesBySystem[account.systemId] || [];
+            const applicableSodRules = [...globalSodRules, ...systemRules];
+
+            if (applicableSodRules.length > 0) {
+                // Cria um Set com os IDs dos Recursos (perfis) que a conta possui
+                const accountResourceIds = new Set(account.assignments.map(a => a.resource.id));
+
+                for (const rule of applicableSodRules) {
+                    let isViolation = false;
+
+                    if (rule.ruleType === 'ROLE_X_ROLE') {
+                        // Se a regra é "Perfil vs Perfil"
+                        const hasProfileA = accountResourceIds.has(parseInt(rule.valueAId, 10));
+                        const hasProfileB = accountResourceIds.has(parseInt(rule.valueBId, 10));
+                        if (hasProfileA && hasProfileB) {
+                            isViolation = true;
+                        }
+
+                    } else if (rule.ruleType === 'ATTR_X_ROLE') {
+                        // Se a regra é "Atributo vs Perfil"
+                        if (rhEquivalent) { // Só pode checar se a conta tem uma identidade
+                            const hasProfileB = accountResourceIds.has(parseInt(rule.valueBId, 10));
+                            
+                            // Pega o valor do atributo da identidade (ex: 'user_type_hr')
+                            const attributeValue = rhEquivalent[rule.valueAId]; 
+                            
+                            const attributeMatches = checkAttributeMatch(
+                                rule.valueAOperator,
+                                attributeValue,
+                                rule.valueAValue
+                            );
+
+                            if (attributeMatches && hasProfileB) {
+                                isViolation = true;
+                            }
+                        }
+                    }
+                    // (Outros tipos de regra como ATTR_X_SYSTEM não se aplicam a *contas*)
+
+                    if (isViolation) {
+                        if (!accountExceptionsSet.has(`${account.id}_SOD_VIOLATION`)) {
+                            sodViolationCount++;
+                            hasDivergence = true;
+                        }
+                        // Importante: Quebra o loop de regras assim que a *primeira* violação for encontrada
+                        // para não contar a mesma conta múltiplas vezes
+                        break; 
+                    }
+                }
+            }
+// ======================== FIM DA ADIÇÃO (Lógica de SoD) =========================
             
             if (hasDivergence) {
                 divergentAccountIds.add(account.id);
+                // Se a conta tem uma identidade e uma divergência, a identidade é divergente
+                if (account.identityId) {
+                    divergentIdentityIds.add(account.identityId);
+                }
             }
 
             if (isAdmin && hasDivergence) {
@@ -217,14 +348,13 @@ const getSystemMetrics = async (req, res) => {
         } // Fim do loop for(allAccounts)
 
         // 7. Calcular Acesso Previsto Não Concedido
-        let acessoPrevistoNaoConcedidoCount = 0;
         const activeRhIdentities = rhIdentities.filter(rhId => rhId.status_hr === 'Ativo');
         
         const accountsByIdentity = allAccounts.reduce((acc, account) => {
-             if (!account.identityId) return acc;
-             if (!acc.has(account.identityId)) acc.set(account.identityId, new Set());
-             acc.get(account.identityId).add(account.systemId);
-             return acc;
+            if (!account.identityId) return acc;
+            if (!acc.has(account.identityId)) acc.set(account.identityId, new Set());
+            acc.get(account.identityId).add(account.systemId);
+            return acc;
         }, new Map());
 
         const allSystems = await tx.system.findMany({
@@ -243,17 +373,16 @@ const getSystemMetrics = async (req, res) => {
                 const hasAccountInSystem = identitySystems ? identitySystems.has(sys.id) : false;
                 
                 if (!hasAccountInSystem) {
-                    acessoPrevistoNaoConcedidoCount++;
+                    if (!identityExceptionsSet.has(`${rhIdentity.id}_ACCESS_NOT_GRANTED_${sys.name_system}`)) {
+                        acessoPrevistoNaoConcedidoCount++;
+                        divergentIdentityIds.add(rhIdentity.id);
+                    }
                 }
             });
         }
         
-        // 8. Métricas Obsoletas (Zeradas por Design)
-        const divergenciaCpfCount = 0;
-        const divergenciaNomeCount = 0;
-        const divergenciaEmailCount = 0;
-        // const naoEncontradosRHCount = 0; // <-- LINHA REMOVIDA
-        const sodViolationCount = 0; // Regras de SoD não migradas
+        // 8. Métricas Obsoletas
+        // const sodViolationCount = 0; // <-- REMOVIDO DAQUI
 
         // 9. Calcular Riscos Financeiros
         const CUSTOS_DE_RISCO = {
@@ -279,11 +408,18 @@ const getSystemMetrics = async (req, res) => {
 
         const valorMitigado = prejuizoCalculado * 0.95;
         
-        const totalDivergentSystemUsers = divergentAccountIds.size;
-        const totalPopulation = total;
+        // Lógica do Índice de Conformidade (baseada em Identidades)
+        const totalPopulation = rhIdentities.length; 
+        const totalDivergentIdentities = divergentIdentityIds.size; 
         
+        // --- LOG DE DEBUG (Conforme solicitado) ---
+        console.log(`[Metrics Debug] Cálculo do Índice:`);
+        console.log(`- Total de Identidades (totalPopulation): ${totalPopulation}`);
+        console.log(`- Identidades com Divergência (totalDivergentIdentities): ${totalDivergentIdentities}`);
+        // --- FIM DO LOG DE DEBUG ---
+
         const calculatedIndex = totalPopulation > 0 
-            ? ((totalPopulation - totalDivergentSystemUsers) / totalPopulation) * 100 
+            ? ((totalPopulation - totalDivergentIdentities) / totalPopulation) * 100 
             : 100;
         const indiceConformidade = calculatedIndex.toFixed(1);
         

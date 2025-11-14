@@ -191,6 +191,13 @@ const processAndSaveData_Contas = async (tx, systemId, rows, mapeamento, resourc
         case "accounts_email":
           appColumn = "email_account";
           break;
+
+// ======================= INÍCIO DA ALTERAÇÃO =======================
+        case "accounts_cpf":
+          appColumn = "cpf_account"; // Mapeia para a nova coluna do schema
+          break;
+// ======================== FIM DA ALTERAÇÃO =========================
+
         case "accounts_status":
           appColumn = "status_account";
           break;

@@ -27,6 +27,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
   const collapseName = location.pathname.replace("/", "");
 
   const { userRole, userPackage, userPlatformKeys } = useMemo(() => {
+    // (Lógica de role/package inalterada)
     const attributes = user?.data?.attributes;
     if (!attributes) {
       return { userRole: null, userPackage: null, userPlatformKeys: [] };
@@ -47,17 +48,40 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
   const closeSidenav = () => setMiniSidenav(dispatch, true);
 
   useEffect(() => {
-    function handleMiniSidenav() {
-      // Esta função é chamada tanto no clique quanto no resize.
-      // Ela que controla a variável 'miniSidenav'.
-      setMiniSidenav(dispatch, window.innerWidth < 1200);
+    // Função para fechar o sidenav em telas pequenas ao mudar de rota
+    function handleCloseSidenavOnRoute() {
+      if (window.innerWidth < 1200) {
+        setMiniSidenav(dispatch, true);
+      }
+    }
+    
+    // Adiciona o listener para fechar ao mudar de rota (em mobile)
+    window.addEventListener("resize", handleCloseSidenavOnRoute);
+    handleCloseSidenavOnRoute(); // Executa uma vez
+    
+    // Remove o listener ao desmontar
+    return () => window.removeEventListener("resize", handleCloseSidenavOnRoute);
+  }, [dispatch, location]); // Depende apenas do dispatch e da localização
+
+
+  // ======================= INÍCIO DA CORREÇÃO (Lógica de Resize) =======================
+  // Esta lógica agora fica separada e reage ao 'miniSidenav'
+  useEffect(() => {
+    // Ajusta a transparência baseado no estado 'miniSidenav' e no tamanho da tela
+    function handleTransparentSidenav() {
       setTransparentSidenav(dispatch, window.innerWidth < 1200 ? false : transparentSidenav);
       setWhiteSidenav(dispatch, window.innerWidth < 1200 ? false : whiteSidenav);
     }
-    window.addEventListener("resize", handleMiniSidenav);
-    handleMiniSidenav();
-    return () => window.removeEventListener("resize", handleMiniSidenav);
-  }, [dispatch, location, transparentSidenav, whiteSidenav]);
+
+    // Adiciona o listener para transparência
+    window.addEventListener("resize", handleTransparentSidenav);
+    handleTransparentSidenav(); // Executa uma vez
+
+    // Remove o listener ao desmontar
+    return () => window.removeEventListener("resize", handleTransparentSidenav);
+  }, [dispatch, transparentSidenav, whiteSidenav]);
+  // ======================== FIM DA CORREÇÃO (Lógica de Resize) =========================
+
 
   const renderRoutes = routes.map(
     ({ type, name, icon, title, noCollapse, key, href, route, collapse, role }) => {
@@ -169,7 +193,7 @@ function Sidenav({ color, brand, brandName, routes, ...rest }) {
           top={0}
           right={0}
           p={1.625}
-          onClick={closeSidenav}
+          onClick={closeSidenav} // Este 'closeSidenav' é para o X em telas mobile
           sx={{ cursor: "pointer" }}
         >
           <MDTypography variant="h6" color="secondary">

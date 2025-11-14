@@ -1,3 +1,5 @@
+// material-react-app/src/layouts/observabilidade/politicas/components/sod/SodModal.js
+
 import { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import PropTypes from 'prop-types';
@@ -10,7 +12,9 @@ import DialogTitle from "@mui/material/DialogTitle";
 import TextField from "@mui/material/TextField";
 import Autocomplete from "@mui/material/Autocomplete";
 import Grid from "@mui/material/Grid";
-import FormHelperText from "@mui/material/FormHelperText"; // Import for helper text
+import FormHelperText from "@mui/material/FormHelperText"; 
+import MDInput from "components/MDInput"; // Importar MDInput
+import { useMaterialUIController } from "context"; // Importar Context
 
 // Material Dashboard 2 React components
 import MDBox from "components/MDBox";
@@ -31,14 +35,17 @@ const newInitialState = {
 
 
 function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
-  profiles: allProfiles,
+  resources: allResources, // Corrigido
   systems: allSystems,
   attributes: allAttributes
 }) {
   
+  const [controller] = useMaterialUIController(); 
+  const { darkMode } = controller; 
+  
   const [currentRule, setCurrentRule] = useState(newInitialState);
   const [isEditing, setIsEditing] = useState(false);
-  const [filteredProfiles, setFilteredProfiles] = useState([]);
+  const [filteredResources, setFilteredResources] = useState([]); // Corrigido
 
   const systemOptions = useMemo(() => [ALL_SYSTEMS_OPTION, ...allSystems], [allSystems]);
 
@@ -66,13 +73,13 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
           : allSystems.find(s => s.id === ruleToEdit.systemId) || null;
 
         // Filtra perfis ANTES de definir o estado
-        const profilesForThisSystem = system?.id !== null
-            ? allProfiles.filter(p => p.systemId === system.id)
+        const resourcesForThisSystem = (system && system.id !== null)
+            ? allResources.filter(r => r.systemId === system.id) // Corrigido
             : [];
-        setFilteredProfiles(profilesForThisSystem);
+        setFilteredResources(resourcesForThisSystem); // Corrigido
         
         // Define os tipos de regra disponíveis para a regra carregada
-        const currentAvailableRuleTypes = system?.id === null
+        const currentAvailableRuleTypes = (system && system.id === null)
             ? ruleTypes.filter(type => !type.id.includes('ROLE'))
             : ruleTypes;
 
@@ -86,16 +93,16 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
         let loadedValueValueA = "";
         let loadedValueB = null;
 
-        if (ruleToEdit.valueAType === 'PROFILE' && profilesForThisSystem.length > 0) {
-          loadedValueA = profilesForThisSystem.find(p => p.id === parseInt(ruleToEdit.valueAId, 10));
+        if (ruleToEdit.valueAType === 'PROFILE' && resourcesForThisSystem.length > 0) {
+          loadedValueA = resourcesForThisSystem.find(p => p.id === parseInt(ruleToEdit.valueAId, 10)); // Corrigido
         } else if (ruleToEdit.valueAType === 'ATTRIBUTE') {
           loadedValueA = allAttributes.find(a => a.id === ruleToEdit.valueAId);
           loadedOperatorA = comparisonOperators.find(op => op.id === ruleToEdit.valueAOperator) || comparisonOperators[0];
           loadedValueValueA = ruleToEdit.valueAValue || "";
         }
 
-        if (ruleToEdit.valueBType === 'PROFILE' && profilesForThisSystem.length > 0) {
-          loadedValueB = profilesForThisSystem.find(p => p.id === parseInt(ruleToEdit.valueBId, 10));
+        if (ruleToEdit.valueBType === 'PROFILE' && resourcesForThisSystem.length > 0) {
+          loadedValueB = resourcesForThisSystem.find(p => p.id === parseInt(ruleToEdit.valueBId, 10)); // Corrigido
         } else if (ruleToEdit.valueBType === 'SYSTEM') {
           loadedValueB = allSystems.find(s => s.id === parseInt(ruleToEdit.valueBId, 10));
         }
@@ -117,17 +124,17 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
       } else {
         setIsEditing(false);
         setCurrentRule(newInitialState);
-        setFilteredProfiles([]);
+        setFilteredResources([]); // Corrigido
       }
     }
   // Lista de dependências reduzida para evitar re-execução indesejada
-  }, [open, ruleToEdit, allProfiles, allSystems, allAttributes]); 
+  }, [open, ruleToEdit, allResources, allSystems, allAttributes]); // Corrigido
   // --- FIM DA CORREÇÃO 2 ---
 
 
   const handleClose = () => {
     setCurrentRule(newInitialState);
-    setFilteredProfiles([]);
+    setFilteredResources([]); // Corrigido
     onClose();
   };
 
@@ -139,10 +146,10 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
       if (fieldName === 'system') {
         const isGlobal = newValue?.id === null; // True para "Todos"
         
-        const profilesForThisSystem = (newValue && !isGlobal)
-          ? allProfiles.filter(p => p.systemId === newValue.id)
+        const resourcesForThisSystem = (newValue && !isGlobal)
+          ? allResources.filter(p => p.systemId === newValue.id) // Corrigido
           : [];
-        setFilteredProfiles(profilesForThisSystem);
+        setFilteredResources(resourcesForThisSystem); // Corrigido
         
         // A lógica do 'availableRuleTypes' (useMemo) vai rodar no re-render,
         // mas precisamos definir o *novo* tipo de regra aqui.
@@ -253,19 +260,19 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
           <Grid container spacing={3}>
             {/* Campos Estáticos - SEM size="small" */}
             <Grid item xs={12}>
-              <TextField label="Nome da Regra *" name="name" value={currentRule.name} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth required />
+              <MDInput label="Nome da Regra *" name="name" value={currentRule.name} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth required variant="outlined" />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField label="Área de negócio" name="areaNegocio" value={currentRule.areaNegocio} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth />
+              <MDInput label="Área de negócio" name="areaNegocio" value={currentRule.areaNegocio} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth variant="outlined" />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField label="Processo de negócio" name="processoNegocio" value={currentRule.processoNegocio} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth />
+              <MDInput label="Processo de negócio" name="processoNegocio" value={currentRule.processoNegocio} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth variant="outlined" />
             </Grid>
             <Grid item xs={12} md={4}>
-              <TextField label="Owner" name="owner" value={currentRule.owner} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth />
+              <MDInput label="Owner" name="owner" value={currentRule.owner} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth variant="outlined" />
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Descrição" name="description" value={currentRule.description} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth multiline rows={2} />
+              <MDInput label="Descrição" name="description" value={currentRule.description} onChange={(e) => handleFormChange(e.target.name, e.target.value)} fullWidth multiline rows={2} variant="outlined" />
             </Grid>
 
             {/* Seletor de Sistema com "Todos" */}
@@ -274,13 +281,16 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
                 options={systemOptions}
                 getOptionLabel={(option) => option.name || ""}
                 value={currentRule.system}
+// ======================= INÍCIO DA CORREÇÃO (onChange) =======================
                 onChange={(event, newValue) => handleFormChange("system", newValue)}
+// ======================== FIM DA CORREÇÃO (onChange) =========================
                 isOptionEqualToValue={(option, value) => option.id === value?.id}
-                renderInput={(params) => <TextField {...params} label="Sistema Alvo *" required />}
                 disabled={isEditing}
+                ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+                renderInput={(params) => <MDInput {...params} label="Sistema Alvo *" required variant="outlined" />}
               />
               {isEditing && currentRule.system && (
-                 <FormHelperText>O sistema não pode ser alterado ao editar uma regra.</FormHelperText>
+                  <FormHelperText>O sistema não pode ser alterado ao editar uma regra.</FormHelperText>
               )}
             </Grid>
 
@@ -290,29 +300,32 @@ function SodModal({ open, onClose, onRefresh, showSnackbar, token, ruleToEdit,
                 options={availableRuleTypes}
                 getOptionLabel={(option) => option.label || ""}
                 value={currentRule.ruleType}
+// ======================= INÍCIO DA CORREÇÃO (onChange) =======================
                 onChange={(event, newValue) => handleFormChange("ruleType", newValue)}
+// ======================== FIM DA CORREÇÃO (onChange) =========================
                 isOptionEqualToValue={(option, value) => option.id === value?.id}
-                renderInput={(params) => <TextField {...params} label="Tipo de Regra *" required />}
                 disableClearable
                 disabled={!currentRule.system}
+                ListboxProps={{ sx: { backgroundColor: darkMode ? "grey.800" : "white" } }}
+                renderInput={(params) => <MDInput {...params} label="Tipo de Regra *" required variant="outlined" />}
               />
                {currentRule.system?.id === null && (
-                 <FormHelperText>Regras globais não podem usar Perfil como critério.</FormHelperText>
+                  <FormHelperText>Regras globais não podem usar Perfil como critério.</FormHelperText>
                )}
             </Grid>
 
             {/* Campos Dinâmicos */}
             <DynamicRuleFields
               ruleType={currentRule.ruleType}
-              profiles={filteredProfiles} 
+              resources={filteredResources} // 4. Passa a prop correta 'filteredResources'
               systems={availableSystemsForValueB} 
               attributes={allAttributes} 
               values={{
-                  valueASelection: currentRule.valueASelection,
-                  valueAOperator: currentRule.valueAOperator,
-                  valueAValue: currentRule.valueAValue,
-                  valueBSelection: currentRule.valueBSelection,
-                }}
+                valueASelection: currentRule.valueASelection,
+                valueAOperator: currentRule.valueAOperator,
+                valueAValue: currentRule.valueAValue,
+                valueBSelection: currentRule.valueBSelection,
+              }}
               onChange={handleFormChange}
               isDisabled={!currentRule.system || !currentRule.ruleType} 
             />
@@ -338,8 +351,14 @@ SodModal.propTypes = {
   token: PropTypes.string,
   ruleToEdit: PropTypes.object,
   systems: PropTypes.arrayOf(PropTypes.object).isRequired,
-  profiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  resources: PropTypes.arrayOf(PropTypes.object).isRequired, // 5. Corrigido
   attributes: PropTypes.arrayOf(PropTypes.object).isRequired,
+};
+
+SodModal.defaultProps = {
+  token: null,
+  ruleToEdit: null,
+  resources: [], // Corrigido
 };
 
 export default SodModal;

@@ -1,3 +1,5 @@
+// node-api/src/services/rbac-rules/index.js
+
 import express from "express";
 import passport from "passport";
 // Importar 'Prisma' para checagem de erros
@@ -26,10 +28,10 @@ const validateAndPrepareRbacData = async (body, isUpdate = false) => {
     conditionType, grantedProfile, // Resultado (Profile Concedido)
 
     // Campos condicionais (um destes conjuntos será usado)
-    requiredProfile,           // Para BY_PROFILE
-    requiredAttribute,         // Para BY_SINGLE_ATTRIBUTE
+    requiredProfile,          // Para BY_PROFILE
+    requiredAttribute,        // Para BY_SINGLE_ATTRIBUTE
     requiredAttributeOperator, // <<-- NOVO: Operador para BY_SINGLE_ATTRIBUTE
-    attributeValue,            // Para BY_SINGLE_ATTRIBUTE
+    attributeValue,           // Para BY_SINGLE_ATTRIBUTE
     logicalOperator,           // <<-- Para BY_MULTIPLE_ATTRIBUTES (AND/OR)
     attributeConditions,       // Para BY_MULTIPLE_ATTRIBUTES (Array: [{attribute, operator, value}])
   } = body;
@@ -43,15 +45,16 @@ const validateAndPrepareRbacData = async (body, isUpdate = false) => {
       throw new Error("ID do Sistema (systemId) é obrigatório e deve ser um número.");
   }
 
+// ======================= INÍCIO DA CORREÇÃO LÓGICA (Profile -> Resource) =======================
   // --- Validação de Perfil vs Sistema ---
   // Verifica se o Perfil Concedido pertence ao Sistema fornecido
-  const grantedProfileRecord = await prisma.profile.findFirst({
+  const grantedProfileRecord = await prisma.resource.findFirst({ // Corrigido
       where: { id: parseInt(grantedProfile.id, 10), systemId: systemIdInt }
   });
   if (!grantedProfileRecord) {
-      throw new Error(`Perfil Concedido (ID: ${grantedProfile.id}) não encontrado ou não pertence ao Sistema (ID: ${systemIdInt}).`);
+      throw new Error(`Recurso Concedido (ID: ${grantedProfile.id}) não encontrado ou não pertence ao Sistema (ID: ${systemIdInt}).`);
   }
-  // --- Fim da Validação ---
+// ======================== FIM DA CORREÇÃO LÓGICA (Profile -> Resource) =========================
 
   const data = {
     name,
@@ -61,17 +64,17 @@ const validateAndPrepareRbacData = async (body, isUpdate = false) => {
     owner: owner || null,
     systemId: systemIdInt, // <<< NOVO: Adiciona systemId
     conditionType,
-    grantedProfileId: parseInt(grantedProfile.id, 10),
+    grantedResourceId: parseInt(grantedProfile.id, 10), // <<< CORRIGIDO
     // Zera os campos condicionais por padrão
-    requiredProfileId: null,
-    requiredAttributeId: null,
-    requiredAttributeOperator: null,
-    requiredAttributeValue: null,
+    requiredResourceId: null, // <<< CORRIGIDO
+    attributeName: null,
+    attributeOperator: null,
+    attributeValue: null,
     logicalOperator: null,
   };
 
-  if (isNaN(data.grantedProfileId)) {
-    throw new Error("ID do Perfil Concedido inválido.");
+  if (isNaN(data.grantedResourceId)) {
+    throw new Error("ID do Recurso Concedido inválido.");
   }
 
   // 2. Validação baseada no Tipo de Condição
@@ -80,22 +83,23 @@ const validateAndPrepareRbacData = async (body, isUpdate = false) => {
       if (!requiredProfile?.id) {
         throw new Error("Para 'Concessão por Perfil', o Perfil Requerido é obrigatório.");
       }
-      data.requiredProfileId = parseInt(requiredProfile.id, 10);
-      if (isNaN(data.requiredProfileId)) {
+      data.requiredResourceId = parseInt(requiredProfile.id, 10); // <<< CORRIGIDO
+      if (isNaN(data.requiredResourceId)) {
         throw new Error("ID do Perfil Requerido inválido.");
       }
       
+// ======================= INÍCIO DA CORREÇÃO LÓGICA (Profile -> Resource) =======================
       // --- Validação de Perfil vs Sistema ---
-      const requiredProfileRecord = await prisma.profile.findFirst({
-          where: { id: data.requiredProfileId, systemId: systemIdInt }
+      const requiredProfileRecord = await prisma.resource.findFirst({ // Corrigido
+          where: { id: data.requiredResourceId, systemId: systemIdInt }
       });
       if (!requiredProfileRecord) {
-           throw new Error(`Perfil Requerido (ID: ${data.requiredProfileId}) não encontrado ou não pertence ao Sistema (ID: ${systemIdInt}).`);
+           throw new Error(`Recurso Requerido (ID: ${data.requiredResourceId}) não encontrado ou não pertence ao Sistema (ID: ${systemIdInt}).`);
       }
-      // --- Fim da Validação ---
+// ======================== FIM DA CORREÇÃO LÓGICA (Profile -> Resource) =========================
 
-      if (data.requiredProfileId === data.grantedProfileId) {
-        throw new Error("O Perfil Requerido e o Perfil Concedido não podem ser iguais.");
+      if (data.requiredResourceId === data.grantedResourceId) {
+        throw new Error("O Recurso Requerido e o Recurso Concedido não podem ser iguais.");
       }
       break;
 
@@ -104,9 +108,9 @@ const validateAndPrepareRbacData = async (body, isUpdate = false) => {
       if (!requiredAttribute?.id || !requiredAttributeOperator || !validComparisonOperators.includes(requiredAttributeOperator) || attributeValue === null || attributeValue === undefined || String(attributeValue).trim() === '') {
         throw new Error("Para 'Atributo Único', o Atributo, Operador Válido e Valor são obrigatórios.");
       }
-      data.requiredAttributeId = String(requiredAttribute.id);
-      data.requiredAttributeOperator = requiredAttributeOperator;
-      data.requiredAttributeValue = String(attributeValue);
+      data.attributeName = String(requiredAttribute.id); // Corrigido
+      data.attributeOperator = requiredAttributeOperator; // Corrigido
+      data.attributeValue = String(attributeValue); // Corrigido
       break;
 
     case "BY_MULTIPLE_ATTRIBUTES":
@@ -165,11 +169,12 @@ const getRbacRules = async (req, res) => {
     const rules = await prisma.rbacRule.findMany({
       where: whereClause, // Aplica filtros
       include: {
-        // --- Inclui Sistema e Perfis ---
-        system: { select: { id: true, name: true } }, // <<< INCLUÍDO
-        grantedProfile: { select: { id: true, name: true, systemId: true } }, // Inclui systemId do perfil
-        requiredProfile: { select: { id: true, name: true, systemId: true } },
-        attributeConditions: true,
+// ======================= INÍCIO DA CORREÇÃO LÓGICA (Schema) =======================
+        system: { select: { id: true, name_system: true } }, // Corrigido
+        grantedResource: { select: { id: true, name_resource: true, systemId: true } }, // Corrigido
+        requiredResource: { select: { id: true, name_resource: true, systemId: true } }, // Corrigido
+        attributeConditions: true, // Corrigido
+// ======================== FIM DA CORREÇÃO LÓGICA (Schema) =========================
       },
       orderBy: { createdAt: "desc" },
     });
@@ -188,8 +193,6 @@ const getRbacRules = async (req, res) => {
 const createRbacRule = async (req, res) => {
   try {
     // 1. Validar e preparar dados (agora é async e valida systemId/perfis)
-    // O body agora DEVE conter systemId e os perfis (grantedProfile, requiredProfile)
-    // devem ser objetos { id: ... } que pertencem àquele systemId.
     const validatedData = await validateAndPrepareRbacData(req.body);
 
     const userIdInt = parseInt(req.user.id, 10);
@@ -199,15 +202,19 @@ const createRbacRule = async (req, res) => {
 
     // 2. Usar transação
     const newRule = await prisma.$transaction(async (tx) => {
+// ======================= INÍCIO DA CORREÇÃO LÓGICA (Schema) =======================
+      // Remove a lógica de 'attributeConditions' do 'validatedData' pois ela será criada separadamente
+      const { attributeConditions, ...mainRuleData } = validatedData;
+
       // Cria a regra principal (agora inclui systemId)
       const rule = await tx.rbacRule.create({
         data: {
-          ...validatedData, // validatedData já contém systemId
+          ...mainRuleData, // validatedData já contém systemId
           userId: userIdInt,
         },
       });
 
-      // Lógica de Múltiplos Atributos (sem alteração, assume atributos da Identity)
+      // Lógica de Múltiplos Atributos (agora correta)
       if (validatedData.conditionType === "BY_MULTIPLE_ATTRIBUTES") {
         if (!Array.isArray(req.body.attributeConditions)) {
             throw new Error("Formato inválido para attributeConditions.");
@@ -224,30 +231,31 @@ const createRbacRule = async (req, res) => {
           }
           return {
             rbacRuleId: rule.id,
-            attributeId: String(cond.attribute.id),
+            attributeName: String(cond.attribute.id), // Corrigido
             operator: cond.operator,
             attributeValue: String(cond.value),
           };
         });
         if (conditionsToCreate.length > 0) {
-            await tx.rbacAttributeCondition.createMany({
+            await tx.rbacAttributeCondition.createMany({ // Corrigido
                 data: conditionsToCreate,
             });
         }
       }
+// ======================== FIM DA CORREÇÃO LÓGICA (Schema) =========================
       return rule;
      });
 
-      // Busca a regra completa para retornar (incluindo o sistema)
-      const completeNewRule = await prisma.rbacRule.findUnique({
-        where: { id: newRule.id },
-        include: {
-            system: { select: { id: true, name: true } }, // <<< INCLUÍDO
-            grantedProfile: { select: { id: true, name: true } },
-            requiredProfile: { select: { id: true, name: true } },
-            attributeConditions: true,
-        },
-    });
+     // Busca a regra completa para retornar (incluindo o sistema)
+     const completeNewRule = await prisma.rbacRule.findUnique({
+       where: { id: newRule.id },
+       include: {
+           system: { select: { id: true, name_system: true } }, // Corrigido
+           grantedResource: { select: { id: true, name_resource: true } }, // Corrigido
+           requiredResource: { select: { id: true, name_resource: true } }, // Corrigido
+           attributeConditions: true, // Corrigido
+       },
+   });
 
     if (!completeNewRule) {
         throw new Error("Falha ao buscar a regra recém-criada.");
@@ -261,7 +269,7 @@ const createRbacRule = async (req, res) => {
     if (error.message.includes("obrigatório") || error.message.includes("inválido") || error.message.includes("desconhecido") || error.message.includes("iguais") || error.message.includes("Condição inválida") || error.message.includes("não encontrado ou não pertence")) {
         res.status(400).json({ message: error.message });
     } else if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') { // Erro de unique constraint
-         res.status(409).json({ message: "Já existe uma regra similar." });
+       res.status(409).json({ message: "Já existe uma regra similar." });
     }
      else {
         res.status(500).json({ message: "Erro interno do servidor." });
@@ -304,25 +312,30 @@ const updateRbacRule = async (req, res) => {
              throw new Error("Não é permitido alterar o Sistema de uma regra RBAC existente.");
          }
 
+// ======================= INÍCIO DA CORREÇÃO LÓGICA (Schema) =======================
          // Deleta condições antigas
-         await tx.rbacAttributeCondition.deleteMany({
+         await tx.rbacAttributeCondition.deleteMany({ // Corrigido
            where: { rbacRuleId: ruleId }
          });
+
+         // Remove a lógica de 'attributeConditions' do 'validatedData' pois ela será recriada
+         const { attributeConditions, ...mainRuleData } = validatedData;
+// ======================== FIM DA CORREÇÃO LÓGICA (Schema) =========================
 
          // Atualiza a regra principal
          const rule = await tx.rbacRule.update({
              where: { id: ruleId },
              data: {
-                 ...validatedData,
+                 ...mainRuleData,
                  // userId não é atualizado, systemId é validado acima
              },
          });
 
          // Recria condições (se Múltiplos Atributos)
          if (validatedData.conditionType === "BY_MULTIPLE_ATTRIBUTES") {
-              if (!Array.isArray(req.body.attributeConditions)) {
+             if (!Array.isArray(req.body.attributeConditions)) {
                  throw new Error("Formato inválido para attributeConditions.");
-              }
+             }
              const conditionsToCreate = req.body.attributeConditions.map(cond => {
                  if (!cond.attribute || typeof cond.attribute.id === 'undefined') {
                      throw new Error(`Condição inválida: atributo ausente ou sem ID.`);
@@ -335,30 +348,30 @@ const updateRbacRule = async (req, res) => {
                  }
                  return {
                      rbacRuleId: rule.id,
-                     attributeId: String(cond.attribute.id),
+                     attributeName: String(cond.attribute.id), // Corrigido
                      operator: cond.operator,
                      attributeValue: String(cond.value),
                  };
              });
-              if (conditionsToCreate.length > 0) {
-                  await tx.rbacAttributeCondition.createMany({
-                      data: conditionsToCreate,
-                  });
-              }
+             if (conditionsToCreate.length > 0) {
+                 await tx.rbacAttributeCondition.createMany({ // Corrigido
+                     data: conditionsToCreate,
+                 });
+             }
          }
          return rule;
-     });
+       });
 
-      // Busca a regra completa atualizada
-      const completeUpdatedRule = await prisma.rbacRule.findUnique({
-        where: { id: updatedRule.id },
-        include: {
-            system: { select: { id: true, name: true } }, // <<< INCLUÍDO
-            grantedProfile: { select: { id: true, name: true } },
-            requiredProfile: { select: { id: true, name: true } },
-            attributeConditions: true,
-        },
-    });
+     // Busca a regra completa atualizada
+     const completeUpdatedRule = await prisma.rbacRule.findUnique({
+       where: { id: updatedRule.id },
+       include: {
+           system: { select: { id: true, name_system: true } }, // Corrigido
+           grantedResource: { select: { id: true, name_resource: true } }, // Corrigido
+           requiredResource: { select: { id: true, name_resource: true } }, // Corrigido
+           attributeConditions: true, // Corrigido
+       },
+   });
 
     if (!completeUpdatedRule) {
         throw new Error("Falha ao buscar a regra atualizada.");
@@ -371,7 +384,7 @@ const updateRbacRule = async (req, res) => {
      if (error.message.includes("obrigatório") || error.message.includes("inválido") || error.message.includes("desconhecido") || error.message.includes("Regra não encontrada") || error.message.includes("iguais") || error.message.includes("Condição inválida") || error.message.includes("não encontrado ou não pertence") || error.message.includes("Não é permitido alterar")) {
         res.status(400).json({ message: error.message });
     } else if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-         res.status(409).json({ message: "Já existe uma regra similar." });
+       res.status(409).json({ message: "Já existe uma regra similar." });
     } else {
         res.status(500).json({ message: "Erro interno do servidor." });
     }
@@ -401,7 +414,7 @@ const deleteRbacRule = async (req, res) => {
           id: ruleId,
           userId: userIdInt,
         },
-      });
+       });
 
     if (deleteResult.count === 0) {
       return res.status(404).json({ message: "Regra RBAC não encontrada ou não pertence a este usuário." });
@@ -413,7 +426,7 @@ const deleteRbacRule = async (req, res) => {
     if (error.code === 'P2003') {
          res.status(409).json({ message: "Não é possível deletar esta regra pois ela está sendo referenciada em outro lugar." });
     } else {
-        res.status(500).json({ message: "Erro interno do servidor." });
+         res.status(500).json({ message: "Erro interno do servidor." });
     }
   }
 };

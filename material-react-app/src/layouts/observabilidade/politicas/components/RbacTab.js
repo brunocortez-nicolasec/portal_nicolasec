@@ -1,3 +1,5 @@
+// material-react-app/src/layouts/observabilidade/politicas/components/RbacTab.js
+
 import { useState, useEffect } from "react";
 import axios from "axios";
 import PropTypes from 'prop-types'; // <<< ADICIONADO: Para validar as novas props
@@ -20,7 +22,7 @@ import RbacModal from "./rbac/RbacModal";
 
 // --- Componente Principal RbacTab ---
 // <<< 1. Aceitar as props do GerenciarPoliticas (pai) >>>
-function RbacTab({ allSystems, allProfiles, allAttributes }) {
+function RbacTab({ allSystems, allResources, allAttributes }) { // Corrigido
   const [controller] = useMaterialUIController();
   const { token } = controller;
 
@@ -98,7 +100,7 @@ function RbacTab({ allSystems, allProfiles, allAttributes }) {
       <RbacTable
         loading={loadingData}
         rules={rbacRules}
-        profiles={allProfiles}     // Passa a prop recebida
+        resources={allResources}   // Passa a prop correta
         attributes={allAttributes} // Passa a prop recebida
         onEdit={handleOpenModal}
         onDelete={handleDelete}
@@ -114,10 +116,9 @@ function RbacTab({ allSystems, allProfiles, allAttributes }) {
         token={token}
         ruleToEdit={editingRule}
         systems={allSystems}       // <<< Passa a nova prop 'allSystems'
-        profiles={allProfiles}     // <<< Passa a prop recebida
+        resources={allResources}     // <<< Passa a prop correta
         attributes={allAttributes} // <<< Passa a prop recebida
       />
-
       {/* --- Snackbar para Notificações --- */}
       <MDSnackbar
         color={snackbar.color}
@@ -136,7 +137,7 @@ function RbacTab({ allSystems, allProfiles, allAttributes }) {
 // --- 6. Adicionar PropTypes para as novas props ---
 RbacTab.propTypes = {
   allSystems: PropTypes.arrayOf(PropTypes.object).isRequired,
-  allProfiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  allResources: PropTypes.arrayOf(PropTypes.object).isRequired, // Corrigido
   allAttributes: PropTypes.arrayOf(PropTypes.object).isRequired,
 };
 // --- Fim da Adição ---

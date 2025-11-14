@@ -12,10 +12,8 @@ import Icon from "@mui/material/Icon";
 import MDBox from "components/MDBox";
 import NotificationItem from "examples/Items/NotificationItem";
 import AuthService from "services/auth-service";
-// ======================= INÍCIO DA ALTERAÇÃO 1 =======================
 import brandLogoLight from "assets/images/mtg_azul_sem_fundo.png"; // Logo para modo claro
 import brandLogoDark from "assets/images/mtg_branco_sem_fundo.png"; // Logo para modo escuro
-// ======================== FIM DA ALTERAÇÃO 1 =========================
 import {
   navbar,
   navbarContainer,
@@ -119,9 +117,7 @@ function DashboardNavbar({ absolute, light, isMini }) {
         <MDBox color="inherit" mb={{ xs: 1, md: 0 }} sx={(theme) => navbarRow(theme, { isMini })}>
           <MDBox
             component="img"
-            // ======================= INÍCIO DA ALTERAÇÃO 2 =======================
             src={darkMode ? brandLogoDark : brandLogoLight} // Escolhe o src baseado no darkMode
-            // ======================== FIM DA ALTERAÇÃO 2 =========================
             alt="Mind The Gap Logo"
             sx={{
               maxHeight: "3.5rem",
@@ -132,17 +128,34 @@ function DashboardNavbar({ absolute, light, isMini }) {
         {isMini ? null : (
           <MDBox sx={(theme) => navbarRow(theme, { isMini })}>
             <MDBox color={light ? "white" : "inherit"} sx={{ display: "flex", alignItems: "center" }}>
+              
+{/* ======================= INÍCIO DA CORREÇÃO (Mover Ícone) ======================= */}
+              {/* Este ícone (hamburger) agora fica visível no desktop */}
               <IconButton
                 size="small"
                 disableRipple
                 color="inherit"
-                sx={navbarMobileMenu}
+                sx={navbarIconButton} // Usa o estilo padrão de desktop
                 onClick={handleMiniSidenav}
               >
                 <Icon sx={defaultIconStyle} fontSize="medium">
                   {miniSidenav ? "menu_open" : "menu"}
                 </Icon>
               </IconButton>
+              
+              {/* Este ícone (mobile) agora fica escondido no desktop */}
+              <IconButton
+                size="small"
+                disableRipple
+                color="inherit"
+                sx={navbarMobileMenu} // (sx o esconde no desktop)
+                onClick={handleMiniSidenav}
+              >
+                <Icon sx={defaultIconStyle} fontSize="medium">
+                  {miniSidenav ? "menu_open" : "menu"}
+                </Icon>
+              </IconButton>
+{/* ======================== FIM DA CORREÇÃO (Mover Ícone) ========================= */}
               
               <IconButton
                 size="medium"

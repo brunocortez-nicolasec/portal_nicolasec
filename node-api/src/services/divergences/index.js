@@ -2,7 +2,7 @@
 
 import express from "express";
 import passport from "passport";
-// Adicionado Prisma para tratamento de erro
+// Importar 'Prisma' para checagem de erros
 import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -37,24 +37,10 @@ const checkAttributeMatch = (operator, userValue, ruleValue) => {
 };
 // --- FIM DA ADIÇÃO ---
 
-const formatAccountProfiles = (account) => {
-  if (!account) return null;
-  const formattedAccount = { ...account };
-  if (Array.isArray(formattedAccount.profiles)) {
-    formattedAccount.profiles = formattedAccount.profiles
-      .map(p => p.profile?.name)
-      .filter(Boolean);
-  } else {
-    formattedAccount.profiles = [];
-  }
-  return formattedAccount;
-};
 
 /*
  * FUNÇÕES createDivergenceException, createBulkDivergenceExceptions,
- * getExceptions, deleteException, deleteBulkExceptions...
- * ...
- * (Sem alterações, omitidas para brevidade)
+ * (Estas funções vão falhar até o schema ser atualizado, o que é esperado)
  */
 const createDivergenceException = async (req, res) => {
   const { identityId, accountId, divergenceCode, justification, targetSystem } = req.body;
@@ -71,6 +57,7 @@ const createDivergenceException = async (req, res) => {
   try {
     let newException;
 
+    // INÍCIO DA LÓGICA DE EXCEÇÃO (VAI FALHAR ATÉ O SCHEMA SER ATUALIZADO)
     if (divergenceCode === 'ACCESS_NOT_GRANTED') {
       const identityIdInt = parseInt(identityId, 10);
       if (isNaN(identityIdInt) || !targetSystem) {
@@ -102,6 +89,7 @@ const createDivergenceException = async (req, res) => {
         },
       });
     }
+    // FIM DA LÓGICA DE EXCEÇÃO
 
     res.status(201).json(newException);
 
@@ -113,6 +101,10 @@ const createDivergenceException = async (req, res) => {
       if (error.code === 'P2003') { 
          return res.status(404).json({ message: "Identidade ou Conta não encontrada para associar a exceção." });
       }
+    }
+    // Erro esperado se os modelos não existirem:
+    if (error.code === 'P2025' || error instanceof TypeError) {
+      return res.status(500).json({ message: "Erro: As tabelas de Exceção (DivergenceException) não existem no banco de dados. O Schema precisa ser atualizado." });
     }
     console.error("Erro ao criar exceção de divergência:", error);
     return res.status(500).json({ message: "Erro interno do servidor." });
@@ -131,6 +123,7 @@ const createBulkDivergenceExceptions = async (req, res) => {
   try {
     let count = 0;
     
+    // INÍCIO DA LÓGICA DE EXCEÇÃO (VAI FALHAR ATÉ O SCHEMA SER ATUALIZADO)
     if (divergenceCode === 'ACCESS_NOT_GRANTED' && Array.isArray(identityIds) && identityIds.length > 0) {
         if (!targetSystem) {
              return res.status(400).json({ message: "targetSystem é obrigatório para exceções ACCESS_NOT_GRANTED." });
@@ -176,12 +169,16 @@ const createBulkDivergenceExceptions = async (req, res) => {
     } else {
         return res.status(400).json({ message: "Tipo de divergência e lista de IDs (identityIds ou accountIds) incompatíveis ou ausentes." });
     }
+    // FIM DA LÓGICA DE EXCEÇÃO
 
     res.status(201).json({ message: `${count} exceções foram criadas com sucesso.` });
 
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
          return res.status(404).json({ message: "Uma ou mais identidades/contas não foram encontradas." });
+    }
+    if (error.code === 'P2025' || error instanceof TypeError) {
+      return res.status(500).json({ message: "Erro: As tabelas de Exceção (DivergenceException) não existem no banco de dados. O Schema precisa ser atualizado." });
     }
     console.error("Erro ao criar exceções de divergência em massa:", error);
     return res.status(500).json({ message: "Erro interno do servidor." });
@@ -195,38 +192,51 @@ const getExceptions = async (req, res) => {
   }
 
   try {
-    const identityExceptions = await prisma.identityDivergenceException.findMany({
-      where: { userId: userIdInt },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        user: { select: { name: true } },
-        identity: { 
-          select: { 
-            id: true, name: true, email: true, cpf: true,
-            sourceSystem: true, 
-            identityId: true,
-          } 
-        },
-      },
-    });
-    
-    const accountExceptions = await prisma.accountDivergenceException.findMany({
-        where: { userId: userIdInt },
-        orderBy: { createdAt: 'desc' },
-        include: {
-            user: { select: { name: true } },
-            account: {
-                select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    cpf: true,
-                    accountIdInSystem: true,
-                    system: { select: { name: true } }
+    let identityExceptions = [];
+    let accountExceptions = [];
+
+    // Tenta buscar, mas se falhar (porque as tabelas não existem), apenas retorna arrays vazios.
+    try {
+        identityExceptions = await prisma.identityDivergenceException.findMany({
+            where: { userId: userIdInt },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                user: { select: { name: true } },
+                identity: {
+                    select: { 
+                        id: true, 
+                        name_hr: true, 
+                        email_hr: true, 
+                        cpf_hr: true,
+                        identity_id_hr: true,
+                    } 
+                },
+            },
+        });
+        
+        accountExceptions = await prisma.accountDivergenceException.findMany({
+            where: { userId: userIdInt },
+            orderBy: { createdAt: 'desc' },
+            include: {
+                user: { select: { name: true } },
+                account: { 
+                    select: {
+                        id: true,
+                        name_account: true,
+                        email_account: true,
+                        id_in_system_account: true,
+                        system: { select: { name_system: true } }
+                    }
                 }
             }
+        });
+    } catch (e) {
+        // Ignora o erro se for TypeError (tabelas não existem)
+        if (!(e instanceof TypeError)) {
+            throw e; // Lança outros erros
         }
-    });
+        console.warn("Aviso: Tabelas de Exceção não encontradas. A funcionalidade 'Ignorar' está desabilitada.");
+    }
     
     const formattedIdentityExceptions = identityExceptions.map(ex => ({
         id: ex.id,
@@ -248,7 +258,7 @@ const getExceptions = async (req, res) => {
         justification: ex.justification,
         createdAt: ex.createdAt,
         expiresAt: ex.expiresAt,
-        targetSystem: ex.account?.system?.name || null,
+        targetSystem: ex.account?.system?.name_system || null,
         user: ex.user,
         identity: null, 
         account: ex.account,
@@ -294,6 +304,9 @@ const deleteException = async (req, res) => {
     
     res.status(204).send();
   } catch (error) {
+    if (error.code === 'P2025' || error instanceof TypeError) {
+      return res.status(500).json({ message: "Erro: As tabelas de Exceção (DivergenceException) não existem no banco de dados." });
+    }
     console.error("Erro ao deletar exceção:", error);
     return res.status(500).json({ message: "Erro interno do servidor." });
   }
@@ -329,6 +342,9 @@ const deleteBulkExceptions = async (req, res) => {
 
     res.status(200).json({ message: `${result.count} exceções do tipo '${type}' foram removidas com sucesso.` });
   } catch (error) {
+    if (error.code === 'P2025' || error instanceof TypeError) {
+      return res.status(500).json({ message: "Erro: As tabelas de Exceção (DivergenceException) não existem no banco de dados." });
+    }
     console.error("Erro ao deletar exceções em massa:", error);
     return res.status(500).json({ message: "Erro interno do servidor." });
   }
@@ -352,48 +368,90 @@ const getDivergencesByCode = async (req, res) => {
   try {
     let divergenceData = [];
     
-    const rhIdentities = await prisma.identity.findMany({ 
-      where: { sourceSystem: 'RH' },
+    const rhIdentities = await prisma.identitiesHR.findMany({ 
+        where: { 
+            dataSource: { 
+                userId: userIdInt,
+                origem_datasource: 'RH'
+            }
+        },
     });
-    const rhMapByCpf = new Map(rhIdentities.filter(i => i.cpf).map(i => [cleanCpf(i.cpf), i]));
-    const rhMapByEmail = new Map(rhIdentities.filter(i => i.email).map(i => [cleanText(i.email), i]));
 
-    const accountsWhere = {};
+    const accountsWhere = {
+        system: {
+            dataSourcesConfigs: { some: { dataSource: { userId: userIdInt } } }
+        }
+    };
     let targetSystemRecord = null;
     if (system && !isGeneral && system.toUpperCase() !== 'RH') {
-        targetSystemRecord = await prisma.system.findUnique({ where: { name: system }, select: { id: true, name: true }});
+        targetSystemRecord = await prisma.system.findUnique({ 
+            where: { name_system: system }, 
+            select: { id: true, name_system: true }
+        });
         if (!targetSystemRecord) {
             return res.status(404).json({ message: `Sistema "${system}" não encontrado.`});
         }
         accountsWhere.systemId = targetSystemRecord.id;
     }
     
-    const identityExceptions = await prisma.identityDivergenceException.findMany({
-        where: { divergenceCode: code, userId: userIdInt }
-    });
-    const accountExceptions = await prisma.accountDivergenceException.findMany({
-         where: { divergenceCode: code, userId: userIdInt }
-    });
+    let identityExceptionsSet = new Set();
+    let accountExceptionsSet = new Set();
+
+    try {
+        const identityExceptions = await prisma.identityDivergenceException.findMany({
+            where: { divergenceCode: code, userId: userIdInt }
+        });
+        const accountExceptions = await prisma.accountDivergenceException.findMany({
+            where: { divergenceCode: code, userId: userIdInt }
+        });
+        
+        identityExceptionsSet = new Set(identityExceptions.map(ex => `${ex.identityId}_${ex.divergenceCode}_${ex.targetSystem || 'null'}`));
+        accountExceptionsSet = new Set(accountExceptions.map(ex => `${ex.accountId}_${ex.divergenceCode}`));
     
-    const identityExceptionsSet = new Set(identityExceptions.map(ex => `${ex.identityId}_${ex.divergenceCode}_${ex.targetSystem || 'null'}`));
-    const accountExceptionsSet = new Set(accountExceptions.map(ex => `${ex.accountId}_${ex.divergenceCode}`));
+    } catch (e) {
+        if (!(e instanceof TypeError)) {
+            throw e; 
+        }
+        console.warn(`Aviso: Tabelas de Exceção não encontradas. A busca por '${code}' não filtrará exceções.`);
+    }
 
+    // 4.5. Buscar Regras de SoD (APENAS se o código for SOD_VIOLATION)
+    let allSodRules = [];
+    let sodRulesBySystem = {};
+    let globalSodRules = [];
 
-    // 4. Lógica de busca baseada no código
+    if (code === 'SOD_VIOLATION') {
+        allSodRules = await prisma.sodRule.findMany({
+            where: { userId: userIdInt }
+        });
+
+        sodRulesBySystem = allSodRules.reduce((acc, rule) => {
+            const key = rule.systemId || 'global'; 
+            if (!acc[key]) {
+                acc[key] = [];
+            }
+            acc[key].push(rule);
+            return acc;
+        }, {});
+        globalSodRules = sodRulesBySystem['global'] || [];
+    }
+
+    // 5. Lógica de busca baseada no código
     switch (code) {
       case 'ZOMBIE_ACCOUNT':
       case 'ORPHAN_ACCOUNT':
-      case 'CPF_MISMATCH':
+      case 'CPF_MISMATCH': 
       case 'NAME_MISMATCH':
       case 'EMAIL_MISMATCH':
       case 'USERTYPE_MISMATCH':
       case 'DORMANT_ADMIN': {
         
-        const appAccounts = await prisma.account.findMany({ 
+        const appAccounts = await prisma.accounts.findMany({ 
             where: accountsWhere, 
             include: { 
-                profiles: { include: { profile: true } },
-                system: { select: { name: true } }
+                identity: true, // <-- CORRIGIDO
+                assignments: { include: { resource: true } }, 
+                system: { select: { name_system: true } } 
             } 
         });
 
@@ -403,21 +461,21 @@ const getDivergencesByCode = async (req, res) => {
         const allDivergences = appAccounts.filter(account => {
             if (accountExceptionsSet.has(`${account.id}_${code}`)) return false;
 
-            const rhUser = (account.cpf && rhMapByCpf.get(cleanCpf(account.cpf))) ||
-                           (account.email && rhMapByEmail.get(cleanText(account.email)));
+            const rhUser = account.identity; 
             
-            if (code === 'ZOMBIE_ACCOUNT') return rhUser && account.status === 'Ativo' && rhUser.status === 'Inativo';
+            if (code === 'ZOMBIE_ACCOUNT') return rhUser && account.status_account === 'Ativo' && rhUser.status_hr === 'Inativo';
             if (code === 'ORPHAN_ACCOUNT') return !rhUser;
-            if (code === 'CPF_MISMATCH') return rhUser && account.cpf && rhUser.cpf && cleanCpf(account.cpf) !== cleanCpf(rhUser.cpf);
-            if (code === 'NAME_MISMATCH') return rhUser && account.name && rhUser.name && cleanText(account.name) !== cleanText(rhUser.name);
-            if (code === 'EMAIL_MISMATCH') return rhUser && account.email && rhUser.email && cleanText(account.email) !== cleanText(rhUser.email);
-            if (code === 'USERTYPE_MISMATCH') return rhUser && account.userType && rhUser.userType && cleanText(account.userType) !== cleanText(rhUser.userType);
+            
+            if (code === 'CPF_MISMATCH') return rhUser && account.cpf_account && rhUser.cpf_hr && cleanCpf(account.cpf_account) !== cleanCpf(rhUser.cpf_hr);
+            if (code === 'NAME_MISMATCH') return rhUser && account.name_account && rhUser.name_hr && cleanText(account.name_account) !== cleanText(rhUser.name_hr);
+            if (code === 'EMAIL_MISMATCH') return rhUser && account.email_account && rhUser.email_hr && cleanText(account.email_account) !== cleanText(rhUser.email_hr);
+            if (code === 'USERTYPE_MISMATCH') return rhUser && account.user_type_account && rhUser.user_type_hr && cleanText(account.user_type_account) !== cleanText(rhUser.user_type_hr);
             
             if (code === 'DORMANT_ADMIN') {
-              const isAdmin = account.profiles.some(p => p.profile.name === 'Admin');
-              if (!isAdmin || account.status !== 'Ativo') return false;
+              const isAdmin = account.assignments.some(a => a.resource.name_resource.toLowerCase().includes('admin'));
+              if (!isAdmin || account.status_account !== 'Ativo') return false;
               
-              const loginDateStr = typeof account.extraData === 'object' && account.extraData !== null ? account.extraData.last_login : null;
+              const loginDateStr = typeof account.extra_data_account === 'object' && account.extra_data_account !== null ? account.extra_data_account.last_login : null;
               if (!loginDateStr) return false; 
               const loginDate = new Date(loginDateStr);
               return !isNaN(loginDate.getTime()) && loginDate < ninetyDaysAgo;
@@ -427,29 +485,34 @@ const getDivergencesByCode = async (req, res) => {
 
         // Formata os dados
         divergenceData = allDivergences.map(account => {
-             const rhUser = (account.cpf && rhMapByCpf.get(cleanCpf(account.cpf))) ||
-                            (account.email && rhMapByEmail.get(cleanText(account.email)));
-             return {
+            const rhUser = account.identity;
+            return {
                 ...account,
-                profile: account.profiles.map(p => p.profile.name).join(', ') || 'N/A',
-                sourceSystem: account.system.name,
+                name: account.name_account, 
+                email: account.email_account,
+                status: account.status_account, 
+                profile: account.assignments.map(a => a.resource.name_resource).join(', ') || 'N/A',
+                sourceSystem: account.system.name_system,
                 rhData: rhUser || null,
                 appData: account
-             };
+            };
         });
         break;
       }
       
       case 'ACCESS_NOT_GRANTED': {
-        const activeRhUsers = rhIdentities.filter(rhUser => rhUser.status === 'Ativo');
+        const activeRhUsers = rhIdentities.filter(rhUser => rhUser.status_hr === 'Ativo');
         const results = [];
 
         const targetSystems = isGeneral 
-            ? await prisma.system.findMany({ where: { name: { not: 'RH' } }, select: { id: true, name: true } })
+            ? await prisma.system.findMany({ where: { name_system: { not: 'RH' }, dataSourcesConfigs: { some: { dataSource: { userId: userIdInt } } } }, select: { id: true, name_system: true } })
             : (targetSystemRecord ? [targetSystemRecord] : []);
         
-        const allAccounts = await prisma.account.findMany({
-            where: { identityId: { not: null } },
+        const allAccounts = await prisma.accounts.findMany({
+            where: { 
+                identityId: { not: null },
+                system: { dataSourcesConfigs: { some: { dataSource: { userId: userIdInt } } } }
+            },
             select: { identityId: true, systemId: true }
         });
         
@@ -462,13 +525,16 @@ const getDivergencesByCode = async (req, res) => {
         for (const system of targetSystems) {
             activeRhUsers.forEach(rhUser => {
                 const hasAccountInSystem = accountsByIdentity[rhUser.id]?.has(system.id);
-                const isExcepted = identityExceptionsSet.has(`${rhUser.id}_${code}_${system.name}`);
+                const isExcepted = identityExceptionsSet.has(`${rhUser.id}_${code}_${system.name_system}`);
 
                 if (!hasAccountInSystem && !isExcepted) {
                     results.push({
                         ...rhUser,
-                        id: `${rhUser.id}-${system.name}`,
-                        sourceSystem: system.name,
+                        id: `${rhUser.id}-${system.name_system}`,
+                        name: rhUser.name_hr, 
+                        email: rhUser.email_hr, 
+                        status: rhUser.status_hr, 
+                        sourceSystem: system.name_system,
                         profile: null,
                     });
                 }
@@ -479,91 +545,39 @@ const getDivergencesByCode = async (req, res) => {
         break;
       }
       
-      // --- INÍCIO DA CORREÇÃO (SOD_VIOLATION - Etapa 3) ---
       case 'SOD_VIOLATION': {
-        // 1. Buscar Regras de SOD (TODOS OS TIPOS)
-        const sodWhere = {}; // <<< Começa vazio
-
-        if (isGeneral) {
-            // "Geral" - sem filtro de sistema
-        } else if (targetSystemRecord) {
-            // "Específico"
-            // --- CORREÇÃO AQUI: Sintaxe do Prisma para OR ---
-            sodWhere.OR = [
-                { systemId: targetSystemRecord.id },
-                { systemId: null }
-            ];
-            // --- FIM DA CORREÇÃO ---
-        }
         
-        // --- CORREÇÃO AQUI: Checa se 'system' (query param) existe antes de usar toUpperCase() ---
-        const activeSodRules = (!system || system.toUpperCase() !== 'RH')
-            ? await prisma.sodRule.findMany({
-                where: sodWhere, // <<< QUERY CORRIGIDA
-                select: { 
-                    ruleType: true,
-                    valueAId: true,
-                    valueAOperator: true,
-                    valueAValue: true,
-                    valueBType: true,
-                    valueBId: true, 
-                    systemId: true 
-                }
-              })
-            : [];
-
-        if (activeSodRules.length === 0) {
-          divergenceData = [];
-          break;
-        }
-
-        // Agrupa regras por systemId para performance
-        const rulesBySystemId = activeSodRules.reduce((acc, rule) => {
-            const key = rule.systemId;
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(rule);
-            return acc;
-        }, {});
-        const globalRules = rulesBySystemId[null] || [];
-
-        // 2. Buscar Contas (accountsWhere já filtra por sistema)
-        const appAccounts = await prisma.account.findMany({ 
+        const appAccounts = await prisma.accounts.findMany({ 
             where: accountsWhere, 
             include: { 
-                profiles: { include: { profile: true } },
-                system: { select: { name: true } },
-                identity: { 
-                    select: { userType: true, cpf: true, name: true, email: true, status: true }
-                }
+                identity: true, // <-- CORRIGIDO
+                assignments: { include: { resource: true } },
+                system: { select: { name_system: true, id: true } }, 
             } 
         });
 
-        // 3. Filtrar contas que violam as regras
         const allDivergences = appAccounts.filter(account => {
             if (accountExceptionsSet.has(`${account.id}_${code}`)) {
               return false;
             }
 
-            const systemSpecificRules = rulesBySystemId[account.systemId] || [];
-            const applicableSodRules = [...systemSpecificRules, ...globalRules];
+            const systemSpecificRules = sodRulesBySystem[account.systemId] || [];
+            const applicableSodRules = [...globalSodRules, ...systemSpecificRules];
 
             if (applicableSodRules.length === 0) return false;
 
-            const accountProfileIds = new Set(account.profiles.map(p => p.profile.id));
+            const accountResourceIds = new Set(account.assignments.map(a => a.resource.id)); 
             
-            const rhUser = account.identity;
+            const rhUser = account.identity; // Agora é o objeto completo
 
             // Verifica violação
             for (const rule of applicableSodRules) {
                 let violationFound = false;
 
                 if (rule.ruleType === 'ROLE_X_ROLE') {
-                    if (accountProfileIds.size < 2) continue;
                     const ruleProfileId1 = parseInt(rule.valueAId, 10);
                     const ruleProfileId2 = parseInt(rule.valueBId, 10);
-
-                    if (isNaN(ruleProfileId1) || isNaN(ruleProfileId2)) continue; 
-                    if (accountProfileIds.has(ruleProfileId1) && accountProfileIds.has(ruleProfileId2)) {
+                    if (accountResourceIds.has(ruleProfileId1) && accountResourceIds.has(ruleProfileId2)) { 
                         violationFound = true;
                     }
                 } 
@@ -576,13 +590,11 @@ const getDivergencesByCode = async (req, res) => {
                     const ruleValue = rule.valueAValue;
                     const conflictingProfileId = parseInt(rule.valueBId, 10);
                     
-                    if (isNaN(conflictingProfileId) || !attributeName || !ruleValue) continue;
-
-                    const userValue = rhUser[attributeName];
+                    const userValue = rhUser[attributeName]; // AGORA FUNCIONA PARA QUALQUER ATRIBUTO
                     
                     const attributeMatch = checkAttributeMatch(attributeOperator, userValue, ruleValue);
                     
-                    if (attributeMatch && accountProfileIds.has(conflictingProfileId)) {
+                    if (attributeMatch && accountResourceIds.has(conflictingProfileId)) {
                         violationFound = true;
                     }
                 }
@@ -595,12 +607,15 @@ const getDivergencesByCode = async (req, res) => {
             return false;
         });
 
-        // 4. Formatar os dados para o modal
+        // Formatar os dados para o modal
         divergenceData = allDivergences.map(account => {
              return {
                 ...account,
-                profile: account.profiles.map(p => p.profile.name).join(', ') || 'N/A',
-                sourceSystem: account.system.name,
+                name: account.name_account,
+                email: account.email_account,
+                status: account.status_account,
+                profile: account.assignments.map(a => a.resource.name_resource).join(', ') || 'N/A',
+                sourceSystem: account.system.name_system,
                 rhData: account.identity || null,
                 appData: account
              };
@@ -608,23 +623,24 @@ const getDivergencesByCode = async (req, res) => {
         
         break;
       }
-      // --- FIM DA CORREÇÃO (SOD_VIOLATION) ---
       
       default:
         return res.status(400).json({ message: `Código de divergência '${code}' desconhecido.` });
     }
 
     return res.status(200).json(divergenceData);
+// ======================= INÍCIO DA CORREÇÃO (SyntaxError) =======================
   } catch (error) {
+    if (error.code === 'P2025' || error instanceof TypeError) {
+      return res.status(500).json({ message: "Erro de Tipo no servidor. Verifique os modelos de Exceção.", internalError: error.message });
+    }
     console.error(`Erro ao buscar detalhes da divergência '${code}':`, error);
     return res.status(500).json({ message: "Erro interno do servidor." });
   }
 };
+// ======================== FIM DA CORREÇÃO (SyntaxError) =========================
 
-/**
- * @route   GET /divergences/exceptions/:id
- * (Função getExceptionDetails... sem alterações)
- */
+
 const getExceptionDetails = async (req, res) => {
   const exceptionId = parseInt(req.params.id, 10);
   const { type } = req.query;
@@ -646,7 +662,7 @@ const getExceptionDetails = async (req, res) => {
             include: {
                 user: { select: { name: true } },
                 identity: {
-                    select: { id: true, name: true, email: true, cpf: true, status: true, userType: true, identityId: true }
+                    select: { id: true, name_hr: true, email_hr: true, cpf_hr: true, status_hr: true, user_type_hr: true, identity_id_hr: true } 
                 },
             },
         });
@@ -664,19 +680,24 @@ const getExceptionDetails = async (req, res) => {
                  user: { select: { name: true } },
                  account: {
                      include: {
-                         identity: {
-                             select: { id: true, name: true, email: true, cpf: true, status: true, userType: true, identityId: true }
+                         identity: { 
+                             select: { id: true, name_hr: true, email_hr: true, cpf_hr: true, status_hr: true, user_type_hr: true, identity_id_hr: true }
                          },
-                         system: { select: { name: true } },
-                         profiles: { include: { profile: { select: { name: true } } } }
+                         system: { select: { name_system: true } }, 
+                         assignments: { include: { resource: { select: { name_resource: true } } } } 
                      }
                  }
              }
          });
          
          if (exception) {
-             divergenceDetails.appData = formatAccountProfiles(exception.account);
-             divergenceDetails.rhData = exception.account?.identity || null;
+            const formattedAccount = { ...exception.account };
+            if (formattedAccount.assignments) {
+                formattedAccount.profileNames = formattedAccount.assignments.map(a => a.resource.name_resource).join(', ');
+            }
+            
+            divergenceDetails.appData = formattedAccount;
+            divergenceDetails.rhData = exception.account?.identity || null;
          }
     }
 
@@ -687,6 +708,9 @@ const getExceptionDetails = async (req, res) => {
     res.status(200).json({ ...exception, divergenceDetails });
 
   } catch (error) {
+     if (error.code === 'P2025' || error instanceof TypeError) {
+      return res.status(404).json({ message: "Exceção não encontrada (tabelas não existem)." });
+    }
     console.error(`Erro ao buscar detalhes da exceção ${exceptionId}:`, error);
     return res.status(500).json({ message: "Erro interno do servidor." });
   }
